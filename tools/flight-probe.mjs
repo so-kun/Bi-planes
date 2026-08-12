@@ -89,6 +89,7 @@ function loopRadius(throttle = 1) {
 
 /** アイドルで緩やかに上昇し続けたとき、どこで速度を失って落ちはじめるか */
 function slowClimb() {
+  // 巡航のまま 30 度の上昇を続ける。全開でも足りないほど上げれば速度は落ちる
   const s = { x: 0, y: 500, vx: 300, vy: 0, pitch: 0, roll: 0, throttle: 0 };
   let peakY = 500, minSpeed = 1e9, stalledAt = null;
   for (let i = 0; i < 20 / DT; i++) {
@@ -103,16 +104,16 @@ function slowClimb() {
   return { stalledAt, minSpeed: Math.round(minSpeed), peakY: Math.round(peakY), result: '20秒たっても落ちない' };
 }
 
-const names = ['アイドル', '巡航', '全開'];
+const names = ['巡航', '全開'];
 console.log('■ 水平飛行');
-for (let t = 0; t < 3; t++) {
+for (let t = 0; t < names.length; t++) {
   const r = levelFlight(t);
   const held = Math.abs(r.y - 360) < 40 ? '高度を維持' : r.y > 360 ? `沈む (y=${r.y})` : `上昇 (y=${r.y})`;
   console.log(`  ${names[t].padEnd(6, '　')} 速度 ${String(r.speed).padStart(4)}  迎え角 ${String(r.aoa).padStart(5)}°  ${held}`);
 }
 console.log('\n■ 失速');
 console.log(`  舵を引き続けて失速に入る速度: ${stallSpeed()}`);
-console.log('\n■ アイドルで上昇を続けたとき');
+console.log('\n■ 巡航のまま上昇を続けたとき');
 console.log(' ', JSON.stringify(slowClimb()));
 console.log('\n■ 宙返り（舵を引き切って一周）');
 console.log(' ', JSON.stringify(loopRadius()));

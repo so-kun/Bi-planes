@@ -52,7 +52,7 @@ export class Plane {
       x, y, vx: facing * 260, vy: 0,
       pitch: facing === 1 ? 0 : Math.PI,
       roll: facing === 1 ? 0 : Math.PI,
-      throttle: 1,
+      throttle: 0,
     };
     this.facing = facing;
 
@@ -98,9 +98,9 @@ export class Plane {
   get rolling(): boolean { return this.rollT < 1; }
   get inverted(): boolean { return Math.cos(this.state.roll) < 0; }
 
-  cycleThrottle(): number {
-    this.state.throttle = (this.state.throttle + 1) % 3;
-    return this.state.throttle;
+  /** スロットルは押している間だけ全開。毎フレーム外から設定する */
+  setThrottle(level: number): void {
+    this.state.throttle = level;
   }
 
   canFireMg(): boolean { return this.alive && this.mgCooldown <= 0; }
@@ -126,7 +126,7 @@ export class Plane {
     this.state.vy = 0;
     this.state.pitch = facing === 1 ? 0 : Math.PI;
     this.state.roll = facing === 1 ? 0 : Math.PI;
-    this.state.throttle = 1;
+    this.state.throttle = 0;
     this.facing = facing;
     this.hp = PLANE.maxHp;
     this.damage = { engine: 1, handling: 1 };

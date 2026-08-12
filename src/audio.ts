@@ -3,6 +3,8 @@
  * 方向性は samples/art-sound-sample.html で採用済み。
  */
 
+import { AUDIO } from './config';
+
 type Ctx = AudioContext;
 
 export class Sfx {
@@ -10,6 +12,8 @@ export class Sfx {
   private master!: GainNode;
   private sfxBus!: GainNode;
   private musicBus!: GainNode;
+  /** エンジン音は鳴りっぱなしなので、単発の効果音とは別に音量を持たせる */
+  private engineBus!: GainNode;
   private engine: EngineVoice | null = null;
   private bgm: Bgm | null = null;
   muted = false;
@@ -23,12 +27,15 @@ export class Sfx {
       comp.threshold.value = -14;
       comp.ratio.value = 5;
       this.master = this.ac.createGain();
-      this.master.gain.value = 0.9;
+      this.master.gain.value = AUDIO.master;
       this.sfxBus = this.ac.createGain();
       this.musicBus = this.ac.createGain();
-      this.musicBus.gain.value = 0.5;
+      this.musicBus.gain.value = AUDIO.music;
+      this.engineBus = this.ac.createGain();
+      this.engineBus.gain.value = AUDIO.engine;
       this.sfxBus.connect(this.master);
       this.musicBus.connect(this.master);
+      this.engineBus.connect(this.sfxBus);
       this.master.connect(comp);
       comp.connect(this.ac.destination);
     }
@@ -41,7 +48,7 @@ export class Sfx {
 
   toggleMute(): boolean {
     this.muted = !this.muted;
-    if (this.ac) this.master.gain.value = this.muted ? 0 : 0.9;
+    if (this.ac) this.master.gain.value = this.muted ? 0 : AUDIO.master;
     return this.muted;
   }
 
@@ -209,7 +216,7 @@ export class Sfx {
   /** エンジン音を鳴らしはじめる。level は 1..3 */
   startEngine(): void {
     if (!this.ac || this.engine) return;
-    this.engine = new EngineVoice(this.ac, this.sfxBus);
+    this.engine = new EngineVoice(this.ac, this.engineBus);
   }
 
   setEngine(level: number, damaged: boolean): void {

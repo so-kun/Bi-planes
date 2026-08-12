@@ -4,7 +4,7 @@
  */
 
 import Phaser from 'phaser';
-import { BALLOON, FILM_PRESETS, PLANE, SCORE, SMOKE, VIEW, WEAPON } from '../config';
+import { BALLOON, FLIGHT, PLANE, SCORE, SMOKE, THROTTLE_NAMES, VIEW, WEAPON } from '../config';
 import { Sfx } from '../audio';
 import { FilmPipeline } from '../fx/FilmPipeline';
 import { Particles } from '../fx/Particles';
@@ -29,6 +29,8 @@ export class PlayScene extends Phaser.Scene {
   private damageTimer = 0;
   private stallSoundTimer = 0;
   private bgmOn = false;
+  /** エンジン音を鳴らし直す判定用。段階が変わったときだけ更新する */
+  private lastEngineState = '';
 
   private hud!: Phaser.GameObjects.Graphics;
   private hudText!: Phaser.GameObjects.Text;
@@ -84,10 +86,6 @@ export class PlayScene extends Phaser.Scene {
     kb.on('keydown', wake);
     this.input.on('pointerdown', wake);
 
-    this.keys.throttle.on('down', () => {
-      const lv = this.plane.cycleThrottle();
-      this.sfx.setEngine(lv + 1, this.plane.hp < 70);
-    });
     this.keys.roll.on('down', () => { this.plane.roll(); });
     this.keys.cannon.on('down', () => this.fireCannon());
     this.keys.mute.on('down', () => this.sfx.toggleMute());
@@ -115,7 +113,7 @@ export class PlayScene extends Phaser.Scene {
       fontFamily: 'Georgia, "Times New Roman", serif', fontSize: '24px', color: '#241a12',
     }).setDepth(71);
     this.add.text(20, VIEW.height - 34,
-      'W/S 機首  E スロットル  R ロール  F 7.7mm  G 20mm   ｜  1-5 フィルム  B BGM  M 消音  Tab 計器', {
+      'W/S 機首  E 全開（押している間）  R ロール  F 7.7mm  G 20mm   ｜  1-5 フィルム  B BGM  M 消音  Tab 計器', {
         fontFamily: 'Georgia, serif', fontSize: '15px', color: '#f4e6c8',
       }).setDepth(71).setAlpha(0.75);
     this.debugText = this.add.text(24, 122, '', {
@@ -155,7 +153,10 @@ export class PlayScene extends Phaser.Scene {
     if (this.plane.alive) {
       const up = this.keys.up.isDown || this.keys.upAlt.isDown;
       const down = this.keys.down.isDown || this.keys.downAlt.isDown;
+      // スロットルは押している間だけ全開。離せば巡航に戻る
+      this.plane.setThrottle(this.keys.throttle.isDown ? 1 : 0);
       this.plane.update((up ? 1 : 0) - (down ? 1 : 0), dt);
+      this.syncEngineSound();
 
       if (this.keys.mg.isDown) this.fireMg();
 
@@ -168,7 +169,7 @@ export class PlayScene extends Phaser.Scene {
       this.respawnTimer -= dt;
       if (this.respawnTimer <= 0) {
         this.plane.reset(Phaser.Math.Between(200, VIEW.width - 200), 300, 1);
-        this.sfx.setEngine(this.plane.state.throttle + 1, false);
+        this.lastEngineState = '';
       }
     }
 
@@ -178,6 +179,16 @@ export class PlayScene extends Phaser.Scene {
     this.checkHits();
     this.bullets.draw();
     this.drawHud();
+  }
+
+  /** スロットルや損傷が変わったときだけエンジン音を鳴らし直す */
+  private syncEngineSound(): void {
+    const damaged = this.plane.hp < 70;
+    const key = `${this.plane.state.throttle}/${damaged}`;
+    if (key === this.lastEngineState) return;
+    this.lastEngineState = key;
+    // EngineVoice の段階は 1..3。巡航を 2、全開を 3 に対応させる
+    this.sfx.setEngine(this.plane.state.throttle + 2, damaged);
   }
 
   /**
@@ -208,7 +219,7 @@ export class PlayScene extends Phaser.Scene {
   private warnStall(dt: number): void {
     this.stallSoundTimer = Math.max(0, this.stallSoundTimer - dt);
     const r = this.plane.readout;
-    if (r.stalled && r.speed < 190 && this.stallSoundTimer <= 0) {
+    if (r.stalled && r.speed < FLIGHT.stallWarnSpeed && this.stallSoundTimer <= 0) {
       this.sfx.stall();
       this.stallSoundTimer = 2.2;
     }
@@ -261,7 +272,7 @@ export class PlayScene extends Phaser.Scene {
     g.beginPath();
     g.arc(254, 94, 16, Math.PI, 0);
     g.strokePath();
-    const a = Math.PI + (th + 0.5) / 3 * Math.PI;
+    const a = Math.PI + (th + 0.5) / THROTTLE_NAMES.length * Math.PI;
     g.lineStyle(4, 0xa8402c, 1);
     g.lineBetween(254, 94, 254 + Math.cos(a) * 14, 94 + Math.sin(a) * 14);
 
@@ -275,7 +286,7 @@ export class PlayScene extends Phaser.Scene {
         `得点   ${this.score}`,
         `速度   ${r.speed.toFixed(0)}  ${r.stalled ? '★失速★' : ''}`,
         `迎え角 ${(r.aoa * 180 / Math.PI).toFixed(1)}°`,
-        `スロットル ${['アイドル', '巡航', '全開'][this.plane.state.throttle]}`,
+        `スロットル ${THROTTLE_NAMES[this.plane.state.throttle]}${this.plane.state.throttle === 1 ? '（E を押している間）' : ''}`,
         `姿勢   ${this.plane.inverted ? '背面' : '正立'}${this.plane.rolling ? '（ロール中）' : ''}`,
         `HP     ${this.plane.hp}  エンジン${(this.plane.damage.engine * 100).toFixed(0)}% 舵${(this.plane.damage.handling * 100).toFixed(0)}%`,
         `気球   ${this.balloons.list.length}/${BALLOON.maxAlive}`,
@@ -284,9 +295,4 @@ export class PlayScene extends Phaser.Scene {
       ].join('\n'));
     }
   }
-}
-
-// 未使用の警告を避けつつ、プリセット数と HUD の表示名の対応を明示しておく
-if (FILM_PRESETS.length !== 5) {
-  console.warn('フィルムのプリセット数が HUD の表示名と合っていません');
 }
