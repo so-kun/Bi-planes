@@ -163,9 +163,15 @@ export class Plane {
     const pad = PLANE.width;
     if (this.state.x < -pad) this.state.x += VIEW.width + pad * 2;
     if (this.state.x > VIEW.width + pad) this.state.x -= VIEW.width + pad * 2;
+    // 高いところは空気が薄い、という扱いで下向きの力が強まる。
+    // 硬い壁で跳ね返すより自然で、機体が画面から消えることもない
+    if (this.state.y < VIEW.softCeilingY) {
+      const over = Math.min(1, (VIEW.softCeilingY - this.state.y) / (VIEW.softCeilingY - VIEW.ceilingY));
+      this.state.vy += VIEW.ceilingPush * over * over * dt;
+    }
     if (this.state.y < VIEW.ceilingY) {
       this.state.y = VIEW.ceilingY;
-      if (this.state.vy < 0) this.state.vy *= -0.2;
+      if (this.state.vy < 0) this.state.vy = 0;
     }
 
     this.facing = Math.abs(wrapPi(this.state.pitch)) < Math.PI / 2 ? 1 : -1;

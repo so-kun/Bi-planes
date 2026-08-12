@@ -119,10 +119,13 @@ export function stepFlight(
   state.pitch -= input.pitch * upSign * FLIGHT.pitchRate * authority * dt;
 
   // 風見安定。機首は進行方向へ戻ろうとする。
-  // 失速からの回復（機首が落ちて速度が戻る）はこの力が作る
+  // 失速からの回復（機首が落ちて速度が戻る）はこの力が作る。
+  // 効きは速度の平方根にし、下限も設ける ―― 速度に比例させると、ほぼ止まった機体では
+  // 機首がまったく戻らず、空中で立ち往生して操縦不能に見えてしまうため
   if (moving) {
     const align = wrapPi(velAngle - state.pitch);
-    state.pitch += align * FLIGHT.weathervane * Math.min(1, speed / FLIGHT.controlRefSpeed) * dt;
+    const factor = Math.max(FLIGHT.minWeathervane, Math.sqrt(Math.min(1, speed / FLIGHT.controlRefSpeed)));
+    state.pitch += align * FLIGHT.weathervane * factor * dt;
   }
   state.pitch = wrapPi(state.pitch);
 
