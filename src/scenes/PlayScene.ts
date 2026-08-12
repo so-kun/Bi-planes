@@ -12,6 +12,7 @@ import { Plane } from '../objects/Plane';
 import { Balloons } from '../objects/Balloons';
 import { Bullets } from '../objects/Bullets';
 import { StuckKeyGuard } from '../input/StuckKeyGuard';
+import { PadInput, type PadState } from '../input/PadInput';
 
 const KEY = Phaser.Input.Keyboard.KeyCodes;
 
@@ -26,6 +27,10 @@ export class PlayScene extends Phaser.Scene {
   private keys!: Record<string, Phaser.Input.Keyboard.Key>;
   /** 押しっぱなしになったキーを見つけて解除する。ブラウザによって keyup が届かないことがある */
   private keyGuard!: StuckKeyGuard;
+  private pad = new PadInput();
+  private padState: PadState = this.pad.read();
+  /** パッドを認識したときに一度だけ音を起こす */
+  private padWoke = false;
   private score = 0;
   private respawnTimer = 0;
   /** 損傷の種類ごとの煙のタイマー */
@@ -88,10 +93,7 @@ export class PlayScene extends Phaser.Scene {
     }) as Record<string, Phaser.Input.Keyboard.Key>;
 
     // ブラウザは操作があるまで音を鳴らせない
-    const wake = (): void => {
-      this.sfx.resume();
-      this.sfx.startEngine();
-    };
+    const wake = (): void => this.wakeAudio();
     kb.on('keydown', wake);
     this.input.on('pointerdown', wake);
 
@@ -142,6 +144,28 @@ export class PlayScene extends Phaser.Scene {
       this.plane.hp = PLANE.maxHp;
       this.plane.damage = { engine: 1, handling: 1 };
     });
+  }
+
+  private wakeAudio(): void {
+    this.sfx.resume();
+    this.sfx.startEngine();
+  }
+
+  /**
+   * パッドの状態。つないでも出てこないときに、原因が切り分けられるようにする。
+   * ブラウザはボタンが一度押されるまでパッドを見せてくれない決まりなので、
+   * 「つないだのに出ない」は正常なこともある
+   */
+  private padLabel(): string {
+    const p = this.padState;
+    if (p.unsupported) return `${p.id.slice(0, 34)}（標準配列でないため使いません）`;
+    if (!p.connected) return '未接続（ボタンを一度押すと認識されます）';
+    const held = [
+      p.pitch > 0.1 ? '機首↑' : p.pitch < -0.1 ? '機首↓' : '',
+      p.throttle ? '全開' : '',
+      p.mg ? '7.7mm' : '',
+    ].filter(Boolean).join(' ');
+    return `${p.id.slice(0, 28)}  ${held || '(操作なし)'}  傾き ${p.pitch.toFixed(2)}`;
   }
 
   private setupFilm(): void {
@@ -216,17 +240,36 @@ export class PlayScene extends Phaser.Scene {
   override update(_time: number, delta: number): void {
     const dt = Math.min(0.05, delta / 1000);
     this.keyGuard.update();
+    // 撃墜されている間も読む。読まずにいると立ち上がりの記録が古びて、
+    // 再出撃した瞬間に押しっぱなしのボタンが暴発する
+    this.padState = this.pad.read();
+    // パッドしか触らない人にも音を出す。ただしブラウザによっては
+    // パッドの操作を「音を鳴らしてよい合図」と認めないので、
+    // そのときはキーを1つ押すかクリックしてもらう必要がある
+    if (this.padState.connected && !this.padWoke) {
+      this.padWoke = true;
+      this.wakeAudio();
+    }
     this.watchFilm(dt);
 
     if (this.plane.alive) {
       const up = this.keys.up.isDown || this.keys.upAlt.isDown;
       const down = this.keys.down.isDown || this.keys.downAlt.isDown;
+      // キーボードは倒し切りの3値、パッドは倒した量がそのまま出る。
+      // 両方触っている場合は、深く入れているほうを採る
+      const byKey = (up ? 1 : 0) - (down ? 1 : 0);
+      const pitch = Math.abs(this.padState.pitch) > Math.abs(byKey) ? this.padState.pitch : byKey;
+
       // スロットルは押している間だけ全開。離せば巡航に戻る
-      this.plane.setThrottle(this.keys.throttle.isDown ? 1 : 0);
-      this.plane.update((up ? 1 : 0) - (down ? 1 : 0), dt);
+      this.plane.setThrottle(this.keys.throttle.isDown || this.padState.throttle ? 1 : 0);
+      this.plane.update(pitch, dt);
       this.syncEngineSound();
 
-      if (this.keys.mg.isDown) this.fireMg();
+      // ロールと 20mm は押した瞬間だけ。キーボード側はキーの down で拾っている
+      if (this.padState.rollEdge !== 0) this.plane.roll(this.padState.rollEdge);
+      if (this.padState.cannonEdge) this.fireCannon();
+
+      if (this.keys.mg.isDown || this.padState.mg) this.fireMg();
 
       // 地面への激突
       if (this.plane.y >= VIEW.groundY) this.crash();
@@ -366,6 +409,7 @@ export class PlayScene extends Phaser.Scene {
           `${this.film ? '' : '（WebGL 無効）'}  BGM ${this.bgmOn ? 'on' : 'off'}`,
         `キー   ${this.keyGuard.heldNames().join(' ') || '(なし)'}` +
           `${this.keyGuard.releasedCount ? `  ／ 押しっぱなしを解除 ${this.keyGuard.releasedCount}回` : ''}`,
+        `パッド ${this.padLabel()}`,
       ].join('\n'));
     }
   }

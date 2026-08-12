@@ -134,6 +134,31 @@ export const BALLOON = {
 export const THROTTLE_NAMES = ['巡航', '全開'] as const;
 
 /**
+ * ゲームパッド。**標準配列（mapping === 'standard'）のパッド専用**（2026-08-12 決定）。
+ * PlayStation / Switch Pro / Xbox などはこれに従い、ボタン番号が決まっている。
+ * 標準でないパッドは並びが機種固有で、番号をそのまま読むと別のボタンが操作に化けるため、
+ * つながっていても使わない。
+ */
+export const PAD = {
+  /** スティック中央の遊び。ここまでは倒していないものとして扱う */
+  deadzone: 0.22,
+  /** アナログのトリガーをどこから「押した」とみなすか */
+  triggerThreshold: 0.35,
+  buttons: {
+    mg: 0,        // ×  / B     （Switch は物理配置が入れ替わるが番号は同じ）
+    cannon: 1,    // ○  / A
+    rollL: 4,     // L1 / L
+    rollR: 5,     // R1 / R
+    throttle: 7,  // R2 / ZR
+    up: 12, down: 13,   // 十字キー
+  },
+  axes: {
+    /** 機首。上に倒すと負の値が来るので、読むときに符号を反転する */
+    pitch: 1,
+  },
+};
+
+/**
  * 音量。エンジン音は鳴りっぱなしなので、単発の効果音より小さく保つ
  */
 export const AUDIO = {
