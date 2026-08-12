@@ -26,11 +26,12 @@ OUT_PLANES = os.path.join(ROOT, "assets/art/planes")
 OUT_BG = os.path.join(ROOT, "assets/art/bg")
 OUT_PROPS = os.path.join(ROOT, "assets/art/props")
 
-# 機体（側面・上面・下面）
+# 機体（側面・上面・下面）。
+# 上面図・下面図は煙なしの差し替え版（末尾 2）を使う。煙ありの初版は参考として残す
 PLANES = (
     "plane-blue", "plane-red", "plane-blue-smoke",
-    "plane-blue-top", "plane-blue-under",
-    "plane-red-top", "plane-red-under",
+    "plane-blue-top2", "plane-blue-under2",
+    "plane-red-top2", "plane-red-under2",
 )
 # その他の絵（気球など）
 PROPS = ("baloon",)

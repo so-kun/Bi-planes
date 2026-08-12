@@ -28,15 +28,16 @@ assets/
 | `planes/plane-blue-smoke.png` | 同上（煙あり。見た目の基準用） |
 | `smoke/puff-dark-01..04.png` | 濃い煙のひと粒（約 200px 四方） |
 | `smoke/puff-light-01..04.png` | 薄い煙のひと粒（同上） |
-| `planes/plane-blue-top.png` / `plane-red-top.png` | 上面図。ロール 90度 の中間コマ |
-| `planes/plane-blue-under.png` / `plane-red-under.png` | 下面図。ロール 270度 の中間コマ |
+| `planes/plane-blue-top2.png` / `plane-red-top2.png` | 上面図。ロール 90度 の中間コマ |
+| `planes/plane-blue-under2.png` / `plane-red-under2.png` | 下面図。ロール 270度 の中間コマ |
 | `props/baloon.png` | 気球（撃ち落とす的） |
 | `bg/stage-sunset.png` | 1280×720 にリサイズしたステージ背景 |
 
-### 未解決: 上面図・下面図に煙が焼き込まれている
+### 上面図・下面図は煙なしの差し替え版を使う
 
-4枚とも煙が描き込まれていて、しかも煙が上翼の上に重なっているため、自動では抜けない。
-ロールの途中で煙が一瞬現れてしまう。**煙なしの上面図・下面図をいただきたい。**
+初版（`plane-*-top.png` / `plane-*-under.png`）は煙が描き込まれていて、しかも煙が上翼の上に
+重なっていたため自動では抜けなかった。ロールの途中で煙が現れてしまうため、
+**煙なしの差し替え版（末尾に 2 が付くファイル）を使う**。初版の原本は参考として `original/` に残す。
 
 ### 切り抜きの仕組み
 
