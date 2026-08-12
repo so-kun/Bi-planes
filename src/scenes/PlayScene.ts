@@ -73,7 +73,8 @@ export class PlayScene extends Phaser.Scene {
     const kb = this.input.keyboard!;
     this.keys = kb.addKeys({
       up: KEY.W, down: KEY.S, upAlt: KEY.UP, downAlt: KEY.DOWN,
-      throttle: KEY.E, roll: KEY.R, mg: KEY.F, cannon: KEY.G,
+      rollL: KEY.A, rollR: KEY.D, rollLAlt: KEY.LEFT, rollRAlt: KEY.RIGHT,
+      throttle: KEY.E, mg: KEY.F, cannon: KEY.G,
       mute: KEY.M, bgm: KEY.B, debug: KEY.TAB,
       f0: KEY.ONE, f1: KEY.TWO, f2: KEY.THREE, f3: KEY.FOUR, f4: KEY.FIVE,
     }) as Record<string, Phaser.Input.Keyboard.Key>;
@@ -86,7 +87,9 @@ export class PlayScene extends Phaser.Scene {
     kb.on('keydown', wake);
     this.input.on('pointerdown', wake);
 
-    this.keys.roll.on('down', () => { this.plane.roll(); });
+    // ロールは左右で回る向きが変わる。どちらも 180度 回って正立と背面が入れ替わる
+    for (const k of ['rollL', 'rollLAlt']) this.keys[k].on('down', () => { this.plane.roll(-1); });
+    for (const k of ['rollR', 'rollRAlt']) this.keys[k].on('down', () => { this.plane.roll(1); });
     this.keys.cannon.on('down', () => this.fireCannon());
     this.keys.mute.on('down', () => this.sfx.toggleMute());
     this.keys.bgm.on('down', () => { this.bgmOn = this.sfx.toggleBgm(); });
@@ -113,7 +116,7 @@ export class PlayScene extends Phaser.Scene {
       fontFamily: 'Georgia, "Times New Roman", serif', fontSize: '24px', color: '#241a12',
     }).setDepth(71);
     this.add.text(20, VIEW.height - 34,
-      'W/S 機首  E 全開（押している間）  R ロール  F 7.7mm  G 20mm   ｜  1-5 フィルム  B BGM  M 消音  Tab 計器', {
+      'W/S 機首  A/D ロール  E 全開（押している間）  F 7.7mm  G 20mm   ｜  1-5 フィルム  B BGM  M 消音  Tab 計器', {
         fontFamily: 'Georgia, serif', fontSize: '15px', color: '#f4e6c8',
       }).setDepth(71).setAlpha(0.75);
     this.debugText = this.add.text(24, 122, '', {

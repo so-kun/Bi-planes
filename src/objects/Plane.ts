@@ -86,11 +86,15 @@ export class Plane {
     return { x: m.x - m.ux * back, y: m.y - m.uy * back - PLANE.width * 0.04 };
   }
 
-  /** ロール開始。連打しても途中では受け付けない */
-  roll(): boolean {
+  /**
+   * ロール開始。連打しても途中では受け付けない。
+   * @param dir +1 なら上面図を見せる向き、-1 なら下面図を見せる向きに回る。
+   *            どちらも 180度 回るので正立と背面は入れ替わり、回り方の見た目だけが変わる
+   */
+  roll(dir: 1 | -1 = 1): boolean {
     if (this.rollT < 1 || !this.alive) return false;
     this.rollFrom = this.state.roll;
-    this.rollTo = this.state.roll + Math.PI;
+    this.rollTo = this.state.roll + Math.PI * dir;
     this.rollT = 0;
     return true;
   }
