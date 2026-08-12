@@ -46,6 +46,25 @@ node tools/flight-probe.mjs
 
 水平飛行の速度、失速する速度、宙返りの大きさ、急上昇からの立て直しを一度に出します。
 
+## 公開する（Vercel）
+
+静的サイトとしてビルドされるので、そのまま Vercel に載せられます。`vercel.json` は用意済みです。
+
+**ダッシュボードから:**
+1. https://vercel.com/new でこのリポジトリを Import
+2. Framework は Vite が自動で選ばれる。Build Command / Output Directory も `vercel.json` の
+   指定（`npm run build` / `dist`）が使われるので、そのまま Deploy
+3. ブランチを指定する場合は Settings → Git → Production Branch で切り替える
+
+**CLI から:**
+```
+npx vercel          # プレビュー環境へ
+npx vercel --prod   # 本番へ
+```
+
+ビルド結果は約 5.8MB です。原本イラスト（`assets/art/original/`、34MB）は実行時に使わないので、
+`vite.config.ts` のプラグインでビルド後に取り除いています。
+
 ## 素材
 
 原本は `assets/art/original/` に無加工で置き、加工物は次で再生成できます:
@@ -54,6 +73,10 @@ node tools/flight-probe.mjs
 python3 tools/cutout.py          # 紙地を抜いて透過 PNG に
 python3 tools/extract_smoke.py   # 煙のひと粒を切り出す
 ```
+
+ゲームで使うスプライトは長辺 640px（気球は 512px）に縮めて書き出しています。表示幅が 102px
+なので原寸の 1536px は過剰なためです。画質を上げたくなったら `tools/cutout.py` の
+`RUNTIME_MAX_WIDTH` を変えて作り直してください。原本は無加工のまま残してあります。
 
 ## 進め方
 

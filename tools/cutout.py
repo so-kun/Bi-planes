@@ -47,6 +47,11 @@ HOLE_MAX_AREA = 4000
 # 実測: 残った紙地は 8〜10、機体のクリーム色の塗装面は 15〜21 で分離できる
 HOLE_MAX_MEAN_DIST = 13.0
 
+# ゲームで使うときの最大幅。原本は 1536px あるが、機体の表示幅は 102px なので過剰。
+# 高解像度の画面で拡大されることを考えても 640px あれば足りる。
+# 原本はそのまま残すので、画質を上げたくなったらここを変えて作り直せばよい
+RUNTIME_MAX_WIDTH = {"planes": 640, "props": 512}
+
 
 def paper_color(rgb: np.ndarray) -> np.ndarray:
     ring = np.concatenate([
@@ -115,8 +120,11 @@ def main():
                 print(f"skip (原本なし): {name}")
                 continue
             img = cut_paper(src)
+            limit = RUNTIME_MAX_WIDTH.get(os.path.basename(out_dir))
+            if limit and img.width > limit:
+                img = img.resize((limit, round(img.height * limit / img.width)), Image.LANCZOS)
             dst = os.path.join(out_dir, f"{name}.png")
-            img.save(dst)
+            img.save(dst, optimize=True)
             print(f"{name}: {img.size} -> {os.path.relpath(dst, ROOT)}")
 
     bg_src = os.path.join(SRC, "stage-sunset.png")
