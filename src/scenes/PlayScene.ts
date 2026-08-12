@@ -64,6 +64,8 @@ export class PlayScene extends Phaser.Scene {
   private keyGuard!: StuckKeyGuard;
   /** パッドを認識したときに一度だけ音を起こす */
   private padWoke = false;
+  private bgmStarted = false;
+  private bgmOn = false;
   /** フィルム処理が外れていないか見張る間隔 */
   private filmWatchdog = 1;
   /** 勝った側。決まるまで null */
@@ -178,7 +180,7 @@ export class PlayScene extends Phaser.Scene {
     k.ai1.on('down', () => this.cycleAi(this.players[0]));
     k.ai2.on('down', () => this.cycleAi(this.players[1]));
     k.mute.on('down', () => this.sfx.toggleMute());
-    k.bgm.on('down', () => this.sfx.toggleBgm());
+    k.bgm.on('down', () => { this.bgmOn = this.sfx.toggleBgm(); });
     k.debug.on('down', () => {
       this.showDebug = !this.showDebug;
       this.debugText.setVisible(this.showDebug);
@@ -240,6 +242,12 @@ export class PlayScene extends Phaser.Scene {
   private wakeAudio(): void {
     this.sfx.resume();
     this.sfx.startEngines(this.players.length);
+    // BGM は最初から鳴らす。ブラウザの決まりで音を出せるようになった時点が
+    // この呼び出しなので、ここで始める（B キーで止められる）
+    if (!this.bgmStarted) {
+      this.bgmStarted = true;
+      this.bgmOn = this.sfx.toggleBgm();
+    }
   }
 
   // ---------------------------------------------------------------- 進行
@@ -414,7 +422,8 @@ export class PlayScene extends Phaser.Scene {
       let consumed = false;
 
       for (const p of this.players) {
-        if (p.id === b.owner || !p.plane.alive) continue;
+        // 再出撃直後は弾がすり抜ける。出てきたところを撃たれて何もできないのを防ぐ
+        if (p.id === b.owner || !p.plane.alive || p.plane.invulnerable) continue;
         const dx = b.x - p.plane.x;
         const dy = b.y - p.plane.y;
         if (dx * dx + dy * dy > PLANE.hitRadius * PLANE.hitRadius) continue;
@@ -592,7 +601,8 @@ export class PlayScene extends Phaser.Scene {
       ...this.players.map((p) => this.debugLines(p)),
       `気球 ${this.balloons.list.length}/${BALLOON.maxAlive}（金 ${this.balloons.list.filter((b) => b.gold).length}）` +
         `  弾 ${this.bullets.list.length}` +
-        `  フィルム ${['切', '弱', '既定', '標準', '強'][this.film?.getLevel() ?? 2]}${this.film ? '' : '（WebGL 無効）'}`,
+        `  フィルム ${['切', '弱', '既定', '標準', '強'][this.film?.getLevel() ?? 2]}${this.film ? '' : '（WebGL 無効）'}` +
+        `  BGM ${this.bgmOn ? 'on' : 'off'}`,
       `キー ${this.keyGuard.heldNames().join(' ') || '(なし)'}` +
         `${this.keyGuard.releasedCount ? `  ／ 押しっぱなしを解除 ${this.keyGuard.releasedCount}回` : ''}`,
     ].join('\n'));
