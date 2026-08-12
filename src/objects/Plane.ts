@@ -46,6 +46,11 @@ export class Plane {
 
   readout: FlightReadout = { speed: 0, aoa: 0, stalled: false, cl: 0 };
 
+  /** 再出撃直後の無敵の残り時間 */
+  private invuln = 0;
+  /** 点滅と震えを進めるための時計。飛んでいる限り止めない */
+  private visualT = 0;
+
   constructor(scene: Phaser.Scene, keys: PlaneKeys, x: number, y: number, facing: Facing) {
     // 左向きに飛ぶ機は、宙返りで到達した状態と同じ ―― 正立でいるには roll が π になる
     this.state = {
@@ -124,8 +129,12 @@ export class Plane {
     this.cannonAmmo--;
   }
 
+  /** 再出撃直後は無敵。弾も当たらない */
+  get invulnerable(): boolean { return this.invuln > 0; }
+
   /** @param part 当たりどころ。省略すると半々でどちらかが鈍る */
   takeDamage(amount: number, part?: 'engine' | 'handling'): void {
+    if (this.invuln > 0) return;
     this.hp = Math.max(0, this.hp - amount);
     const hit = part ?? (Math.random() < 0.5 ? 'engine' : 'handling');
     if (hit === 'engine') {
@@ -155,7 +164,9 @@ export class Plane {
     this.cannonAmmo = WEAPON.cannon.ammo;
     this.rollT = 1;
     this.alive = true;
+    this.invuln = PLANE.invulnDuration;
     this.container.setVisible(true);
+    this.container.setAlpha(1);
   }
 
   update(pitchInput: number, dt: number): void {
@@ -193,8 +204,35 @@ export class Plane {
     }
 
     this.facing = Math.abs(wrapPi(this.state.pitch)) < Math.PI / 2 ? 1 : -1;
-    this.container.setPosition(this.state.x, this.state.y);
+    this.visualT += dt;
+    this.invuln = Math.max(0, this.invuln - dt);
+    this.applyBodyVisual();
     this.applyRollVisual();
+  }
+
+  /**
+   * 位置と濃さ。当たり判定は state のままで、動かすのは見た目だけ。
+   *
+   * - 無敵の間は点滅して透ける
+   * - 傷んでいると震える。縦と横で周期をずらして、円を描かずブルブルさせる
+   */
+  private applyBodyVisual(): void {
+    let ox = 0;
+    let oy = 0;
+    const sev = Math.max(this.hurt('engine'), this.hurt('handling'));
+    if (sev > 0.02) {
+      const amp = PLANE.shake.amplitude * sev;
+      ox = Math.sin(this.visualT * PLANE.shake.speed) * amp;
+      oy = Math.cos(this.visualT * PLANE.shake.speed * 1.37) * amp;
+    }
+    this.container.setPosition(this.state.x + ox, this.state.y + oy);
+
+    if (this.invuln > 0) {
+      const on = Math.sin(this.visualT * PLANE.invulnBlinkHz * Math.PI * 2) >= 0;
+      this.container.setAlpha(on ? PLANE.invulnAlpha.on : PLANE.invulnAlpha.off);
+    } else if (this.container.alpha !== 1) {
+      this.container.setAlpha(1);
+    }
   }
 
   /**

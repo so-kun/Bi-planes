@@ -168,7 +168,10 @@ export class Pilot {
     const dist = aim ? Math.hypot(aim.x - me.x, aim.y - me.y) : Infinity;
     // 地面や失速から逃げている間は、機首が相手ではなく逃げる方へ向いている。
     // このとき撃つと、あらぬ方向へ撃つことになる
-    const onTarget = !urgent && aim !== null && Math.abs(err) < lv.aim;
+    // 再出撃直後の相手には当たらないので撃たない。
+    // ただし狙いは付け続ける ―― 無敵が切れたときに射線に乗っているように
+    const ghost = target === foe && foe !== null && foe.invulnerable;
+    const onTarget = !urgent && !ghost && aim !== null && Math.abs(err) < lv.aim;
     const inMgRange = dist < WEAPON.mg.speed * WEAPON.mg.life * lv.mgRange;
     const wants = onTarget && inMgRange;
 
