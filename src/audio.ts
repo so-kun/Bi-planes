@@ -15,6 +15,9 @@ export class Sfx {
   /** エンジン音は鳴りっぱなしなので、単発の効果音とは別に音量を持たせる */
   private engineBus!: GainNode;
   private engine: EngineVoice | null = null;
+  /** 音を鳴らせるようになる前に要求された段階。鳴らしはじめるときに使う */
+  private engineLevel = 2;
+  private engineDamaged = false;
   private bgm: Bgm | null = null;
   muted = false;
 
@@ -213,13 +216,22 @@ export class Sfx {
     n.start(t); n.stop(t + 1.45);
   }
 
-  /** エンジン音を鳴らしはじめる。level は 1..3 */
+  /**
+   * エンジン音を鳴らしはじめる。
+   *
+   * 音はブラウザの決まりで操作があるまで鳴らせないので、この呼び出しは
+   * ゲームが動きはじめたあとになる。それまでに要求された段階を覚えておいて、
+   * 作った瞬間からその段階で鳴らす。覚えずにいると、段階が変わるまで
+   * 既定のままの音が鳴り続ける
+   */
   startEngine(): void {
     if (!this.ac || this.engine) return;
-    this.engine = new EngineVoice(this.ac, this.engineBus);
+    this.engine = new EngineVoice(this.ac, this.engineBus, this.engineLevel, this.engineDamaged);
   }
 
   setEngine(level: number, damaged: boolean): void {
+    this.engineLevel = level;
+    this.engineDamaged = damaged;
     this.engine?.set(level, damaged);
   }
 
@@ -251,7 +263,11 @@ class EngineVoice {
   private base: GainNode;
   private sputter: number | null = null;
 
-  constructor(private ac: Ctx, out: AudioNode) {
+  /** 段階ごとの基音と、爆発の刻みの速さ */
+  private static readonly PITCH = [0, 46, 64, 88];
+  private static readonly CHOP = [0, 17, 24, 34];
+
+  constructor(private ac: Ctx, out: AudioNode, level = 2, damaged = false) {
     this.o1 = ac.createOscillator(); this.o1.type = 'sawtooth';
     this.o2 = ac.createOscillator(); this.o2.type = 'square'; this.o2.detune.value = 9;
     this.lp = ac.createBiquadFilter(); this.lp.type = 'lowpass';
@@ -262,13 +278,24 @@ class EngineVoice {
     this.chop.connect(chopG); chopG.connect(this.g.gain);
     this.o1.connect(this.lp); this.o2.connect(this.lp);
     this.lp.connect(this.g); this.g.connect(this.base); this.base.connect(out);
+
+    // 発振器は何も指定しないと 440Hz（ラの音）で鳴る。
+    // 刻みの発振器まで 440Hz で回るため、そのままだと機関の音ではなく甲高い音になる。
+    // 作った時点で目的の段階に合わせておく。音量だけは 0 から始めて、set() で立ち上げる
+    const f = EngineVoice.PITCH[level] ?? 64;
+    this.o1.frequency.value = f;
+    this.o2.frequency.value = f * 2.01;
+    this.chop.frequency.value = EngineVoice.CHOP[level] ?? 24;
+    this.lp.frequency.value = 300 + level * 330;
+
     this.o1.start(); this.o2.start(); this.chop.start();
+    this.set(level, damaged);
   }
 
   set(level: number, damaged: boolean): void {
     const t = this.ac.currentTime;
-    const f = [0, 46, 64, 88][level] ?? 64;
-    const c = [0, 17, 24, 34][level] ?? 24;
+    const f = EngineVoice.PITCH[level] ?? 64;
+    const c = EngineVoice.CHOP[level] ?? 24;
     this.o1.frequency.setTargetAtTime(f, t, 0.15);
     this.o2.frequency.setTargetAtTime(f * 2.01, t, 0.15);
     this.chop.frequency.setTargetAtTime(c, t, 0.15);
