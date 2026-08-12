@@ -17,6 +17,7 @@ import { Balloons } from '../objects/Balloons';
 import { Bullets } from '../objects/Bullets';
 import { StuckKeyGuard } from '../input/StuckKeyGuard';
 import { PadInput, type PadState } from '../input/PadInput';
+import { Pilot, AI_LEVELS } from '../ai/Pilot';
 
 const KEY = Phaser.Input.Keyboard.KeyCodes;
 
@@ -45,6 +46,9 @@ interface Player {
   lastEngineState: string;
   /** 出撃位置 */
   home: { x: number; y: number; facing: Facing };
+  /** コンピュータ操縦。0 = 人が操縦、1..3 = 弱・普通・強 */
+  ai: number;
+  pilot: Pilot;
 }
 
 export class PlayScene extends Phaser.Scene {
@@ -68,7 +72,10 @@ export class PlayScene extends Phaser.Scene {
   private hud!: Phaser.GameObjects.Graphics;
   private hudTexts: Phaser.GameObjects.Text[] = [];
   private debugText!: Phaser.GameObjects.Text;
+  /** 操縦がどちらかを切り替えたときだけ出す表示 */
+  private aiText!: Phaser.GameObjects.Text;
   private downedTexts: Phaser.GameObjects.Text[] = [];
+  private aiBadges: Phaser.GameObjects.Text[] = [];
   private resultText!: Phaser.GameObjects.Text;
   private showDebug = false;
 
@@ -109,7 +116,7 @@ export class PlayScene extends Phaser.Scene {
       p1Throttle: KEY.E, p1Mg: KEY.F, p1Cannon: KEY.G,
       p2Up: KEY.UP, p2Down: KEY.DOWN, p2RollL: KEY.LEFT, p2RollR: KEY.RIGHT,
       p2Throttle: KEY.SHIFT, p2Mg: KEY.COMMA, p2Cannon: KEY.PERIOD,
-      restart: KEY.ENTER,
+      restart: KEY.ENTER, ai1: KEY.V, ai2: KEY.C,
       mute: KEY.M, bgm: KEY.B, debug: KEY.TAB,
       f0: KEY.ONE, f1: KEY.TWO, f2: KEY.THREE, f3: KEY.FOUR, f4: KEY.FIVE,
     }) as Record<string, Key>;
@@ -168,6 +175,8 @@ export class PlayScene extends Phaser.Scene {
     }
 
     k.restart.on('down', () => { if (this.winner) this.restart(); });
+    k.ai1.on('down', () => this.cycleAi(this.players[0]));
+    k.ai2.on('down', () => this.cycleAi(this.players[1]));
     k.mute.on('down', () => this.sfx.toggleMute());
     k.bgm.on('down', () => this.sfx.toggleBgm());
     k.debug.on('down', () => {
@@ -197,7 +206,32 @@ export class PlayScene extends Phaser.Scene {
       stallSoundTimer: 0,
       lastEngineState: '',
       home,
+      ai: 0,
+      pilot: new Pilot(AI_LEVELS[1]),
     };
+  }
+
+  /**
+   * コンピュータ操縦の切り替え。切 → 弱 → 普通 → 強 → 切 と回る。
+   * 2P を任せれば1人で遊べ、両方に任せればデモとして眺められる
+   */
+  private cycleAi(p: Player): void {
+    p.ai = (p.ai + 1) % (AI_LEVELS.length + 1);
+    if (p.ai > 0) p.pilot.setLevel(AI_LEVELS[p.ai - 1]);
+    p.pilot.reset();
+    this.flashAi();
+  }
+
+  private flashAi(): void {
+    const label = this.players
+      .map((p) => `${p.name} ${p.ai === 0 ? '人' : `CPU ${AI_LEVELS[p.ai - 1].name}`}`)
+      .join('　　');
+    this.aiText.setText(label);
+    this.aiText.setAlpha(1);
+    for (const p of this.players) {
+      this.aiBadges[p.id].setText(p.ai === 0 ? '' : `CPU 操縦  ${AI_LEVELS[p.ai - 1].name}`);
+      this.aiBadges[p.id].setVisible(p.ai > 0);
+    }
   }
 
   /** 試合中か。勝敗が決まったら操作を受け付けない */
@@ -238,6 +272,7 @@ export class PlayScene extends Phaser.Scene {
     this.checkHits();
     this.bullets.draw();
     this.drawHud();
+    if (this.aiText.alpha > 0) this.aiText.setAlpha(Math.max(0, this.aiText.alpha - dt * 0.5));
   }
 
   private updatePlayer(p: Player, dt: number): void {
@@ -254,19 +289,38 @@ export class PlayScene extends Phaser.Scene {
       return;
     }
 
-    // キーボードは倒し切りの3値、パッドは倒した量がそのまま出る。
-    // 両方触っている場合は、深く入れているほうを採る
-    const byKey = (p.keys.up.isDown ? 1 : 0) - (p.keys.down.isDown ? 1 : 0);
-    const pitch = Math.abs(p.padState.pitch) > Math.abs(byKey) ? p.padState.pitch : byKey;
+    // コンピュータに任せているときは人の操作を見ない。
+    // AI が出すのは人と同じ5つ（機首・ロール・スロットル・7.7mm・20mm）だけなので、
+    // ここから先の扱いは人が操縦しているときと変わらない
+    let pitch: number;
+    let throttle: boolean;
+    let rollEdge: -1 | 0 | 1;
+    let mg: boolean;
+    let cannonEdge: boolean;
+
+    if (p.ai > 0) {
+      const foe = this.other(p);
+      const intent = p.pilot.think(p.plane, foe.plane.alive ? foe.plane : null, this.balloons.list, dt);
+      ({ pitch, throttle, rollEdge, mg, cannonEdge } = intent);
+    } else {
+      // キーボードは倒し切りの3値、パッドは倒した量がそのまま出る。
+      // 両方触っている場合は、深く入れているほうを採る
+      const byKey = (p.keys.up.isDown ? 1 : 0) - (p.keys.down.isDown ? 1 : 0);
+      pitch = Math.abs(p.padState.pitch) > Math.abs(byKey) ? p.padState.pitch : byKey;
+      throttle = p.keys.throttle.isDown || p.padState.throttle;
+      rollEdge = p.padState.rollEdge;
+      mg = p.keys.mg.isDown || p.padState.mg;
+      cannonEdge = p.padState.cannonEdge;
+    }
 
     // スロットルは押している間だけ全開。離せば巡航に戻る
-    p.plane.setThrottle(p.keys.throttle.isDown || p.padState.throttle ? 1 : 0);
+    p.plane.setThrottle(throttle ? 1 : 0);
     p.plane.update(pitch, dt);
     this.syncEngineSound(p);
 
-    if (p.padState.rollEdge !== 0) p.plane.roll(p.padState.rollEdge);
-    if (p.padState.cannonEdge) this.fireCannon(p);
-    if (p.keys.mg.isDown || p.padState.mg) this.fireMg(p);
+    if (rollEdge !== 0) p.plane.roll(rollEdge);
+    if (cannonEdge) this.fireCannon(p);
+    if (mg) this.fireMg(p);
 
     // 地面への激突は自滅。相手に点が入る
     if (p.plane.y >= VIEW.groundY) this.crash(p);
@@ -341,6 +395,7 @@ export class PlayScene extends Phaser.Scene {
       p.score = 0;
       p.respawnTimer = 0;
       p.lastEngineState = '';
+      p.pilot.reset();
       p.plane.reset(p.home.x, p.home.y, p.home.facing);
       this.downedTexts[p.id].setVisible(false);
     }
@@ -489,6 +544,12 @@ export class PlayScene extends Phaser.Scene {
       this.hudTexts[p.id] = this.add.text(0, 0, '', {
         fontFamily: 'Georgia, "Times New Roman", serif', fontSize: '22px', color: '#f4e6c8',
       }).setDepth(71);
+      // 誰が操縦しているかは試合中ずっと分かっている必要があるので、計器の下に出しておく
+      this.aiBadges[p.id] = this.add.text(
+        p.id === 0 ? 26 : VIEW.width - 26, 110, '', {
+          fontFamily: 'Georgia, serif', fontSize: '15px', color: '#f4e6c8',
+          backgroundColor: 'rgba(24,16,10,0.5)', padding: { x: 7, y: 3 },
+        }).setOrigin(p.id === 0 ? 0 : 1, 0).setDepth(71).setVisible(false);
       this.downedTexts[p.id] = this.add.text(
         p.id === 0 ? VIEW.width * 0.27 : VIEW.width * 0.73, VIEW.height / 2 - 30, '', {
           fontFamily: 'Georgia, "Times New Roman", serif', fontSize: '28px', color: '#f4e6c8',
@@ -500,7 +561,7 @@ export class PlayScene extends Phaser.Scene {
     this.add.text(VIEW.width / 2, VIEW.height - 21,
       '1P  W/S 機首  A/D ロール  E 全開  F 7.7mm  G 20mm　　' +
       '2P  ↑/↓ 機首  ←/→ ロール  Shift 全開  , 7.7mm  . 20mm　　' +
-      '1-5 フィルム  B BGM  M 消音  Tab 計器', {
+      'V/C CPU 操縦（1P/2P）  1-5 フィルム  B BGM  M 消音  Tab 計器', {
         fontFamily: 'Georgia, serif', fontSize: '14px', color: '#f4e6c8',
         backgroundColor: 'rgba(24,16,10,0.5)', padding: { x: 12, y: 5 },
       }).setOrigin(0.5).setDepth(71).setAlpha(0.9);
@@ -509,6 +570,12 @@ export class PlayScene extends Phaser.Scene {
       fontFamily: 'Georgia, "Times New Roman", serif', fontSize: '44px', color: '#f4e6c8',
       align: 'center', stroke: '#241a12', strokeThickness: 8,
     }).setOrigin(0.5).setDepth(73).setVisible(false);
+
+    // 切り替えたときだけ出て、しばらくすると消える。常時出ていると邪魔になる
+    this.aiText = this.add.text(VIEW.width / 2, 128, '', {
+      fontFamily: 'Georgia, "Times New Roman", serif', fontSize: '26px', color: '#f4e6c8',
+      align: 'center', stroke: '#241a12', strokeThickness: 5,
+    }).setOrigin(0.5).setDepth(72).setAlpha(0);
 
     this.debugText = this.add.text(24, 128, '', {
       fontFamily: 'ui-monospace, monospace', fontSize: '13px', color: '#f4e6c8',
@@ -585,7 +652,8 @@ export class PlayScene extends Phaser.Scene {
   private debugLines(p: Player): string {
     const r = p.plane.readout;
     return [
-      `${p.name} 得点 ${p.score}  速度 ${r.speed.toFixed(0)}${r.stalled ? ' ★失速★' : ''}` +
+      `${p.name}[${p.ai === 0 ? '人' : `CPU ${AI_LEVELS[p.ai - 1].name}`}] 得点 ${p.score}` +
+        `  速度 ${r.speed.toFixed(0)}${r.stalled ? ' ★失速★' : ''}` +
         `  迎え角 ${(r.aoa * 180 / Math.PI).toFixed(1)}°  ${p.plane.inverted ? '背面' : '正立'}` +
         `${p.plane.rolling ? '(ロール中)' : ''}`,
       `   HP ${p.plane.hp}  エンジン${(p.plane.damage.engine * 100).toFixed(0)}%（黒煙）` +
