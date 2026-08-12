@@ -81,9 +81,9 @@
 <div class="sheet">
   <header>
     <div class="marq">
-      <p class="eyebrow">Screen Mock — Rev.2</p>
+      <p class="eyebrow">Screen Mock — Rev.3</p>
       <h1>BI-PLANES<br>実画面モック</h1>
-      <p class="sub">飛行する機体・煙の軌跡・2種類の弾道</p>
+      <p class="sub">飛行する機体・煙の軌跡・2種類の弾道 ― アート確定版</p>
     </div>
   </header>
 
@@ -92,6 +92,7 @@
     <p class="sec-note">
       機体を実際に飛ばしています。<b>通常飛行中も薄い白煙を引く</b>ので、どこをどう飛んだかが残ります。
       被弾している P2（青）は、そこに濃い黒煙が重なります。
+      フィルム処理は<b>「既定」＝弱と標準の中間</b>で確定しています。
       武装は下のボタンでも撃てます ―― 7.7mm と 20mm の弾道の違いをご確認ください。
     </p>
 
@@ -160,13 +161,14 @@
       <span class="lbl">フィルム</span>
       <div class="seg" id="seg" role="group" aria-label="フィルム強度">
         <button data-lv="0" aria-pressed="false">切</button>
-        <button data-lv="1" aria-pressed="true">弱</button>
-        <button data-lv="2" aria-pressed="false">標準</button>
-        <button data-lv="3" aria-pressed="false">強</button>
+        <button data-lv="1" aria-pressed="false">弱</button>
+        <button data-lv="2" aria-pressed="true">既定</button>
+        <button data-lv="3" aria-pressed="false">標準</button>
+        <button data-lv="4" aria-pressed="false">強</button>
       </div>
       <label class="toggle"><input type="checkbox" id="weave" checked>ゲートウィーブ</label>
     </div>
-    <p class="caption">図1 — 機体は画面幅の 10%。縦キズ（フィルムの傷）は「わざとらしい」とのご指摘を受けて外しました。</p>
+    <p class="caption">図1 — 機体は画面幅の 8%。縦キズは不採用。ゲートウィーブの量は強度を変えても一定です。</p>
   </section>
 
   <section>
@@ -209,18 +211,20 @@
   </section>
 
   <section>
-    <div class="sec-head"><h2>三、ご判断いただきたい点</h2><div class="rule"></div></div>
+    <div class="sec-head"><h2>三、確定した内容</h2><div class="rule"></div></div>
     <div class="check">
       <ol>
-        <li><b>機体サイズ</b> — 画面幅の 10% にしました。これで良いか</li>
-        <li><b>白煙の軌跡</b> — 濃さと残る長さ。もっと長く残す／薄くする等ご指示ください</li>
-        <li><b>黒煙</b> — 被弾時の濃さと量</li>
-        <li><b>弾道と発射炎</b> — 7.7mm と 20mm の差の付け方、炎の大きさ</li>
+        <li><b>フィルム処理</b> — 既定は「弱と標準の中間」。縦キズは不採用</li>
+        <li><b>ゲートウィーブ</b> — 現在の量で確定。強度を上げても揺れは増えない</li>
+        <li><b>機体サイズ</b> — 画面幅の 8%</li>
+        <li><b>煙</b> — 通常飛行は薄い白煙の軌跡、被弾は濃い黒煙</li>
+        <li><b>武装</b> — 7.7mm は直線・高速・長射程・連射、20mm は低速・短射程・山なり。発射炎あり</li>
+        <li><b>HUD</b> — クリーム地＋黒枠</li>
       </ol>
     </div>
   </section>
 
-  <footer>BI-PLANES PROJECT — SCREEN MOCK — REV.2</footer>
+  <footer>BI-PLANES PROJECT — SCREEN MOCK — REV.3</footer>
 </div>
 
 <div id="assets" aria-hidden="true">
@@ -280,7 +284,10 @@ const planes = [
   {img:IMG.red,  x:-140, y:470, vx:255, faceRight:true,  amp:62, freq:.52, phase:0,   damaged:false},
   {img:IMG.blue, x:1420, y:250, vx:-235, faceRight:false, amp:54, freq:.63, phase:1.4, damaged:true },
 ];
-const PLANE_W = LW * 0.10;                       // 画面幅の 10%
+const PLANE_W = LW * 0.08;                       // 画面幅の 8%
+// 煙と発射炎の大きさは機体サイズに追従させる。
+// 機体だけ縮めると煙が相対的に大きくなり、承認時の見え方が崩れるため
+const S = PLANE_W / 128;
 
 function updatePlane(p, t, dt){
   const prevY = p.y;
@@ -336,10 +343,10 @@ function addPuff(x, y, kind){
   puffs.push({
     img, x, y, t:0,
     life: light ? 3.6 + Math.random()*1.8 : 2.1 + Math.random()*.8,
-    size: light ? LW*(.015+Math.random()*.006) : LW*(.034+Math.random()*.016),
+    size: (light ? LW*(.015+Math.random()*.006) : LW*(.034+Math.random()*.016)) * S,
     grow: light ? 2.2 : 1.7,
-    vx: light ? (Math.random()-.5)*12 : 26 + Math.random()*22,
-    vy: light ? -(3+Math.random()*7) : -(16+Math.random()*16),
+    vx: (light ? (Math.random()-.5)*12 : 26 + Math.random()*22) * S,
+    vy: (light ? -(3+Math.random()*7) : -(16+Math.random()*16)) * S,
     rot: (Math.random()-.5)*.7, spin:(Math.random()-.5)*.5,
     peak: light ? .38 : .9,
   });
@@ -431,7 +438,7 @@ function drawFlashes(dt){
     if(f.t >= f.life){ flashes.splice(i,1); continue; }
     const k = 1 - f.t/f.life;
     const big = f.kind === 'cannon';
-    const len = (big ? 78 : 34) * k, wid = (big ? 26 : 11) * k;
+    const len = (big ? 78 : 34) * k * S, wid = (big ? 26 : 11) * k * S;
     fc.save();
     fc.globalCompositeOperation = 'lighter';
     fc.translate(f.x, f.y); fc.rotate(f.ang);
@@ -513,13 +520,16 @@ document.getElementById('damageOn').addEventListener('change', e=>{ damageOn = e
    縦キズ（フィルムの傷）は作為的に見えるため外し、
    粒状感・ゴミ・露光ゆらぎ・ゲートウィーブ・ビネットだけを残している
    ===================================================================== */
+// weave（ゲートウィーブ）は強度を上げても .35 のまま。
+// 画面全体が揺れる演出は今の量で確定しているため、他の要素とは連動させない
 const PRESETS = [
-  {blur:0,   sat:1,   sep:0,   con:1,   grain:0,   dirt:0,  flick:0,   weave:0,   halo:0},
-  {blur:.3,  sat:.95, sep:.06, con:.99, grain:.15, dirt:.4, flick:.02, weave:.35, halo:.5},
-  {blur:.55, sat:.88, sep:.13, con:.96, grain:.28, dirt:1,  flick:.04, weave:.7,  halo:1},
-  {blur:.9,  sat:.76, sep:.24, con:.91, grain:.44, dirt:2,  flick:.07, weave:1.2, halo:1.5},
+  {blur:0,    sat:1,    sep:0,    con:1,    grain:0,    dirt:0,  flick:0,    weave:0,   halo:0},
+  {blur:.30,  sat:.95,  sep:.06,  con:.99,  grain:.15,  dirt:.4, flick:.02,  weave:.35, halo:.5},
+  {blur:.42,  sat:.915, sep:.095, con:.975, grain:.215, dirt:.7, flick:.03,  weave:.35, halo:.75},  // 既定
+  {blur:.55,  sat:.88,  sep:.13,  con:.96,  grain:.28,  dirt:1,  flick:.04,  weave:.35, halo:1},
+  {blur:.9,   sat:.76,  sep:.24,  con:.91,  grain:.44,  dirt:2,  flick:.07,  weave:.35, halo:1.5},
 ];
-let level = 1, useWeave = true;
+let level = 2, useWeave = true;
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const gCv = document.getElementById('filmGrain'), dCv = document.getElementById('filmDirt');
 const gx = gCv.getContext('2d'), dx = dCv.getContext('2d');
