@@ -10,7 +10,13 @@
 
 ## 技術スタック（確定）
 
-Phaser 3 + TypeScript + 自作フライトモデル。詳細は `docs/decisions.md`。
+Phaser 3 + TypeScript + Vite + 自作フライトモデル。詳細は `docs/decisions.md`。
+
+## 動かす
+
+`npm run dev` で開発サーバ。`npm run build` で型チェックとビルド。
+飛行の数値は `src/config.ts` に集約。`node tools/flight-probe.mjs` で
+ブラウザなしに速度・失速・宙返りの大きさを確認できる。
 
 ## 絶対ルール
 
