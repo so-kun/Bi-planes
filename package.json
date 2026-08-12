@@ -1,0 +1,31 @@
+{
+  "name": "bi-planes",
+  "version": "0.1.0",
+  "description": "レトロゲーム Bi-Planes のブラウザ版リメイク",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/so-kun/Bi-planes.git"
+  },
+  "bugs": {
+    "url": "https://github.com/so-kun/Bi-planes/issues"
+  },
+  "homepage": "https://github.com/so-kun/Bi-planes#readme",
+  "dependencies": {
+    "phaser": "^3.90.0"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2",
+    "vite": "^8.2.1"
+  },
+  "private": true,
+  "type": "module"
+}

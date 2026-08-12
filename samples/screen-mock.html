@@ -1,0 +1,961 @@
+<title>Bi-Planes 実画面モック</title>
+<style>
+  :root{
+    --paper:#e9d6b4; --ink:#241a12; --ink-soft:#5b4632;
+    --red:#a8402c; --gold:#d59a34; --cream:#f4e6c8; --blue:#3c5a78;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--paper); color:var(--ink);
+    font-family:Georgia,'Times New Roman','Hiragino Mincho ProN','Yu Mincho',serif;
+    line-height:1.7;
+    background-image:radial-gradient(ellipse at 18% 8%, rgba(255,255,255,.32), transparent 52%),
+                     radial-gradient(ellipse at 82% 92%, rgba(110,80,40,.15), transparent 56%);
+  }
+  .sheet{max-width:1080px;margin:0 auto;padding:38px 26px 84px}
+  header{text-align:center;padding:28px 12px 6px}
+  .marq{display:inline-block;border:4px double var(--ink);padding:18px 42px 22px;
+    background:var(--cream);box-shadow:0 4px 0 rgba(36,26,18,.26);position:relative}
+  .marq::before,.marq::after{content:"★";position:absolute;top:50%;transform:translateY(-50%);color:var(--red);font-size:19px}
+  .marq::before{left:14px}.marq::after{right:14px}
+  .eyebrow{font-size:12.5px;letter-spacing:.42em;text-transform:uppercase;color:var(--ink-soft);margin:0 0 6px}
+  h1{margin:0;font-size:clamp(32px,5.2vw,50px);line-height:1.12;letter-spacing:.04em;font-weight:900;
+    text-wrap:balance;text-shadow:2px 2px 0 var(--gold)}
+  .sub{margin:9px 0 0;font-size:14.5px;color:var(--ink-soft);font-style:italic}
+  section{margin-top:58px}
+  .sec-head{display:flex;align-items:center;gap:15px;margin-bottom:8px}
+  .sec-head h2{margin:0;font-size:24px;letter-spacing:.14em;white-space:nowrap}
+  .sec-head .rule{flex:1;height:7px;border-top:2px solid var(--ink);border-bottom:2px solid var(--ink)}
+  .sec-note{margin:0 0 18px;color:var(--ink-soft);font-size:14.5px;max-width:66ch}
+
+  /* ===== 画面 ===== */
+  .projector{position:relative;border:5px solid var(--ink);border-radius:10px;overflow:hidden;
+    box-shadow:0 10px 0 rgba(36,26,18,.28);background:#0d0a08;isolation:isolate}
+  .stage{position:relative;width:100%;aspect-ratio:16/9;transform-origin:center;overflow:hidden}
+  .stage .bg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+  .stage #fx{position:absolute;inset:0;width:100%;height:100%}
+  .hud{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+  #assets{display:none}
+
+  .film-canvas{position:absolute;inset:-2%;width:104%;height:104%;pointer-events:none}
+  .film-grain{mix-blend-mode:overlay}
+  .film-halo{position:absolute;inset:0;pointer-events:none;
+    background:radial-gradient(ellipse at 46% 40%, rgba(255,238,196,.16), transparent 62%);mix-blend-mode:screen}
+  .film-vig{position:absolute;inset:0;pointer-events:none;
+    background:radial-gradient(ellipse at center, transparent 50%, rgba(32,18,8,.28) 84%, rgba(20,10,4,.52) 100%)}
+
+  /* ===== コントロール ===== */
+  .controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:15px 0 0}
+  .controls .lbl{font-size:12.5px;letter-spacing:.2em;color:var(--ink-soft);text-transform:uppercase}
+  .seg{display:flex;border:3px solid var(--ink);border-radius:8px;overflow:hidden;box-shadow:0 3px 0 var(--ink)}
+  .seg button{font-family:inherit;font-size:14px;padding:7px 15px;border:0;cursor:pointer;
+    background:var(--cream);color:var(--ink);border-right:2px solid var(--ink)}
+  .seg button:last-child{border-right:0}
+  .seg button[aria-pressed="true"]{background:var(--red);color:var(--cream);font-weight:700}
+  .seg button:focus-visible,.btn:focus-visible{outline:3px dashed var(--red);outline-offset:2px}
+  .btn{font-family:inherit;font-size:14px;padding:7px 15px;cursor:pointer;background:var(--cream);
+    color:var(--ink);border:3px solid var(--ink);border-radius:8px;box-shadow:0 3px 0 var(--ink)}
+  .btn:active{transform:translateY(2px);box-shadow:0 1px 0 var(--ink)}
+  .toggle{font-size:13.5px;display:inline-flex;gap:7px;align-items:center;background:var(--cream);
+    border:3px solid var(--ink);border-radius:8px;padding:6px 12px;box-shadow:0 3px 0 var(--ink);cursor:pointer}
+  .toggle input{width:16px;height:16px;accent-color:var(--red);cursor:pointer}
+  .caption{font-size:13px;color:var(--ink-soft);margin-top:11px;text-align:center;font-style:italic}
+
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:16px}
+  .card{background:var(--cream);border:3px solid var(--ink);border-radius:8px;padding:12px 14px;
+    box-shadow:0 4px 0 rgba(36,26,18,.2)}
+  .card h3{margin:0 0 3px;font-size:15.5px;letter-spacing:.05em}
+  .card p{margin:0;font-size:12.5px;color:var(--ink-soft);line-height:1.6}
+  .card .spec{margin:8px 0 0;padding:0;list-style:none;font-size:12.5px;color:var(--ink-soft)}
+  .card .spec li{margin:2px 0;display:flex;gap:8px}
+  .card .spec b{color:var(--ink);min-width:4.5em;font-weight:700}
+  .check{background:var(--cream);border:3px solid var(--ink);border-radius:8px;padding:18px 24px;
+    box-shadow:0 5px 0 rgba(36,26,18,.22)}
+  .check ol{margin:8px 0 0;padding-left:22px}
+  .check li{margin:7px 0;font-size:14.5px}
+  .check li b{color:var(--red)}
+  footer{margin-top:58px;text-align:center;font-size:12px;color:var(--ink-soft);letter-spacing:.2em}
+</style>
+
+<div class="sheet">
+  <header>
+    <div class="marq">
+      <p class="eyebrow">Screen Mock — Rev.5</p>
+      <h1>BI-PLANES<br>実画面モック</h1>
+      <p class="sub">ロール・気球・煙の軌跡・2種類の弾道・撃墜と激突の爆発</p>
+    </div>
+  </header>
+
+  <section>
+    <div class="sec-head"><h2>一、対戦画面</h2><div class="rule"></div></div>
+    <p class="sec-note">
+      機体を実際に飛ばしています。<b>通常飛行中も薄い白煙を引く</b>ので、どこをどう飛んだかが残ります。
+      被弾している P2（青）は、そこに濃い黒煙が重なります。
+      フィルム処理は<b>「既定」＝弱と標準の中間</b>で確定しています。
+      <b>ロール（正立⇄背面）</b>と<b>気球</b>を追加しました。武装・爆発とあわせて下のボタンで試せます。
+      P1（赤）は5秒ごとに自動でロールします。
+    </p>
+
+    <div class="projector" id="proj">
+      <div class="stage" id="stage">
+        <img class="bg" src="../assets/art/bg/stage-sunset.png" alt="夕暮れの町のステージ背景">
+        <canvas id="fx"></canvas>
+
+        <svg class="hud" viewBox="0 0 1280 720" aria-label="HUD">
+          <g font-family="Georgia, serif">
+            <g stroke="#241a12" stroke-width="5">
+              <rect x="22" y="20" width="262" height="84" rx="9" fill="#f4e6c8"/>
+              <rect x="22" y="20" width="68" height="84" rx="9" fill="#a8402c"/>
+            </g>
+            <text x="56" y="76" font-size="38" font-weight="900" fill="#f4e6c8" text-anchor="middle">P1</text>
+            <text x="106" y="54" font-size="25" font-weight="900" fill="#241a12">★ 3<tspan font-size="14" font-weight="400" fill="#5b4632">／10</tspan></text>
+            <g transform="translate(106 64)">
+              <rect width="150" height="13" rx="6.5" fill="#d3bd93" stroke="#241a12" stroke-width="3"/>
+              <rect x="3" y="3" width="100" height="7" rx="3.5" fill="#a8402c"/>
+            </g>
+            <g transform="translate(106 90)" stroke="#241a12" stroke-width="3">
+              <rect x="0" y="-8" width="9" height="14" rx="3" fill="#d59a34"/><rect x="14" y="-8" width="9" height="14" rx="3" fill="#d59a34"/>
+              <rect x="28" y="-8" width="9" height="14" rx="3" fill="#d59a34"/><rect x="42" y="-8" width="9" height="14" rx="3" fill="#c4b087"/>
+              <rect x="56" y="-8" width="9" height="14" rx="3" fill="#c4b087"/>
+            </g>
+            <text x="192" y="95" font-size="12" fill="#5b4632" font-style="italic">throttle</text>
+            <g transform="translate(254 88)" stroke="#241a12" stroke-width="3">
+              <path d="M-14 6 A 16 16 0 0 1 14 6" fill="none"/><line x1="0" y1="6" x2="9" y2="-6" stroke-width="4" stroke="#a8402c"/>
+            </g>
+
+            <g stroke="#241a12" stroke-width="5">
+              <rect x="996" y="20" width="262" height="84" rx="9" fill="#f4e6c8"/>
+              <rect x="1190" y="20" width="68" height="84" rx="9" fill="#3c5a78"/>
+            </g>
+            <text x="1224" y="76" font-size="38" font-weight="900" fill="#f4e6c8" text-anchor="middle">P2</text>
+            <text x="1014" y="54" font-size="25" font-weight="900" fill="#241a12">★ 5<tspan font-size="14" font-weight="400" fill="#5b4632">／10</tspan></text>
+            <g transform="translate(1014 64)">
+              <rect width="150" height="13" rx="6.5" fill="#d3bd93" stroke="#241a12" stroke-width="3"/>
+              <rect x="3" y="3" width="52" height="7" rx="3.5" fill="#3c5a78"/>
+            </g>
+            <g transform="translate(1014 90)" stroke="#241a12" stroke-width="3">
+              <rect x="0" y="-8" width="9" height="14" rx="3" fill="#d59a34"/><rect x="14" y="-8" width="9" height="14" rx="3" fill="#d59a34"/>
+              <rect x="28" y="-8" width="9" height="14" rx="3" fill="#c4b087"/><rect x="42" y="-8" width="9" height="14" rx="3" fill="#c4b087"/>
+              <rect x="56" y="-8" width="9" height="14" rx="3" fill="#c4b087"/>
+            </g>
+            <text x="1100" y="95" font-size="12" fill="#5b4632" font-style="italic">throttle</text>
+            <g transform="translate(1162 88)" stroke="#241a12" stroke-width="3">
+              <path d="M-14 6 A 16 16 0 0 1 14 6" fill="none"/><line x1="0" y1="6" x2="-4" y2="-8" stroke-width="4" stroke="#3c5a78"/>
+            </g>
+          </g>
+        </svg>
+      </div>
+      <div class="film-halo" id="halo"></div>
+      <canvas class="film-canvas film-grain" id="filmGrain"></canvas>
+      <canvas class="film-canvas film-dirt" id="filmDirt"></canvas>
+      <div class="film-vig"></div>
+    </div>
+
+    <div class="controls">
+      <button class="btn" id="fireMg">7.7mm を連射</button>
+      <button class="btn" id="fireCannon">20mm を発射</button>
+      <button class="btn" id="rollP1">ロール（正立 ⇄ 背面）</button>
+      <button class="btn" id="balloonBtn">気球を出す</button>
+      <button class="btn" id="killAir">20mm で撃墜（空中爆発）</button>
+      <button class="btn" id="killGround">地面に激突</button>
+      <label class="toggle"><input type="checkbox" id="trailOn" checked>通常飛行の白煙</label>
+      <label class="toggle"><input type="checkbox" id="damageOn" checked>P2 の被弾（黒煙）</label>
+    </div>
+    <div class="controls">
+      <span class="lbl">フィルム</span>
+      <div class="seg" id="seg" role="group" aria-label="フィルム強度">
+        <button data-lv="0" aria-pressed="false">切</button>
+        <button data-lv="1" aria-pressed="false">弱</button>
+        <button data-lv="2" aria-pressed="true">既定</button>
+        <button data-lv="3" aria-pressed="false">標準</button>
+        <button data-lv="4" aria-pressed="false">強</button>
+      </div>
+      <label class="toggle"><input type="checkbox" id="weave" checked>ゲートウィーブ</label>
+    </div>
+    <p class="caption">図1 — 機体は画面幅の 8%。縦キズは不採用。ゲートウィーブの量は強度を変えても一定です。</p>
+  </section>
+
+  <section>
+    <div class="sec-head"><h2>二、武装の設計</h2><div class="rule"></div></div>
+    <p class="sec-note">
+      弾道はゲームシステムをそのまま見た目に落としています。数値は仮で、プレイテストで詰めます。
+    </p>
+    <div class="cards">
+      <div class="card">
+        <h3>7.7mm 機銃</h3>
+        <p>まっすぐ・速い・遠くまで届く。連射でばらまいて削る武器。</p>
+        <ul class="spec">
+          <li><b>弾速</b>1500 px/秒（画面を約0.9秒で横断）</li>
+          <li><b>弾道</b>直線。重力の影響なし</li>
+          <li><b>射程</b>画面全域</li>
+          <li><b>連射</b>毎秒約11発</li>
+          <li><b>威力</b>小（撃墜まで複数発）</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>20mm 機関砲</h3>
+        <p>遅い・近距離・山なり。当てにくいが当たれば一撃。</p>
+        <ul class="spec">
+          <li><b>弾速</b>600 px/秒</li>
+          <li><b>弾道</b>重力 430 px/秒² で落ちる山なり</li>
+          <li><b>射程</b>約 480px（画面幅の約37%）で消滅</li>
+          <li><b>連射</b>単発・装填あり</li>
+          <li><b>威力</b>一撃撃墜</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>ロール（正立 ⇄ 背面）</h3>
+        <p>横から見た機体が機軸まわりに回る動きを、いただいた上面図・下面図を中間コマとして補間しています。</p>
+        <ul class="spec">
+          <li><b>0°</b>側面図（正立）</li>
+          <li><b>90°</b>上面図。翼が画面いっぱいに開いて見える</li>
+          <li><b>180°</b>側面図を上下反転（背面飛行）</li>
+          <li><b>270°</b>下面図</li>
+          <li><b>補間</b>翼の見かけの高さは sin に比例するので、上面図・下面図を縦に潰しながら側面図と入れ替える</li>
+          <li><b>所要</b>180°で 0.45秒（出だしと終わりを緩める）</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>気球</h3>
+        <p>下からランダムに上がってくる的。7.7mm でも 20mm でも割れます。当たり判定は球皮だけで、籠や索には当たりません。</p>
+        <ul class="spec">
+          <li><b>大きさ</b>画面幅の 7.5%（機体は 8%）</li>
+          <li><b>上昇</b>毎秒 34〜54px、左右にゆっくり揺れる</li>
+          <li><b>割れる</b>小さな火の玉＋黒煙＋布の破片</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>爆発</h3>
+        <p>火の玉・黒煙・土煙は、<b>提供いただいた煙の絵を火や土の色に染め直して</b>作っています。別の絵を用意すると絵柄が浮くためです。</p>
+        <ul class="spec">
+          <li><b>空中</b>閃光 → 全方位の火の玉 → 破片 → 黒煙が膨らんで残る</li>
+          <li><b>地面</b>火は上半分だけに立ち上がり、土煙が横に広がる。衝撃波の輪は横長</li>
+          <li><b>破片</b>機体の欠片が重力で放物線を描いて落ちる</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>発射炎（マズルフラッシュ）</h3>
+        <p>撃った瞬間、機首から炎が出ます。どちらが撃っているかが一目でわかるように、20mm は大きく長い炎＋発射煙にしてあります。</p>
+        <ul class="spec">
+          <li><b>7.7mm</b>小さく速い閃光（0.085秒）</li>
+          <li><b>20mm</b>大きな橙の炎（0.17秒）＋白い発射煙</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><h2>三、確定した内容</h2><div class="rule"></div></div>
+    <div class="check">
+      <ol>
+        <li><b>フィルム処理</b> — 既定は「弱と標準の中間」。縦キズは不採用</li>
+        <li><b>ゲートウィーブ</b> — 現在の量で確定。強度を上げても揺れは増えない</li>
+        <li><b>機体サイズ</b> — 画面幅の 8%</li>
+        <li><b>煙</b> — 通常飛行は薄い白煙の軌跡、被弾は濃い黒煙</li>
+        <li><b>武装</b> — 7.7mm は直線・高速・射程は画面幅の約60%・連射、20mm は低速・より短射程・山なり。発射炎あり</li>
+        <li><b>爆発</b> — 空中撃墜と地面への激突で、火の広がり方と土煙の有無を描き分け</li>
+        <li><b>ロール</b> — 上面図・下面図を中間コマに使い、正立と背面を 0.45秒で入れ替え</li>
+        <li><b>気球</b> — 下から上昇する的。撃つと割れる</li>
+        <li><b>HUD</b> — クリーム地＋黒枠</li>
+      </ol>
+    </div>
+  </section>
+
+  <footer>BI-PLANES PROJECT — SCREEN MOCK — REV.5</footer>
+</div>
+
+<div id="assets" aria-hidden="true">
+  <img id="imgRed" src="../assets/art/planes/plane-red.png" alt="">
+  <img id="imgBlue" src="../assets/art/planes/plane-blue.png" alt="">
+  <img id="pd1" src="../assets/art/smoke/puff-dark-01.png" alt="">
+  <img id="pd2" src="../assets/art/smoke/puff-dark-02.png" alt="">
+  <img id="pd3" src="../assets/art/smoke/puff-dark-03.png" alt="">
+  <img id="pd4" src="../assets/art/smoke/puff-dark-04.png" alt="">
+  <img id="pl1" src="../assets/art/smoke/puff-light-01.png" alt="">
+  <img id="pl2" src="../assets/art/smoke/puff-light-02.png" alt="">
+  <img id="pl3" src="../assets/art/smoke/puff-light-03.png" alt="">
+  <img id="pl4" src="../assets/art/smoke/puff-light-04.png" alt="">
+  <img id="imgBalloon" src="../assets/art/props/baloon.png" alt="">
+  <img id="imgRedTop" src="../assets/art/planes/plane-red-top2.png" alt="">
+  <img id="imgRedUnder" src="../assets/art/planes/plane-red-under2.png" alt="">
+  <img id="imgBlueTop" src="../assets/art/planes/plane-blue-top2.png" alt="">
+  <img id="imgBlueUnder" src="../assets/art/planes/plane-blue-under2.png" alt="">
+</div>
+
+<script>
+/* =====================================================================
+   論理解像度 1280x720 で計算し、canvas 側でスケールする
+   ===================================================================== */
+const LW = 1280, LH = 720;
+const stage = document.getElementById('stage');
+const fx = document.getElementById('fx');
+const fc = fx.getContext('2d');
+const IMG = {
+  red: document.getElementById('imgRed'),
+  blue: document.getElementById('imgBlue'),
+  balloon: document.getElementById('imgBalloon'),
+  redTop: document.getElementById('imgRedTop'),
+  redUnder: document.getElementById('imgRedUnder'),
+  blueTop: document.getElementById('imgBlueTop'),
+  blueUnder: document.getElementById('imgBlueUnder'),
+  dark:  [1,2,3,4].map(i=>document.getElementById('pd'+i)),
+  light: [1,2,3,4].map(i=>document.getElementById('pl'+i)),
+};
+let scale = 1;
+
+// 白煙・火の玉・熾火・土煙は、すべて提供イラストの「濃い煙」の絵を染め直して作る。
+// 別の絵を用意すると絵柄が揃わないため、同じペン画のタッチを流用する
+function tint(img, color, amount, lift, round, dense, ink){
+  const c = document.createElement('canvas');
+  c.width = img.naturalWidth || 200; c.height = img.naturalHeight || 200;
+  const x = c.getContext('2d');
+  // dense 回重ねて描くと不透明度が積み上がる。火は薄いと空に負けるため濃く起こす
+  for(let i = 0; i < (dense || 1); i++) x.drawImage(img, 0, 0, c.width, c.height);
+  x.globalCompositeOperation = 'source-atop';
+  x.globalAlpha = amount; x.fillStyle = color;
+  x.fillRect(0, 0, c.width, c.height);
+  if(lift){ x.globalAlpha = lift; x.fillStyle = '#ffdf9c'; x.fillRect(0, 0, c.width, c.height); }
+  // 染めると輪郭のインク線まで同じ色になってしまうので、元絵を掛け合わせて線だけ濃さを戻す。
+  // 提供イラストのペン画のタッチを、火や土の色でも保つため
+  if(ink){
+    x.globalCompositeOperation = 'multiply';
+    x.globalAlpha = ink;
+    x.drawImage(img, 0, 0, c.width, c.height);
+  }
+  // 爆発の粒は明るく重なりも多いため、切り抜きの正方形が塊になって見えてしまう。
+  // 外周に向けて透明に落として丸くする
+  if(round){
+    x.globalCompositeOperation = 'destination-in';
+    x.globalAlpha = 1;
+    const g = x.createRadialGradient(c.width/2, c.height/2, 0, c.width/2, c.height/2, c.width*.5);
+    g.addColorStop(0, 'rgba(255,255,255,1)');
+    g.addColorStop(.72, 'rgba(255,255,255,1)');
+    g.addColorStop(1, 'rgba(255,255,255,0)');
+    x.fillStyle = g; x.fillRect(0, 0, c.width, c.height);
+  }
+  return c;
+}
+
+function fxResize(){
+  const r = stage.getBoundingClientRect();
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  fx.width = Math.round(r.width * dpr);
+  fx.height = Math.round(r.height * dpr);
+  scale = fx.width / LW;
+}
+addEventListener('resize', fxResize); fxResize();
+
+/* ===================== 機体 ===================== */
+// 原画は機首が左。右向きに飛ぶ機体は左右反転して使う
+const planes = [
+  {img:IMG.red,  top:IMG.redTop,  under:IMG.redUnder,
+   x:-140, y:470, vx:255,  faceRight:true,  amp:62, freq:.52, phase:0,   damaged:false,
+   roll:0, rollFrom:0, rollTo:0, rollT:1},
+  {img:IMG.blue, top:IMG.blueTop, under:IMG.blueUnder,
+   x:1420, y:250, vx:-235, faceRight:false, amp:54, freq:.63, phase:1.4, damaged:true,
+   roll:0, rollFrom:0, rollTo:0, rollT:1},
+];
+const ROLL_DUR = .45;                 // 180度ロールにかける秒数
+
+function startRoll(p, dir){
+  if(p.rollT < 1) return;             // ロール中は受け付けない
+  p.rollFrom = p.roll;
+  p.rollTo = p.roll + Math.PI * (dir || 1);
+  p.rollT = 0;
+}
+function updateRoll(p, dt){
+  if(p.rollT >= 1) return;
+  p.rollT = Math.min(1, p.rollT + dt / ROLL_DUR);
+  const t = p.rollT;
+  const e = t < .5 ? 2*t*t : 1 - Math.pow(-2*t + 2, 2)/2;   // 出だしと終わりを緩める
+  p.roll = p.rollFrom + (p.rollTo - p.rollFrom) * e;
+  if(p.rollT >= 1){
+    p.roll = ((p.rollTo % (Math.PI*2)) + Math.PI*2) % (Math.PI*2);
+  }
+}
+const PLANE_W = LW * 0.08;                       // 画面幅の 8%
+// 煙と発射炎の大きさは機体サイズに追従させる。
+// 機体だけ縮めると煙が相対的に大きくなり、承認時の見え方が崩れるため
+const S = PLANE_W / 128;
+
+function updatePlane(p, t, dt){
+  const prevY = p.y;
+  p.x += p.vx * dt;
+  p.y = (p.img === IMG.red ? 470 : 250) + p.amp * Math.sin(t * p.freq + p.phase);
+  const pad = PLANE_W;
+  if(p.vx > 0 && p.x > LW + pad) p.x = -pad;
+  if(p.vx < 0 && p.x < -pad)     p.x = LW + pad;
+  p.vy = dt > 0 ? (p.y - prevY) / dt : 0;
+  // 機首の向き（進行方向）。反転していない絵は機首が左なので 180 度ずらす
+  p.ang = p.faceRight ? Math.atan2(p.vy, p.vx) : Math.atan2(-p.vy, -p.vx);
+}
+
+function planeSize(p){
+  const w = PLANE_W, h = w * (p.img.naturalHeight || 1024) / (p.img.naturalWidth || 1536);
+  return {w, h};
+}
+
+// 機首（銃口）の位置と、弾を撃ち出す向き
+function muzzle(p){
+  const {w} = planeSize(p);
+  const dir = p.faceRight ? 1 : -1;
+  const a = p.ang;
+  // 絵の中でプロペラ軸は端から約6%の位置
+  const len = w * 0.44;
+  const ux = Math.cos(a) * dir, uy = Math.sin(a) * dir;
+  return {x: p.x + ux*len, y: p.y + uy*len - w*0.02, ux: p.faceRight?Math.cos(a):-Math.cos(a),
+          uy: p.faceRight?Math.sin(a):-Math.sin(a)};
+}
+
+// エンジン（煙の出どころ）。機首よりわずかに後ろ
+function enginePos(p){
+  const m = muzzle(p);
+  return {x: m.x - m.ux * PLANE_W * 0.16, y: m.y - m.uy * PLANE_W * 0.16 - PLANE_W*0.04};
+}
+
+// ロールの見え方:
+//   横から見た機体が機軸まわりに回ると、
+//     0度   = 側面図（正立）
+//     90度  = 上面図（背中がこちらを向く。翼が画面いっぱいに開いて見える）
+//     180度 = 側面図を上下反転（背面飛行）
+//     270度 = 下面図（腹がこちらを向く）
+//   翼の見かけの高さは sin に比例するので、上面図・下面図は縦に潰して補間する
+function drawView(img, w, scaleY, alpha){
+  const h = w * (img.naturalHeight || 1024) / (img.naturalWidth || 1536);
+  fc.save();
+  fc.globalAlpha = alpha;
+  fc.scale(1, scaleY);
+  fc.drawImage(img, -w/2, -h/2, w, h);
+  fc.restore();
+}
+function drawPlane(p){
+  const {w} = planeSize(p);
+  const r = p.roll || 0, cs = Math.cos(r), sn = Math.sin(r);
+  fc.save();
+  fc.translate(p.x, p.y);
+  fc.rotate(p.ang);
+  if(p.faceRight) fc.scale(-1, 1);   // 原画の機首は左。反転して右向きにする
+  const aSide = Math.min(1, Math.abs(cs) * 1.8);
+  if(aSide > .012) drawView(p.img, w, cs < 0 ? -1 : 1, aSide);   // 背面では上下反転
+  const aTop = Math.min(1, Math.abs(sn) * 1.8);
+  if(aTop > .012) drawView(sn > 0 ? p.top : p.under, w, Math.abs(sn), aTop);
+  fc.restore();
+}
+
+/* ===================== 煙 ===================== */
+// 通常飛行の白煙は薄く長く残り、被弾の黒煙は濃く短い間隔で出る
+const puffs = [];      // 機体より下に描く（飛行中の煙）
+const topPuffs = [];   // 機体より上に描く（爆発の煙・土煙）
+const firePuffs = [];  // さらに上に描く（火の玉）。煙に隠れると爆発に見えないため
+function pushPuff(list, o){
+  list.push(Object.assign({
+    t:0, grow:1.8, peak:.9, vx:0, vy:0, delay:0,
+    rot:(Math.random()-.5)*.7, spin:(Math.random()-.5)*.5,
+  }, o));
+}
+function addPuff(x, y, kind){
+  const light = kind === 'trail';
+  pushPuff(puffs, {
+    img: (light ? IMG.white : IMG.dark)[Math.floor(Math.random()*4)], x, y,
+    life: light ? 3.6 + Math.random()*1.8 : 2.1 + Math.random()*.8,
+    size: (light ? LW*(.015+Math.random()*.006) : LW*(.034+Math.random()*.016)) * S,
+    grow: light ? 2.2 : 1.7,
+    vx: (light ? (Math.random()-.5)*12 : 26 + Math.random()*22) * S,
+    vy: (light ? -(3+Math.random()*7) : -(16+Math.random()*16)) * S,
+    peak: light ? .38 : .9,
+  });
+}
+function drawPuffs(list, dt){
+  for(let i=list.length-1; i>=0; i--){
+    const q = list[i];
+    q.t += dt;
+    if(q.t < q.delay) continue;
+    if(q.t >= q.life + q.delay){ list.splice(i,1); continue; }
+    const k = (q.t - q.delay) / q.life, ease = 1 - Math.pow(1-k, 2);
+    const s = q.size * (1 + (q.grow-1)*ease);
+    const a = (k < .08 ? k/.08 : 1 - (k-.08)/.92) * q.peak;
+    fc.save();
+    fc.globalAlpha = Math.max(0, a);
+    fc.translate(q.x + q.vx*ease*q.life, q.y + q.vy*ease*q.life + (q.grav||0)*ease*ease*q.life*q.life*.5);
+    fc.rotate(q.rot + q.spin*ease);
+    fc.drawImage(q.img, -s/2, -s/2, s, s);
+    fc.restore();
+  }
+}
+
+/* ===================== 気球 ===================== */
+// ランダムに下から上がってくる的。撃つと割れて得点になる
+const balloons = [];
+function spawnBalloon(x){
+  balloons.push({
+    x: x !== undefined ? x : 180 + Math.random()*920,
+    y: LH + 90,
+    vy: -(34 + Math.random()*20),
+    w: LW * 0.075,
+    sway: Math.random()*6.3, swayAmp: 6 + Math.random()*10,
+  });
+}
+function balloonHitBox(b){
+  const h = b.w * (IMG.balloon.naturalHeight || 1254) / (IMG.balloon.naturalWidth || 1254);
+  // 当たり判定は球皮の部分だけ。籠や索は当たらない
+  return {cx: b.x, cy: b.y - h*0.16, r: b.w*0.40};
+}
+function popBalloon(b){
+  const hb = balloonHitBox(b);
+  for(let i=0;i<5;i++){
+    const a = Math.random()*Math.PI*2, sp = PLANE_W*(.3+Math.random()*.5);
+    pushPuff(firePuffs, {
+      img: IMG.fire[Math.floor(Math.random()*4)], x: hb.cx, y: hb.cy,
+      life: .34+Math.random()*.18, size: PLANE_W*(.22+Math.random()*.18), grow:1.7, peak:.9,
+      vx: Math.cos(a)*sp, vy: Math.sin(a)*sp - PLANE_W*.2, delay: Math.random()*.05,
+    });
+  }
+  for(let i=0;i<4;i++){
+    const a = Math.random()*Math.PI*2, sp = PLANE_W*(.25+Math.random()*.4);
+    pushPuff(topPuffs, {
+      img: IMG.dark[Math.floor(Math.random()*4)], x: hb.cx, y: hb.cy,
+      life: 1.0+Math.random()*.6, size: PLANE_W*(.24+Math.random()*.2), grow:2.0, peak:.7,
+      vx: Math.cos(a)*sp, vy: Math.sin(a)*sp - PLANE_W*.4, delay: .1+Math.random()*.16,
+    });
+  }
+  for(let i=0;i<7;i++){
+    const a = Math.random()*Math.PI*2, sp = PLANE_W*(.6+Math.random()*1.6);
+    shards.push({
+      x: hb.cx, y: hb.cy, vx: Math.cos(a)*sp, vy: Math.sin(a)*sp - PLANE_W*.5,
+      rot: Math.random()*6.3, spin:(Math.random()-.5)*12,
+      w: PLANE_W*(.014+Math.random()*.020), h: PLANE_W*(.010+Math.random()*.014),
+      t:0, life: .9+Math.random()*.6,
+    });
+  }
+}
+function updateBalloons(dt){
+  for(let i=balloons.length-1;i>=0;i--){
+    const b = balloons[i];
+    b.y += b.vy*dt; b.sway += dt*1.4;
+    b.x += Math.sin(b.sway) * b.swayAmp * dt;
+    if(b.y < -140){ balloons.splice(i,1); continue; }
+    const hb = balloonHitBox(b);
+    for(let j=bullets.length-1;j>=0;j--){
+      const q = bullets[j];
+      if((q.x-hb.cx)**2 + (q.y-hb.cy)**2 < hb.r*hb.r){
+        bullets.splice(j,1); popBalloon(b); balloons.splice(i,1); break;
+      }
+    }
+  }
+}
+function drawBalloons(){
+  const img = IMG.balloon;
+  const ar = (img.naturalHeight || 1254) / (img.naturalWidth || 1254);
+  balloons.forEach(b=>{
+    const h = b.w * ar;
+    fc.save();
+    fc.translate(b.x, b.y);
+    fc.rotate(Math.sin(b.sway)*.05);
+    fc.drawImage(img, -b.w/2, -h/2, b.w, h);
+    fc.restore();
+  });
+}
+
+/* ===================== 弾 ===================== */
+const MG     = {speed:1500, life:.51, grav:0};   // 射程 = 1500*0.51 ≒ 765px（画面幅の約60%）
+const CANNON = {speed:600,  life:.80,  grav:430};  // 射程 = 600*0.80 = 480px（画面幅の約37%）
+const bullets = [], flashes = [];
+
+function fire(p, kind){
+  const m = muzzle(p);
+  const spec = kind === 'mg' ? MG : CANNON;
+  const spread = kind === 'mg' ? (Math.random()-.5)*.02 : 0;
+  const ca = Math.cos(spread), sa = Math.sin(spread);
+  const ux = m.ux*ca - m.uy*sa, uy = m.ux*sa + m.uy*ca;
+  bullets.push({kind, x:m.x, y:m.y, vx:ux*spec.speed, vy:uy*spec.speed,
+                t:0, life:spec.life, grav:spec.grav, trail:[]});
+  flashes.push({x:m.x, y:m.y, ang:Math.atan2(uy,ux), t:0,
+                life: kind==='mg' ? .085 : .17, kind});
+  if(kind === 'cannon'){
+    // 発射の白煙
+    for(let i=0;i<3;i++) addPuff(m.x + ux*10*i, m.y + uy*10*i, 'trail');
+  }
+}
+
+function drawBullets(dt){
+  for(let i=bullets.length-1; i>=0; i--){
+    const b = bullets[i];
+    b.t += dt;
+    if(b.t >= b.life || b.x < -60 || b.x > LW+60 || b.y > LH+60){ bullets.splice(i,1); continue; }
+    b.vy += b.grav * dt;
+    b.x += b.vx * dt; b.y += b.vy * dt;
+
+    if(b.kind === 'mg'){
+      const tx = b.x - b.vx*.014, ty = b.y - b.vy*.014;
+      fc.save();
+      fc.globalCompositeOperation = 'lighter';
+      fc.lineCap = 'round';
+      fc.strokeStyle = 'rgba(255,186,74,.24)'; fc.lineWidth = 4.5;
+      fc.beginPath(); fc.moveTo(tx,ty); fc.lineTo(b.x,b.y); fc.stroke();
+      fc.strokeStyle = 'rgba(255,243,204,.92)'; fc.lineWidth = 1.8;
+      fc.beginPath(); fc.moveTo(tx,ty); fc.lineTo(b.x,b.y); fc.stroke();
+      fc.restore();
+    } else {
+      b.trail.push({x:b.x, y:b.y, a:1});
+      if(b.trail.length > 16) b.trail.shift();
+      fc.save();
+      b.trail.forEach((s,j)=>{
+        const k = j / b.trail.length;
+        fc.globalAlpha = k*.34;
+        fc.fillStyle = '#6e6154';
+        fc.beginPath(); fc.arc(s.x, s.y, 2 + k*4, 0, 7); fc.fill();
+      });
+      fc.globalAlpha = 1;
+      fc.globalCompositeOperation = 'lighter';
+      const g = fc.createRadialGradient(b.x,b.y,0,b.x,b.y,13);
+      g.addColorStop(0,'rgba(255,240,190,.95)');
+      g.addColorStop(.4,'rgba(255,158,54,.65)');
+      g.addColorStop(1,'rgba(255,120,20,0)');
+      fc.fillStyle = g; fc.beginPath(); fc.arc(b.x,b.y,13,0,7); fc.fill();
+      fc.fillStyle = 'rgba(255,250,230,.98)';
+      fc.beginPath(); fc.arc(b.x,b.y,3.4,0,7); fc.fill();
+      fc.restore();
+    }
+  }
+}
+
+/* ===================== 爆発 ===================== */
+// 火の玉・黒煙・破片・衝撃波の輪・閃光の5層。
+// 火と煙は提供イラストの煙の絵を染めたものなので、絵柄が機体と揃う
+const shards = [], rings = [], blasts = [];
+const GROUND_Y = 612;   // このステージの地面の高さ（デモ用）
+
+function explode(x, y, kind){
+  const ground = kind === 'ground';
+  blasts.push({x, y, t:0, life: ground ? .15 : .13, r: PLANE_W * (ground ? .72 : .8)});
+  rings.push({x, y, t:0, life:.48, r1: PLANE_W * (ground ? 1.9 : 1.7), flat: ground ? .45 : 1});
+
+  // 火の玉 ―― 地面では上半分に、空中では全方位に散る
+  const nFire = ground ? 8 : 10;
+  for(let i=0;i<nFire;i++){
+    const a = ground ? -Math.PI/2 + (Math.random()-.5)*Math.PI*1.15
+                     : Math.random()*Math.PI*2;
+    const sp = PLANE_W * (.22 + Math.random()*.42);
+    const r0 = PLANE_W * Math.random()*.16;
+    pushPuff(firePuffs, {
+      img: IMG.fire[Math.floor(Math.random()*4)],
+      x: x + Math.cos(a)*r0, y: y + Math.sin(a)*r0,
+      life: .58 + Math.random()*.30,
+      size: PLANE_W * (.50 + Math.random()*.34),
+      grow: 1.55, peak: 1,
+      vx: Math.cos(a)*sp, vy: Math.sin(a)*sp - PLANE_W*.12,
+      delay: Math.random()*.06,
+    });
+  }
+  // 白熱した芯 ―― 中心にごく短く。爆発の「熱さ」を出す
+  for(let i=0;i<5;i++){
+    const a = Math.random()*Math.PI*2;
+    const r0 = PLANE_W * Math.random()*.20;
+    pushPuff(firePuffs, {
+      img: IMG.core[Math.floor(Math.random()*4)],
+      x: x + Math.cos(a)*r0, y: y + Math.sin(a)*r0,
+      life: .22 + Math.random()*.12, size: PLANE_W*(.38+Math.random()*.26),
+      grow: 1.7, peak: 1,
+      vx: Math.cos(a)*PLANE_W*.22, vy: Math.sin(a)*PLANE_W*.22 - PLANE_W*.08,
+      delay: Math.random()*.03,
+    });
+  }
+  // 燃え残り（火が消える途中の色）
+  for(let i=0;i<5;i++){
+    const a = ground ? -Math.PI/2 + (Math.random()-.5)*Math.PI : Math.random()*Math.PI*2;
+    const sp = PLANE_W * (.22 + Math.random()*.38);
+    const r0 = PLANE_W * Math.random()*.20;
+    pushPuff(firePuffs, {
+      img: IMG.ember[Math.floor(Math.random()*4)],
+      x: x + Math.cos(a)*r0, y: y + Math.sin(a)*r0,
+      life: .8 + Math.random()*.4, size: PLANE_W*(.40+Math.random()*.26), grow:1.7, peak:.8,
+      vx: Math.cos(a)*sp, vy: Math.sin(a)*sp - PLANE_W*.25, delay:.10+Math.random()*.14,
+    });
+  }
+  // 黒煙 ―― 遅れて膨らみ、長く残る
+  for(let i=0;i<(ground?9:8);i++){
+    const a = ground ? -Math.PI/2 + (Math.random()-.5)*Math.PI*1.3 : Math.random()*Math.PI*2;
+    const sp = PLANE_W * (.20 + Math.random()*.42);
+    const r0 = PLANE_W * Math.random()*.22;
+    pushPuff(topPuffs, {
+      img: (Math.random()<.5 ? IMG.dark : IMG.bsmoke)[Math.floor(Math.random()*4)],
+      x: x + Math.cos(a)*r0, y: y + Math.sin(a)*r0,
+      life: 1.9 + Math.random()*1.1, size: PLANE_W*(.42+Math.random()*.30),
+      grow: 2.1, peak:.85,
+      vx: Math.cos(a)*sp, vy: Math.sin(a)*sp - PLANE_W*.55,
+      delay: .26 + Math.random()*.30,
+    });
+  }
+  // 地面のときは土煙が横に広がる
+  if(ground){
+    for(let i=0;i<8;i++){
+      const dir = Math.random() < .5 ? -1 : 1;
+      pushPuff(topPuffs, {
+        img: IMG.dust[Math.floor(Math.random()*4)],
+        x: x + dir * PLANE_W * Math.random()*.35, y: y + PLANE_W*.05,
+        life: 1.5 + Math.random()*.8, size: PLANE_W*(.26+Math.random()*.24), grow:2.4, peak:.72,
+        vx: dir * PLANE_W * (.7 + Math.random()*.9), vy: -PLANE_W*(.05+Math.random()*.18),
+        delay: .10 + Math.random()*.18,
+      });
+    }
+  }
+  // 破片
+  const nSh = ground ? 8 : 11;
+  for(let i=0;i<nSh;i++){
+    const a = ground ? -Math.PI/2 + (Math.random()-.5)*Math.PI*1.1 : Math.random()*Math.PI*2;
+    const sp = PLANE_W * (.7 + Math.random()*Math.random()*3.6);
+    shards.push({
+      x, y, vx: Math.cos(a)*sp, vy: Math.sin(a)*sp - PLANE_W*.4,
+      rot: Math.random()*6.3, spin: (Math.random()-.5)*14,
+      w: PLANE_W*(.016+Math.random()*.024), h: PLANE_W*(.011+Math.random()*.017),
+      t:0, life: 1.0 + Math.random()*.8,
+    });
+  }
+}
+
+function drawBlasts(dt){
+  for(let i=blasts.length-1;i>=0;i--){
+    const b = blasts[i]; b.t += dt;
+    if(b.t >= b.life){ blasts.splice(i,1); continue; }
+    const k = b.t/b.life, r = b.r * (.35 + k*.9), a = 1 - k;
+    const g = fc.createRadialGradient(b.x,b.y,0,b.x,b.y,r);
+    g.addColorStop(0,   `rgba(255,252,232,${.95*a})`);
+    g.addColorStop(.32, `rgba(255,214,120,${.85*a})`);
+    g.addColorStop(.68, `rgba(255,124,26,${.55*a})`);
+    g.addColorStop(1,   'rgba(255,90,10,0)');
+    fc.save(); fc.globalCompositeOperation='lighter';
+    fc.fillStyle = g; fc.beginPath(); fc.arc(b.x,b.y,r,0,7); fc.fill(); fc.restore();
+  }
+}
+
+function drawRings(dt){
+  for(let i=rings.length-1;i>=0;i--){
+    const r = rings[i]; r.t += dt;
+    if(r.t >= r.life){ rings.splice(i,1); continue; }
+    const k = r.t/r.life, rad = r.r1 * (.15 + k*.95), a = (1-k)*(1-k);
+    fc.save();
+    fc.translate(r.x, r.y); fc.scale(1, r.flat);
+    fc.strokeStyle = `rgba(255,240,206,${.75*a})`;
+    fc.lineWidth = Math.max(.6, 5*S*(1-k));
+    fc.beginPath(); fc.arc(0,0,rad,0,7); fc.stroke();
+    fc.restore();
+  }
+}
+
+function drawShards(dt){
+  for(let i=shards.length-1;i>=0;i--){
+    const p = shards[i]; p.t += dt;
+    if(p.t >= p.life || p.y > LH + 40){ shards.splice(i,1); continue; }
+    p.vy += 620 * dt;
+    p.x += p.vx*dt; p.y += p.vy*dt; p.rot += p.spin*dt;
+    const a = p.t > p.life*.75 ? 1 - (p.t - p.life*.75)/(p.life*.25) : 1;
+    fc.save();
+    fc.globalAlpha = Math.max(0,a);
+    fc.translate(p.x, p.y); fc.rotate(p.rot);
+    fc.fillStyle = '#4a3728'; fc.strokeStyle = '#1a120c'; fc.lineWidth = Math.max(.5, 1.4*S);
+    fc.beginPath();
+    fc.moveTo(-p.w, -p.h*.55); fc.lineTo(p.w*.8, -p.h);
+    fc.lineTo(p.w, p.h*.7);   fc.lineTo(-p.w*.7, p.h);
+    fc.closePath(); fc.fill(); fc.stroke();
+    fc.restore();
+  }
+}
+
+function drawFlashes(dt){
+  for(let i=flashes.length-1; i>=0; i--){
+    const f = flashes[i];
+    f.t += dt;
+    if(f.t >= f.life){ flashes.splice(i,1); continue; }
+    const k = 1 - f.t/f.life;
+    const big = f.kind === 'cannon';
+    const len = (big ? 78 : 34) * k * S, wid = (big ? 26 : 11) * k * S;
+    fc.save();
+    fc.globalCompositeOperation = 'lighter';
+    fc.translate(f.x, f.y); fc.rotate(f.ang);
+    const g = fc.createRadialGradient(0,0,0,0,0,1);
+    g.addColorStop(0, big ? 'rgba(255,238,190,.95)' : 'rgba(255,246,214,.9)');
+    g.addColorStop(.45, big ? 'rgba(255,150,40,.72)' : 'rgba(255,196,86,.6)');
+    g.addColorStop(1, 'rgba(255,110,20,0)');
+    fc.save(); fc.scale(len, wid); fc.fillStyle = g;
+    fc.beginPath(); fc.arc(.5,0,1,0,7); fc.fill(); fc.restore();
+    // 十字の閃光
+    fc.strokeStyle = `rgba(255,240,200,${.7*k})`; fc.lineWidth = big?3:2; fc.lineCap='round';
+    fc.beginPath(); fc.moveTo(-len*.2,0); fc.lineTo(len*1.05,0);
+    fc.moveTo(len*.28,-wid*.9); fc.lineTo(len*.28,wid*.9); fc.stroke();
+    fc.restore();
+  }
+}
+
+/* ===================== メインループ ===================== */
+let trailOn = true, damageOn = true;
+let trailAcc = 0, dmgAcc = 0, mgAcc = 0, burst = 0, cycle = 0, balloonAcc = 5.5, rollAcc = 0;
+let prev = performance.now(), clock = 0;
+
+function tick(now){
+  const dt = Math.min(.05, (now - prev)/1000); prev = now; clock += dt;
+
+  planes.forEach(p => { updatePlane(p, clock, dt); updateRoll(p, dt); });
+
+  // 通常飛行の白煙（両機）
+  trailAcc += dt;
+  if(trailOn && trailAcc >= .06){
+    trailAcc = 0;
+    planes.forEach(p => { const e = enginePos(p); addPuff(e.x, e.y, 'trail'); });
+  }
+  // 被弾の黒煙（P2 のみ）
+  dmgAcc += dt;
+  if(damageOn && dmgAcc >= .12){
+    dmgAcc = 0;
+    const p = planes[1], e = enginePos(p);
+    addPuff(e.x, e.y, 'damage');
+  }
+
+  updateBalloons(dt);
+  balloonAcc += dt;
+  if(balloonAcc >= 7.5){ balloonAcc = 0; spawnBalloon(); }
+
+  // 自動ロール（P1）と自動射撃
+  rollAcc += dt;
+  if(rollAcc > 5.0){ rollAcc = 0; startRoll(planes[0]); }
+  cycle += dt;
+  if(cycle > 3.2){ cycle = 0; burst = 10; }
+  if(burst > 0){
+    mgAcc += dt;
+    if(mgAcc >= .09){ mgAcc = 0; burst--; fire(planes[0], 'mg'); if(burst === 0) setTimeout(()=>fire(planes[0],'cannon'), 500); }
+  }
+
+  fc.setTransform(scale, 0, 0, scale, 0, 0);
+  fc.clearRect(0, 0, LW, LH);
+  drawPuffs(puffs, dt);          // 機体の下（飛行中の煙）
+  drawBalloons();
+  planes.forEach(drawPlane);
+  drawPuffs(topPuffs, dt);       // 機体の上（爆発の煙）
+  drawPuffs(firePuffs, dt);      // さらに上（火の玉）
+  drawShards(dt);
+  drawBullets(dt);
+  drawFlashes(dt);
+  drawBlasts(dt);
+  drawRings(dt);
+
+  requestAnimationFrame(tick);
+}
+
+function start(){
+  IMG.white = IMG.dark.map(i => tint(i, '#ffffff', .88));       // 通常飛行の白煙
+  IMG.fire  = IMG.dark.map(i => tint(i, '#ef5f08', .96, .20, true, 4, .30)); // 火の玉
+  IMG.core  = IMG.dark.map(i => tint(i, '#ffc23a', .95, .55, true, 4, .28)); // 白熱した芯
+  IMG.ember = IMG.dark.map(i => tint(i, '#a83518', .90, 0, true, 2, .35)); // 燃え残り
+  IMG.dust  = IMG.dark.map(i => tint(i, '#a9854f', .85, .12, true, 1, .30)); // 土煙
+  IMG.bsmoke= IMG.dark.map(i => tint(i, '#3a332b', .35, 0, true));   // 爆発の黒煙
+  requestAnimationFrame(t=>{ prev = t; tick(t); });
+}
+const all = [IMG.red, IMG.blue, IMG.balloon, IMG.redTop, IMG.redUnder,
+             IMG.blueTop, IMG.blueUnder, ...IMG.dark, ...IMG.light];
+let pending = all.filter(i => !i.complete).length;
+if(pending === 0) start();
+else all.forEach(i => i.complete || i.addEventListener('load', ()=>{ if(--pending === 0) start(); }));
+
+document.getElementById('fireMg').addEventListener('click', ()=>{
+  let n = 10;
+  const id = setInterval(()=>{ fire(planes[0],'mg'); if(--n === 0) clearInterval(id); }, 90);
+});
+document.getElementById('fireCannon').addEventListener('click', ()=> fire(planes[0],'cannon'));
+document.getElementById('rollP1').addEventListener('click', ()=> startRoll(planes[0]));
+document.getElementById('balloonBtn').addEventListener('click', ()=> spawnBalloon(300 + Math.random()*680));
+document.getElementById('killAir').addEventListener('click', ()=>{
+  const p = planes[1];                       // 被弾している P2 が撃墜される
+  explode(p.x, p.y, 'air');
+});
+document.getElementById('killGround').addEventListener('click', ()=>{
+  const p = planes[1];
+  explode(p.x, GROUND_Y, 'ground');
+});
+document.getElementById('trailOn').addEventListener('change', e=>{ trailOn = e.target.checked; });
+document.getElementById('damageOn').addEventListener('change', e=>{ damageOn = e.target.checked; });
+
+/* =====================================================================
+   フィルム風ポストエフェクト
+   縦キズ（フィルムの傷）は作為的に見えるため外し、
+   粒状感・ゴミ・露光ゆらぎ・ゲートウィーブ・ビネットだけを残している
+   ===================================================================== */
+// weave（ゲートウィーブ）は強度を上げても .35 のまま。
+// 画面全体が揺れる演出は今の量で確定しているため、他の要素とは連動させない
+const PRESETS = [
+  {blur:0,    sat:1,    sep:0,    con:1,    grain:0,    dirt:0,  flick:0,    weave:0,   halo:0},
+  {blur:.30,  sat:.95,  sep:.06,  con:.99,  grain:.15,  dirt:.4, flick:.02,  weave:.35, halo:.5},
+  {blur:.42,  sat:.915, sep:.095, con:.975, grain:.215, dirt:.7, flick:.03,  weave:.35, halo:.75},  // 既定
+  {blur:.55,  sat:.88,  sep:.13,  con:.96,  grain:.28,  dirt:1,  flick:.04,  weave:.35, halo:1},
+  {blur:.9,   sat:.76,  sep:.24,  con:.91,  grain:.44,  dirt:2,  flick:.07,  weave:.35, halo:1.5},
+];
+let level = 2, useWeave = true;
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const gCv = document.getElementById('filmGrain'), dCv = document.getElementById('filmDirt');
+const gx = gCv.getContext('2d'), dx = dCv.getContext('2d');
+const halo = document.getElementById('halo');
+let FW = 0, FH = 0, noise = null, wx = 0, wy = 0, jumpT = 0;
+
+function filmResize(){
+  const r = gCv.getBoundingClientRect();
+  FW = Math.max(2, Math.round(r.width/2.2));
+  FH = Math.max(2, Math.round(r.height/2.2));
+  gCv.width = dCv.width = FW; gCv.height = dCv.height = FH;
+  noise = gx.createImageData(FW, FH);
+}
+addEventListener('resize', filmResize); filmResize();
+
+function filmFrame(){
+  const p = PRESETS[level];
+  const amp = p.grain * 118;
+  if(amp > 0){
+    const d = noise.data;
+    for(let i=0;i<d.length;i+=4){
+      const v = 128 + (Math.random()-.5)*amp;
+      d[i]=d[i+1]=d[i+2]=v; d[i+3]=255;
+    }
+    gx.putImageData(noise, 0, 0);
+  } else gx.clearRect(0,0,FW,FH);
+
+  dx.clearRect(0,0,FW,FH);
+  for(let i=0;i<Math.round(p.dirt*5);i++){
+    if(Math.random() > .5) continue;
+    const x = Math.random()*FW, y = Math.random()*FH;
+    dx.strokeStyle = Math.random()<.5 ? 'rgba(255,250,235,.45)' : 'rgba(20,12,6,.4)';
+    dx.fillStyle = dx.strokeStyle; dx.lineWidth = 1;
+    if(Math.random() < .35){
+      dx.beginPath(); dx.moveTo(x,y);
+      dx.quadraticCurveTo(x+(Math.random()-.5)*9, y+(Math.random()-.5)*9,
+                          x+(Math.random()-.5)*13, y+(Math.random()-.5)*13);
+      dx.stroke();
+    } else dx.fillRect(x, y, 1+Math.random(), 1+Math.random());
+  }
+
+  let tx = 0, ty = 0;
+  if(useWeave && p.weave > 0 && !reduced){
+    wx = (wx + (Math.random()-.5)*.5)*.82;
+    wy = (wy + (Math.random()-.5)*.4)*.82;
+    if(--jumpT <= 0 && Math.random() < .02){ wy += (Math.random()<.5?-1:1)*(2+Math.random()*3); jumpT = 20; }
+    tx = wx*p.weave; ty = wy*p.weave;
+  }
+  const flick = 1 + (Math.random()-.5)*p.flick*2;
+  stage.style.transform = `translate(${tx.toFixed(2)}px, ${ty.toFixed(2)}px)`;
+  stage.style.filter = `blur(${p.blur}px) saturate(${p.sat}) sepia(${p.sep}) contrast(${p.con}) brightness(${flick.toFixed(3)})`;
+  halo.style.opacity = p.halo;
+  gCv.style.opacity = p.grain > 0 ? .85 : 0;
+  dCv.style.opacity = p.dirt > 0 ? .9 : 0;
+}
+
+let lastFilm = 0;
+(function filmLoop(t){
+  if(t - lastFilm >= 1000/24){ lastFilm = t; filmFrame(); }
+  requestAnimationFrame(filmLoop);
+})(0);
+
+document.querySelectorAll('#seg button').forEach(b=>{
+  b.addEventListener('click', ()=>{
+    level = +b.dataset.lv;
+    document.querySelectorAll('#seg button').forEach(x=>x.setAttribute('aria-pressed', x===b ? 'true' : 'false'));
+  });
+});
+document.getElementById('weave').addEventListener('change', e=>{ useWeave = e.target.checked; });
+</script>
