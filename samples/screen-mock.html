@@ -81,9 +81,9 @@
 <div class="sheet">
   <header>
     <div class="marq">
-      <p class="eyebrow">Screen Mock — Rev.3</p>
+      <p class="eyebrow">Screen Mock — Rev.4</p>
       <h1>BI-PLANES<br>実画面モック</h1>
-      <p class="sub">飛行する機体・煙の軌跡・2種類の弾道 ― アート確定版</p>
+      <p class="sub">飛行する機体・煙の軌跡・2種類の弾道・撃墜と激突の爆発</p>
     </div>
   </header>
 
@@ -93,7 +93,7 @@
       機体を実際に飛ばしています。<b>通常飛行中も薄い白煙を引く</b>ので、どこをどう飛んだかが残ります。
       被弾している P2（青）は、そこに濃い黒煙が重なります。
       フィルム処理は<b>「既定」＝弱と標準の中間</b>で確定しています。
-      武装は下のボタンでも撃てます ―― 7.7mm と 20mm の弾道の違いをご確認ください。
+      武装と爆発は下のボタンで試せます ―― 弾道の違いと、空中撃墜／地面激突の爆発をご確認ください。
     </p>
 
     <div class="projector" id="proj">
@@ -154,6 +154,8 @@
     <div class="controls">
       <button class="btn" id="fireMg">7.7mm を連射</button>
       <button class="btn" id="fireCannon">20mm を発射</button>
+      <button class="btn" id="killAir">20mm で撃墜（空中爆発）</button>
+      <button class="btn" id="killGround">地面に激突</button>
       <label class="toggle"><input type="checkbox" id="trailOn" checked>通常飛行の白煙</label>
       <label class="toggle"><input type="checkbox" id="damageOn" checked>P2 の被弾（黒煙）</label>
     </div>
@@ -192,11 +194,20 @@
         <h3>20mm 機関砲</h3>
         <p>遅い・近距離・山なり。当てにくいが当たれば一撃。</p>
         <ul class="spec">
-          <li><b>弾速</b>640 px/秒</li>
-          <li><b>弾道</b>重力で落ちる山なり</li>
-          <li><b>射程</b>約 700px（画面の半分ほど）で消滅</li>
+          <li><b>弾速</b>600 px/秒</li>
+          <li><b>弾道</b>重力 430 px/秒² で落ちる山なり</li>
+          <li><b>射程</b>約 480px（画面幅の約37%）で消滅</li>
           <li><b>連射</b>単発・装填あり</li>
           <li><b>威力</b>一撃撃墜</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>爆発</h3>
+        <p>火の玉・黒煙・土煙は、<b>提供いただいた煙の絵を火や土の色に染め直して</b>作っています。別の絵を用意すると絵柄が浮くためです。</p>
+        <ul class="spec">
+          <li><b>空中</b>閃光 → 全方位の火の玉 → 破片 → 黒煙が膨らんで残る</li>
+          <li><b>地面</b>火は上半分だけに立ち上がり、土煙が横に広がる。衝撃波の輪は横長</li>
+          <li><b>破片</b>機体の欠片が重力で放物線を描いて落ちる</li>
         </ul>
       </div>
       <div class="card">
@@ -218,13 +229,14 @@
         <li><b>ゲートウィーブ</b> — 現在の量で確定。強度を上げても揺れは増えない</li>
         <li><b>機体サイズ</b> — 画面幅の 8%</li>
         <li><b>煙</b> — 通常飛行は薄い白煙の軌跡、被弾は濃い黒煙</li>
-        <li><b>武装</b> — 7.7mm は直線・高速・長射程・連射、20mm は低速・短射程・山なり。発射炎あり</li>
+        <li><b>武装</b> — 7.7mm は直線・高速・射程は画面幅の約60%・連射、20mm は低速・より短射程・山なり。発射炎あり</li>
+        <li><b>爆発</b> — 空中撃墜と地面への激突で、火の広がり方と土煙の有無を描き分け</li>
         <li><b>HUD</b> — クリーム地＋黒枠</li>
       </ol>
     </div>
   </section>
 
-  <footer>BI-PLANES PROJECT — SCREEN MOCK — REV.3</footer>
+  <footer>BI-PLANES PROJECT — SCREEN MOCK — REV.4</footer>
 </div>
 
 <div id="assets" aria-hidden="true">
@@ -256,16 +268,36 @@ const IMG = {
 };
 let scale = 1;
 
-// 通常飛行の白煙は、密度のある「濃い煙」の絵を白く起こして使う。
-// 「薄い煙」の絵は元々かすれていて、夕焼け空の上では軌跡として読み取れないため
-function whiten(img, amount){
+// 白煙・火の玉・熾火・土煙は、すべて提供イラストの「濃い煙」の絵を染め直して作る。
+// 別の絵を用意すると絵柄が揃わないため、同じペン画のタッチを流用する
+function tint(img, color, amount, lift, round, dense, ink){
   const c = document.createElement('canvas');
   c.width = img.naturalWidth || 200; c.height = img.naturalHeight || 200;
   const x = c.getContext('2d');
-  x.drawImage(img, 0, 0, c.width, c.height);
+  // dense 回重ねて描くと不透明度が積み上がる。火は薄いと空に負けるため濃く起こす
+  for(let i = 0; i < (dense || 1); i++) x.drawImage(img, 0, 0, c.width, c.height);
   x.globalCompositeOperation = 'source-atop';
-  x.fillStyle = `rgba(255,255,255,${amount})`;
+  x.globalAlpha = amount; x.fillStyle = color;
   x.fillRect(0, 0, c.width, c.height);
+  if(lift){ x.globalAlpha = lift; x.fillStyle = '#ffdf9c'; x.fillRect(0, 0, c.width, c.height); }
+  // 染めると輪郭のインク線まで同じ色になってしまうので、元絵を掛け合わせて線だけ濃さを戻す。
+  // 提供イラストのペン画のタッチを、火や土の色でも保つため
+  if(ink){
+    x.globalCompositeOperation = 'multiply';
+    x.globalAlpha = ink;
+    x.drawImage(img, 0, 0, c.width, c.height);
+  }
+  // 爆発の粒は明るく重なりも多いため、切り抜きの正方形が塊になって見えてしまう。
+  // 外周に向けて透明に落として丸くする
+  if(round){
+    x.globalCompositeOperation = 'destination-in';
+    x.globalAlpha = 1;
+    const g = x.createRadialGradient(c.width/2, c.height/2, 0, c.width/2, c.height/2, c.width*.5);
+    g.addColorStop(0, 'rgba(255,255,255,1)');
+    g.addColorStop(.72, 'rgba(255,255,255,1)');
+    g.addColorStop(1, 'rgba(255,255,255,0)');
+    x.fillStyle = g; x.fillRect(0, 0, c.width, c.height);
+  }
   return c;
 }
 
@@ -336,32 +368,39 @@ function drawPlane(p){
 
 /* ===================== 煙 ===================== */
 // 通常飛行の白煙は薄く長く残り、被弾の黒煙は濃く短い間隔で出る
-const puffs = [];
+const puffs = [];      // 機体より下に描く（飛行中の煙）
+const topPuffs = [];   // 機体より上に描く（爆発の煙・土煙）
+const firePuffs = [];  // さらに上に描く（火の玉）。煙に隠れると爆発に見えないため
+function pushPuff(list, o){
+  list.push(Object.assign({
+    t:0, grow:1.8, peak:.9, vx:0, vy:0, delay:0,
+    rot:(Math.random()-.5)*.7, spin:(Math.random()-.5)*.5,
+  }, o));
+}
 function addPuff(x, y, kind){
   const light = kind === 'trail';
-  const img = (light ? IMG.white : IMG.dark)[Math.floor(Math.random()*4)];
-  puffs.push({
-    img, x, y, t:0,
+  pushPuff(puffs, {
+    img: (light ? IMG.white : IMG.dark)[Math.floor(Math.random()*4)], x, y,
     life: light ? 3.6 + Math.random()*1.8 : 2.1 + Math.random()*.8,
     size: (light ? LW*(.015+Math.random()*.006) : LW*(.034+Math.random()*.016)) * S,
     grow: light ? 2.2 : 1.7,
     vx: (light ? (Math.random()-.5)*12 : 26 + Math.random()*22) * S,
     vy: (light ? -(3+Math.random()*7) : -(16+Math.random()*16)) * S,
-    rot: (Math.random()-.5)*.7, spin:(Math.random()-.5)*.5,
     peak: light ? .38 : .9,
   });
 }
-function drawPuffs(dt){
-  for(let i=puffs.length-1; i>=0; i--){
-    const q = puffs[i];
+function drawPuffs(list, dt){
+  for(let i=list.length-1; i>=0; i--){
+    const q = list[i];
     q.t += dt;
-    if(q.t >= q.life){ puffs.splice(i,1); continue; }
-    const k = q.t / q.life, ease = 1 - Math.pow(1-k, 2);
+    if(q.t < q.delay) continue;
+    if(q.t >= q.life + q.delay){ list.splice(i,1); continue; }
+    const k = (q.t - q.delay) / q.life, ease = 1 - Math.pow(1-k, 2);
     const s = q.size * (1 + (q.grow-1)*ease);
     const a = (k < .08 ? k/.08 : 1 - (k-.08)/.92) * q.peak;
     fc.save();
     fc.globalAlpha = Math.max(0, a);
-    fc.translate(q.x + q.vx*ease*q.life, q.y + q.vy*ease*q.life);
+    fc.translate(q.x + q.vx*ease*q.life, q.y + q.vy*ease*q.life + (q.grav||0)*ease*ease*q.life*q.life*.5);
     fc.rotate(q.rot + q.spin*ease);
     fc.drawImage(q.img, -s/2, -s/2, s, s);
     fc.restore();
@@ -369,8 +408,8 @@ function drawPuffs(dt){
 }
 
 /* ===================== 弾 ===================== */
-const MG     = {speed:1500, life:1.05, grav:0};
-const CANNON = {speed:640,  life:1.15, grav:320};
+const MG     = {speed:1500, life:.51, grav:0};   // 射程 = 1500*0.51 ≒ 765px（画面幅の約60%）
+const CANNON = {speed:600,  life:.80,  grav:430};  // 射程 = 600*0.80 = 480px（画面幅の約37%）
 const bullets = [], flashes = [];
 
 function fire(p, kind){
@@ -398,13 +437,13 @@ function drawBullets(dt){
     b.x += b.vx * dt; b.y += b.vy * dt;
 
     if(b.kind === 'mg'){
-      const tx = b.x - b.vx*.026, ty = b.y - b.vy*.026;
+      const tx = b.x - b.vx*.014, ty = b.y - b.vy*.014;
       fc.save();
       fc.globalCompositeOperation = 'lighter';
       fc.lineCap = 'round';
-      fc.strokeStyle = 'rgba(255,186,74,.30)'; fc.lineWidth = 8;
+      fc.strokeStyle = 'rgba(255,186,74,.24)'; fc.lineWidth = 4.5;
       fc.beginPath(); fc.moveTo(tx,ty); fc.lineTo(b.x,b.y); fc.stroke();
-      fc.strokeStyle = 'rgba(255,243,204,.95)'; fc.lineWidth = 3;
+      fc.strokeStyle = 'rgba(255,243,204,.92)'; fc.lineWidth = 1.8;
       fc.beginPath(); fc.moveTo(tx,ty); fc.lineTo(b.x,b.y); fc.stroke();
       fc.restore();
     } else {
@@ -428,6 +467,148 @@ function drawBullets(dt){
       fc.beginPath(); fc.arc(b.x,b.y,3.4,0,7); fc.fill();
       fc.restore();
     }
+  }
+}
+
+/* ===================== 爆発 ===================== */
+// 火の玉・黒煙・破片・衝撃波の輪・閃光の5層。
+// 火と煙は提供イラストの煙の絵を染めたものなので、絵柄が機体と揃う
+const shards = [], rings = [], blasts = [];
+const GROUND_Y = 612;   // このステージの地面の高さ（デモ用）
+
+function explode(x, y, kind){
+  const ground = kind === 'ground';
+  blasts.push({x, y, t:0, life: ground ? .15 : .13, r: PLANE_W * (ground ? .72 : .8)});
+  rings.push({x, y, t:0, life:.48, r1: PLANE_W * (ground ? 1.9 : 1.7), flat: ground ? .45 : 1});
+
+  // 火の玉 ―― 地面では上半分に、空中では全方位に散る
+  const nFire = ground ? 8 : 10;
+  for(let i=0;i<nFire;i++){
+    const a = ground ? -Math.PI/2 + (Math.random()-.5)*Math.PI*1.15
+                     : Math.random()*Math.PI*2;
+    const sp = PLANE_W * (.22 + Math.random()*.42);
+    const r0 = PLANE_W * Math.random()*.16;
+    pushPuff(firePuffs, {
+      img: IMG.fire[Math.floor(Math.random()*4)],
+      x: x + Math.cos(a)*r0, y: y + Math.sin(a)*r0,
+      life: .58 + Math.random()*.30,
+      size: PLANE_W * (.50 + Math.random()*.34),
+      grow: 1.55, peak: 1,
+      vx: Math.cos(a)*sp, vy: Math.sin(a)*sp - PLANE_W*.12,
+      delay: Math.random()*.06,
+    });
+  }
+  // 白熱した芯 ―― 中心にごく短く。爆発の「熱さ」を出す
+  for(let i=0;i<5;i++){
+    const a = Math.random()*Math.PI*2;
+    const r0 = PLANE_W * Math.random()*.20;
+    pushPuff(firePuffs, {
+      img: IMG.core[Math.floor(Math.random()*4)],
+      x: x + Math.cos(a)*r0, y: y + Math.sin(a)*r0,
+      life: .22 + Math.random()*.12, size: PLANE_W*(.38+Math.random()*.26),
+      grow: 1.7, peak: 1,
+      vx: Math.cos(a)*PLANE_W*.22, vy: Math.sin(a)*PLANE_W*.22 - PLANE_W*.08,
+      delay: Math.random()*.03,
+    });
+  }
+  // 燃え残り（火が消える途中の色）
+  for(let i=0;i<5;i++){
+    const a = ground ? -Math.PI/2 + (Math.random()-.5)*Math.PI : Math.random()*Math.PI*2;
+    const sp = PLANE_W * (.22 + Math.random()*.38);
+    const r0 = PLANE_W * Math.random()*.20;
+    pushPuff(firePuffs, {
+      img: IMG.ember[Math.floor(Math.random()*4)],
+      x: x + Math.cos(a)*r0, y: y + Math.sin(a)*r0,
+      life: .8 + Math.random()*.4, size: PLANE_W*(.40+Math.random()*.26), grow:1.7, peak:.8,
+      vx: Math.cos(a)*sp, vy: Math.sin(a)*sp - PLANE_W*.25, delay:.10+Math.random()*.14,
+    });
+  }
+  // 黒煙 ―― 遅れて膨らみ、長く残る
+  for(let i=0;i<(ground?9:8);i++){
+    const a = ground ? -Math.PI/2 + (Math.random()-.5)*Math.PI*1.3 : Math.random()*Math.PI*2;
+    const sp = PLANE_W * (.20 + Math.random()*.42);
+    const r0 = PLANE_W * Math.random()*.22;
+    pushPuff(topPuffs, {
+      img: (Math.random()<.5 ? IMG.dark : IMG.bsmoke)[Math.floor(Math.random()*4)],
+      x: x + Math.cos(a)*r0, y: y + Math.sin(a)*r0,
+      life: 1.9 + Math.random()*1.1, size: PLANE_W*(.42+Math.random()*.30),
+      grow: 2.1, peak:.85,
+      vx: Math.cos(a)*sp, vy: Math.sin(a)*sp - PLANE_W*.55,
+      delay: .26 + Math.random()*.30,
+    });
+  }
+  // 地面のときは土煙が横に広がる
+  if(ground){
+    for(let i=0;i<8;i++){
+      const dir = Math.random() < .5 ? -1 : 1;
+      pushPuff(topPuffs, {
+        img: IMG.dust[Math.floor(Math.random()*4)],
+        x: x + dir * PLANE_W * Math.random()*.35, y: y + PLANE_W*.05,
+        life: 1.5 + Math.random()*.8, size: PLANE_W*(.26+Math.random()*.24), grow:2.4, peak:.72,
+        vx: dir * PLANE_W * (.7 + Math.random()*.9), vy: -PLANE_W*(.05+Math.random()*.18),
+        delay: .10 + Math.random()*.18,
+      });
+    }
+  }
+  // 破片
+  const nSh = ground ? 8 : 11;
+  for(let i=0;i<nSh;i++){
+    const a = ground ? -Math.PI/2 + (Math.random()-.5)*Math.PI*1.1 : Math.random()*Math.PI*2;
+    const sp = PLANE_W * (.7 + Math.random()*Math.random()*3.6);
+    shards.push({
+      x, y, vx: Math.cos(a)*sp, vy: Math.sin(a)*sp - PLANE_W*.4,
+      rot: Math.random()*6.3, spin: (Math.random()-.5)*14,
+      w: PLANE_W*(.016+Math.random()*.024), h: PLANE_W*(.011+Math.random()*.017),
+      t:0, life: 1.0 + Math.random()*.8,
+    });
+  }
+}
+
+function drawBlasts(dt){
+  for(let i=blasts.length-1;i>=0;i--){
+    const b = blasts[i]; b.t += dt;
+    if(b.t >= b.life){ blasts.splice(i,1); continue; }
+    const k = b.t/b.life, r = b.r * (.35 + k*.9), a = 1 - k;
+    const g = fc.createRadialGradient(b.x,b.y,0,b.x,b.y,r);
+    g.addColorStop(0,   `rgba(255,252,232,${.95*a})`);
+    g.addColorStop(.32, `rgba(255,214,120,${.85*a})`);
+    g.addColorStop(.68, `rgba(255,124,26,${.55*a})`);
+    g.addColorStop(1,   'rgba(255,90,10,0)');
+    fc.save(); fc.globalCompositeOperation='lighter';
+    fc.fillStyle = g; fc.beginPath(); fc.arc(b.x,b.y,r,0,7); fc.fill(); fc.restore();
+  }
+}
+
+function drawRings(dt){
+  for(let i=rings.length-1;i>=0;i--){
+    const r = rings[i]; r.t += dt;
+    if(r.t >= r.life){ rings.splice(i,1); continue; }
+    const k = r.t/r.life, rad = r.r1 * (.15 + k*.95), a = (1-k)*(1-k);
+    fc.save();
+    fc.translate(r.x, r.y); fc.scale(1, r.flat);
+    fc.strokeStyle = `rgba(255,240,206,${.75*a})`;
+    fc.lineWidth = Math.max(.6, 5*S*(1-k));
+    fc.beginPath(); fc.arc(0,0,rad,0,7); fc.stroke();
+    fc.restore();
+  }
+}
+
+function drawShards(dt){
+  for(let i=shards.length-1;i>=0;i--){
+    const p = shards[i]; p.t += dt;
+    if(p.t >= p.life || p.y > LH + 40){ shards.splice(i,1); continue; }
+    p.vy += 620 * dt;
+    p.x += p.vx*dt; p.y += p.vy*dt; p.rot += p.spin*dt;
+    const a = p.t > p.life*.75 ? 1 - (p.t - p.life*.75)/(p.life*.25) : 1;
+    fc.save();
+    fc.globalAlpha = Math.max(0,a);
+    fc.translate(p.x, p.y); fc.rotate(p.rot);
+    fc.fillStyle = '#4a3728'; fc.strokeStyle = '#1a120c'; fc.lineWidth = Math.max(.5, 1.4*S);
+    fc.beginPath();
+    fc.moveTo(-p.w, -p.h*.55); fc.lineTo(p.w*.8, -p.h);
+    fc.lineTo(p.w, p.h*.7);   fc.lineTo(-p.w*.7, p.h);
+    fc.closePath(); fc.fill(); fc.stroke();
+    fc.restore();
   }
 }
 
@@ -490,16 +671,26 @@ function tick(now){
 
   fc.setTransform(scale, 0, 0, scale, 0, 0);
   fc.clearRect(0, 0, LW, LH);
-  drawPuffs(dt);
+  drawPuffs(puffs, dt);          // 機体の下（飛行中の煙）
   planes.forEach(drawPlane);
+  drawPuffs(topPuffs, dt);       // 機体の上（爆発の煙）
+  drawPuffs(firePuffs, dt);      // さらに上（火の玉）
+  drawShards(dt);
   drawBullets(dt);
   drawFlashes(dt);
+  drawBlasts(dt);
+  drawRings(dt);
 
   requestAnimationFrame(tick);
 }
 
 function start(){
-  IMG.white = IMG.dark.map(i => whiten(i, .88));
+  IMG.white = IMG.dark.map(i => tint(i, '#ffffff', .88));       // 通常飛行の白煙
+  IMG.fire  = IMG.dark.map(i => tint(i, '#ef5f08', .96, .20, true, 4, .30)); // 火の玉
+  IMG.core  = IMG.dark.map(i => tint(i, '#ffc23a', .95, .55, true, 4, .28)); // 白熱した芯
+  IMG.ember = IMG.dark.map(i => tint(i, '#a83518', .90, 0, true, 2, .35)); // 燃え残り
+  IMG.dust  = IMG.dark.map(i => tint(i, '#a9854f', .85, .12, true, 1, .30)); // 土煙
+  IMG.bsmoke= IMG.dark.map(i => tint(i, '#3a332b', .35, 0, true));   // 爆発の黒煙
   requestAnimationFrame(t=>{ prev = t; tick(t); });
 }
 const all = [IMG.red, IMG.blue, ...IMG.dark, ...IMG.light];
@@ -512,6 +703,14 @@ document.getElementById('fireMg').addEventListener('click', ()=>{
   const id = setInterval(()=>{ fire(planes[0],'mg'); if(--n === 0) clearInterval(id); }, 90);
 });
 document.getElementById('fireCannon').addEventListener('click', ()=> fire(planes[0],'cannon'));
+document.getElementById('killAir').addEventListener('click', ()=>{
+  const p = planes[1];                       // 被弾している P2 が撃墜される
+  explode(p.x, p.y, 'air');
+});
+document.getElementById('killGround').addEventListener('click', ()=>{
+  const p = planes[1];
+  explode(p.x, GROUND_Y, 'ground');
+});
 document.getElementById('trailOn').addEventListener('change', e=>{ trailOn = e.target.checked; });
 document.getElementById('damageOn').addEventListener('change', e=>{ damageOn = e.target.checked; });
 
