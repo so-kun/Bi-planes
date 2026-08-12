@@ -40,6 +40,6 @@ export class BootScene extends Phaser.Scene {
       makeTintedTexture(this, `${k}-dust`, k, { color: '#a9854f', amount: 0.85, lift: 0.12, round: true, ink: 0.3 });
       makeTintedTexture(this, `${k}-bsmoke`, k, { color: '#3a332b', amount: 0.35, round: true });
     }
-    this.scene.start('Play');
+    this.scene.start('Title');
   }
 }

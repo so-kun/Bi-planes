@@ -257,6 +257,29 @@ export class Sfx {
     this.engineBus.gain.value = AUDIO.engine / Math.sqrt(n);
   }
 
+  /**
+   * カウントダウンの合図。3・2・1 は低く、GO! は高く鳴らす。
+   * 木管のような柔らかい音にして、戦闘中の効果音と混同しないようにする
+   */
+  beep(go = false): void {
+    if (!this.ac) return;
+    const ac = this.ac;
+    const t = ac.currentTime;
+    const o = ac.createOscillator();
+    o.type = 'triangle';
+    o.frequency.setValueAtTime(go ? 784 : 392, t);          // ソ（GO は 1 オクターブ上）
+    const g = ac.createGain();
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(0.5, t + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + (go ? 0.55 : 0.22));
+    const lp = ac.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = go ? 2600 : 1500;
+    o.connect(lp); lp.connect(g); g.connect(this.sfxBus);
+    o.start(t);
+    o.stop(t + (go ? 0.6 : 0.28));
+  }
+
   toggleBgm(): boolean {
     if (!this.ac) return false;
     if (this.bgm) {
@@ -269,6 +292,13 @@ export class Sfx {
     return true;
   }
 }
+
+/**
+ * 音は画面をまたいで1つだけ持つ。
+ * 画面ごとに作ると AudioContext が増え、BGM が二重に鳴ったり、
+ * タイトルで鳴らしはじめた曲が対戦に移った瞬間に止まったりする
+ */
+export const sfx = new Sfx();
 
 /** プロペラのチョップ感を AM で作るエンジン音 */
 class EngineVoice {

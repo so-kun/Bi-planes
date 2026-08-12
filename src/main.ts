@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { VIEW } from './config';
 import { BootScene } from './scenes/BootScene';
+import { TitleScene } from './scenes/TitleScene';
 import { PlayScene } from './scenes/PlayScene';
 
 const game = new Phaser.Game({
@@ -18,7 +19,7 @@ const game = new Phaser.Game({
     antialias: true,
     roundPixels: false,
   },
-  scene: [BootScene, PlayScene],
+  scene: [BootScene, TitleScene, PlayScene],
 });
 
 // プレイテスト中に値を覗けるようにしておく
