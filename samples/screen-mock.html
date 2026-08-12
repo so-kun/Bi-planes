@@ -1,0 +1,377 @@
+<title>Bi-Planes 実画面モック</title>
+<style>
+  :root{
+    --paper:#e9d6b4; --ink:#241a12; --ink-soft:#5b4632;
+    --red:#a8402c; --gold:#d59a34; --cream:#f4e6c8; --blue:#3c5a78;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--paper); color:var(--ink);
+    font-family:Georgia,'Times New Roman','Hiragino Mincho ProN','Yu Mincho',serif;
+    line-height:1.7;
+    background-image:radial-gradient(ellipse at 18% 8%, rgba(255,255,255,.32), transparent 52%),
+                     radial-gradient(ellipse at 82% 92%, rgba(110,80,40,.15), transparent 56%);
+  }
+  .sheet{max-width:1080px;margin:0 auto;padding:38px 26px 84px}
+  header{text-align:center;padding:28px 12px 6px}
+  .marq{display:inline-block;border:4px double var(--ink);padding:18px 42px 22px;
+    background:var(--cream);box-shadow:0 4px 0 rgba(36,26,18,.26);position:relative}
+  .marq::before,.marq::after{content:"★";position:absolute;top:50%;transform:translateY(-50%);color:var(--red);font-size:19px}
+  .marq::before{left:14px}.marq::after{right:14px}
+  .eyebrow{font-size:12.5px;letter-spacing:.42em;text-transform:uppercase;color:var(--ink-soft);margin:0 0 6px}
+  h1{margin:0;font-size:clamp(32px,5.2vw,50px);line-height:1.12;letter-spacing:.04em;font-weight:900;
+    text-wrap:balance;text-shadow:2px 2px 0 var(--gold)}
+  .sub{margin:9px 0 0;font-size:14.5px;color:var(--ink-soft);font-style:italic}
+  section{margin-top:60px}
+  .sec-head{display:flex;align-items:center;gap:15px;margin-bottom:8px}
+  .sec-head h2{margin:0;font-size:24px;letter-spacing:.14em;white-space:nowrap}
+  .sec-head .rule{flex:1;height:7px;border-top:2px solid var(--ink);border-bottom:2px solid var(--ink)}
+  .sec-note{margin:0 0 18px;color:var(--ink-soft);font-size:14.5px;max-width:66ch}
+
+  /* ===== 画面 ===== */
+  .projector{position:relative;border:5px solid var(--ink);border-radius:10px;overflow:hidden;
+    box-shadow:0 10px 0 rgba(36,26,18,.28);background:#0d0a08;isolation:isolate}
+  .stage{position:relative;width:100%;aspect-ratio:16/9;transform-origin:center;overflow:hidden}
+  .stage .bg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+  .plane{position:absolute;will-change:transform}
+  .plane .tilt{transform-origin:50% 50%}
+  .plane img{display:block;width:100%;height:auto}
+  .plane img.flip{transform:scaleX(-1)}   /* 原画は機首が左。右向きにするため反転 */
+  .puff{position:absolute;pointer-events:none;will-change:transform,opacity}
+  .puff img{display:block;width:100%;height:auto}
+  .hud{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+
+  .film-canvas{position:absolute;inset:-2%;width:104%;height:104%;pointer-events:none}
+  .film-grain{mix-blend-mode:overlay}
+  .film-halo{position:absolute;inset:0;pointer-events:none;
+    background:radial-gradient(ellipse at 46% 40%, rgba(255,238,196,.16), transparent 62%);mix-blend-mode:screen}
+  .film-vig{position:absolute;inset:0;pointer-events:none;
+    background:radial-gradient(ellipse at center, transparent 50%, rgba(32,18,8,.28) 84%, rgba(20,10,4,.52) 100%)}
+
+  /* ===== コントロール ===== */
+  .controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:15px 0 0}
+  .controls .lbl{font-size:12.5px;letter-spacing:.2em;color:var(--ink-soft);text-transform:uppercase}
+  .seg{display:flex;border:3px solid var(--ink);border-radius:8px;overflow:hidden;box-shadow:0 3px 0 var(--ink)}
+  .seg button{font-family:inherit;font-size:14px;padding:7px 15px;border:0;cursor:pointer;
+    background:var(--cream);color:var(--ink);border-right:2px solid var(--ink)}
+  .seg button:last-child{border-right:0}
+  .seg button[aria-pressed="true"]{background:var(--red);color:var(--cream);font-weight:700}
+  .seg button:focus-visible{outline:3px dashed var(--red);outline-offset:2px}
+  .toggle{font-size:13.5px;display:inline-flex;gap:7px;align-items:center;background:var(--cream);
+    border:3px solid var(--ink);border-radius:8px;padding:6px 12px;box-shadow:0 3px 0 var(--ink);cursor:pointer}
+  .toggle input{width:16px;height:16px;accent-color:var(--red);cursor:pointer}
+  .caption{font-size:13px;color:var(--ink-soft);margin-top:11px;text-align:center;font-style:italic}
+
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:16px}
+  .card{background:var(--cream);border:3px solid var(--ink);border-radius:8px;padding:12px 14px;
+    box-shadow:0 4px 0 rgba(36,26,18,.2)}
+  .card .fig{background:linear-gradient(#87a9c0,#d8c9a4);border:2px solid var(--ink);border-radius:6px;
+    margin-bottom:10px;overflow:hidden;display:flex;align-items:center;justify-content:center;min-height:120px}
+  .card .fig img{display:block;width:88%;height:auto}
+  .card h3{margin:0 0 3px;font-size:15.5px;letter-spacing:.05em}
+  .card p{margin:0;font-size:12.5px;color:var(--ink-soft);line-height:1.6}
+  .check{background:var(--cream);border:3px solid var(--ink);border-radius:8px;padding:18px 24px;
+    box-shadow:0 5px 0 rgba(36,26,18,.22)}
+  .check ol{margin:8px 0 0;padding-left:22px}
+  .check li{margin:7px 0;font-size:14.5px}
+  .check li b{color:var(--red)}
+  footer{margin-top:60px;text-align:center;font-size:12px;color:var(--ink-soft);letter-spacing:.2em}
+
+  @keyframes bobA{0%,100%{transform:translateY(0)}50%{transform:translateY(-1.1%)}}
+  @keyframes bobB{0%,100%{transform:translateY(0)}50%{transform:translateY(1.4%)}}
+  .p1{animation:bobA 4.6s ease-in-out infinite}
+  .p2{animation:bobB 3.8s ease-in-out infinite}
+  @media (prefers-reduced-motion:reduce){.p1,.p2{animation:none}}
+</style>
+
+<div class="sheet">
+  <header>
+    <div class="marq">
+      <p class="eyebrow">Screen Mock — Final Art</p>
+      <h1>BI-PLANES<br>実画面モック</h1>
+      <p class="sub">提供いただいたイラストをそのまま使った、実寸の対戦画面</p>
+    </div>
+  </header>
+
+  <section>
+    <div class="sec-head"><h2>一、対戦画面</h2><div class="rule"></div></div>
+    <p class="sec-note">
+      背景・機体ともご提供のイラストです。紙地を抜いて透過にし、煙は「ひと粒」に切り出して
+      パーティクルとして出しています。<b>フィルム処理は既定を「弱」</b>にしてあります
+      ―― 絵自体が既に古びているので、かけすぎると潰れるためです。切り替えてご確認ください。
+    </p>
+
+    <div class="projector" id="proj">
+      <div class="stage" id="stage">
+        <img class="bg" src="../assets/art/bg/stage-sunset.png" alt="夕暮れの町のステージ背景">
+
+        <div class="plane p2" id="planeP2" style="left:58%;top:20%;width:20%">
+          <div class="tilt" style="transform:rotate(7deg)">
+            <img src="../assets/art/planes/plane-blue.png" alt="青の複葉機">
+          </div>
+        </div>
+        <div class="plane p1" id="planeP1" style="left:13%;top:40%;width:20%">
+          <div class="tilt" style="transform:rotate(-9deg)">
+            <img class="flip" src="../assets/art/planes/plane-red.png" alt="赤の複葉機">
+          </div>
+        </div>
+
+        <svg class="hud" viewBox="0 0 1280 720" preserveAspectRatio="none" aria-hidden="true">
+          <g id="tracers" stroke="#ffe6a0" stroke-width="6" stroke-linecap="round" opacity=".95"></g>
+        </svg>
+        <svg class="hud" viewBox="0 0 1280 720" aria-label="HUD">
+          <g font-family="Georgia, serif">
+            <g stroke="#241a12" stroke-width="5">
+              <rect x="22" y="20" width="262" height="84" rx="9" fill="#f4e6c8"/>
+              <rect x="22" y="20" width="68" height="84" rx="9" fill="#a8402c"/>
+            </g>
+            <text x="56" y="76" font-size="38" font-weight="900" fill="#f4e6c8" text-anchor="middle">P1</text>
+            <text x="106" y="54" font-size="25" font-weight="900" fill="#241a12">★ 3<tspan font-size="14" font-weight="400" fill="#5b4632">／10</tspan></text>
+            <g transform="translate(106 64)">
+              <rect width="150" height="13" rx="6.5" fill="#d3bd93" stroke="#241a12" stroke-width="3"/>
+              <rect x="3" y="3" width="100" height="7" rx="3.5" fill="#a8402c"/>
+            </g>
+            <g transform="translate(106 90)" stroke="#241a12" stroke-width="3">
+              <rect x="0" y="-8" width="9" height="14" rx="3" fill="#d59a34"/><rect x="14" y="-8" width="9" height="14" rx="3" fill="#d59a34"/>
+              <rect x="28" y="-8" width="9" height="14" rx="3" fill="#d59a34"/><rect x="42" y="-8" width="9" height="14" rx="3" fill="#c4b087"/>
+              <rect x="56" y="-8" width="9" height="14" rx="3" fill="#c4b087"/>
+            </g>
+            <text x="192" y="95" font-size="12" fill="#5b4632" font-style="italic">throttle</text>
+            <g transform="translate(254 88)" stroke="#241a12" stroke-width="3">
+              <path d="M-14 6 A 16 16 0 0 1 14 6" fill="none"/><line x1="0" y1="6" x2="9" y2="-6" stroke-width="4" stroke="#a8402c"/>
+            </g>
+
+            <g stroke="#241a12" stroke-width="5">
+              <rect x="996" y="20" width="262" height="84" rx="9" fill="#f4e6c8"/>
+              <rect x="1190" y="20" width="68" height="84" rx="9" fill="#3c5a78"/>
+            </g>
+            <text x="1224" y="76" font-size="38" font-weight="900" fill="#f4e6c8" text-anchor="middle">P2</text>
+            <text x="1014" y="54" font-size="25" font-weight="900" fill="#241a12">★ 5<tspan font-size="14" font-weight="400" fill="#5b4632">／10</tspan></text>
+            <g transform="translate(1014 64)">
+              <rect width="150" height="13" rx="6.5" fill="#d3bd93" stroke="#241a12" stroke-width="3"/>
+              <rect x="3" y="3" width="52" height="7" rx="3.5" fill="#3c5a78"/>
+            </g>
+            <g transform="translate(1014 90)" stroke="#241a12" stroke-width="3">
+              <rect x="0" y="-8" width="9" height="14" rx="3" fill="#d59a34"/><rect x="14" y="-8" width="9" height="14" rx="3" fill="#d59a34"/>
+              <rect x="28" y="-8" width="9" height="14" rx="3" fill="#c4b087"/><rect x="42" y="-8" width="9" height="14" rx="3" fill="#c4b087"/>
+              <rect x="56" y="-8" width="9" height="14" rx="3" fill="#c4b087"/>
+            </g>
+            <text x="1100" y="95" font-size="12" fill="#5b4632" font-style="italic">throttle</text>
+            <g transform="translate(1162 88)" stroke="#241a12" stroke-width="3">
+              <path d="M-14 6 A 16 16 0 0 1 14 6" fill="none"/><line x1="0" y1="6" x2="-4" y2="-8" stroke-width="4" stroke="#3c5a78"/>
+            </g>
+          </g>
+        </svg>
+      </div>
+      <div class="film-halo" id="halo"></div>
+      <canvas class="film-canvas film-grain" id="filmGrain"></canvas>
+      <canvas class="film-canvas film-dirt" id="filmDirt"></canvas>
+      <div class="film-vig"></div>
+    </div>
+
+    <div class="controls">
+      <span class="lbl">フィルム</span>
+      <div class="seg" id="seg" role="group" aria-label="フィルム強度">
+        <button data-lv="0" aria-pressed="false">切</button>
+        <button data-lv="1" aria-pressed="true">弱</button>
+        <button data-lv="2" aria-pressed="false">標準</button>
+        <button data-lv="3" aria-pressed="false">強</button>
+      </div>
+      <label class="toggle"><input type="checkbox" id="weave" checked>ゲートウィーブ</label>
+      <label class="toggle"><input type="checkbox" id="smokeOn" checked>被弾の煙（P2）</label>
+    </div>
+    <p class="caption">図1 — P2（青）が被弾して黒煙を吐き、P1（赤）が 7.7mm を撃っている場面。</p>
+  </section>
+
+  <section>
+    <div class="sec-head"><h2>二、作った素材</h2><div class="rule"></div></div>
+    <p class="sec-note">
+      原本は <code>assets/art/original/</code> に無加工で保存し、加工物は <code>tools/cutout.py</code> と
+      <code>tools/extract_smoke.py</code> でいつでも作り直せるようにしてあります。
+    </p>
+    <div class="cards">
+      <div class="card">
+        <div class="fig"><img src="../assets/art/planes/plane-red.png" alt="赤の複葉機（透過）"></div>
+        <h3>機体・赤（透過）</h3><p>紙地を抜いて透過 PNG に。プロペラの回転ブラーも淡い線として残しています。</p>
+      </div>
+      <div class="card">
+        <div class="fig"><img src="../assets/art/planes/plane-blue.png" alt="青の複葉機（透過）"></div>
+        <h3>機体・青（透過）</h3><p>輪郭に囲まれたクリーム色の塗装面は誤って抜けないよう判定を分けています。</p>
+      </div>
+      <div class="card">
+        <div class="fig" style="background:linear-gradient(#87a9c0,#a9b8c4)"><img src="../assets/art/smoke/puff-dark-02.png" alt="黒煙のひと粒" style="width:62%"></div>
+        <h3>煙のひと粒 ×8</h3><p>濃い煙4種・薄い煙4種。被弾量に応じて量と濃さを変えられます。</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><h2>三、ご判断いただきたい点</h2><div class="rule"></div></div>
+    <div class="check">
+      <ol>
+        <li><b>フィルム強度の既定値</b> — 切／弱／標準／強のどれにするか</li>
+        <li><b>機体の表示サイズ</b> — 現在は画面幅の 19%。大きすぎ／小さすぎがあればご指示ください</li>
+        <li><b>煙の出かた</b> — 量・速さ・濃さ。撃墜時はもっと激しくします</li>
+        <li><b>HUD の意匠</b> — このクリーム地＋黒枠で進めてよいか</li>
+      </ol>
+    </div>
+  </section>
+
+  <footer>BI-PLANES PROJECT — SCREEN MOCK — FINAL ART</footer>
+</div>
+
+<script>
+/* ================= 煙のパーティクル ================= */
+const DARK  = [1,2,3,4].map(i=>`../assets/art/smoke/puff-dark-0${i}.png`);
+const LIGHT = [1,2,3,4].map(i=>`../assets/art/smoke/puff-light-0${i}.png`);
+const stage = document.getElementById('stage');
+const p2 = document.getElementById('planeP2');
+let smokeOn = true;
+
+function emitPuff(){
+  if(!smokeOn) return;
+  // P2 は左向き。機首（左端）付近から煙が出て、後方（右上）へ流れる
+  const r = p2.getBoundingClientRect(), s = stage.getBoundingClientRect();
+  const x0 = (r.left - s.left + r.width*0.12) / s.width * 100;
+  const y0 = (r.top  - s.top  + r.height*0.45) / s.height * 100;
+
+  const dark = Math.random() < .62;
+  const src = (dark?DARK:LIGHT)[Math.floor(Math.random()*4)];
+  const el = document.createElement('div');
+  el.className = 'puff';
+  el.style.width = (3 + Math.random()*1.6) + '%';
+  el.innerHTML = `<img src="${src}" alt="">`;
+  stage.appendChild(el);
+
+  const life = 2200 + Math.random()*900;
+  const dx = 13 + Math.random()*9;           // 画面幅に対する移動量(%)
+  const dy = -(2.5 + Math.random()*4);       // 画面高に対する移動量(%)
+  const rot = (Math.random()-.5)*36, grow = 1.5 + Math.random()*.6;
+  const t0 = performance.now();
+  (function step(t){
+    const k = (t - t0) / life;
+    if(k >= 1){ el.remove(); return; }
+    const ease = 1 - Math.pow(1-k, 2);
+    el.style.left = (x0 + dx*ease) + '%';
+    el.style.top  = (y0 + dy*ease) + '%';
+    el.style.transform = `translate(-50%,-50%) scale(${1 + (grow-1)*ease}) rotate(${rot*ease}deg)`;
+    el.style.opacity = (k < .1 ? k/.1 : 1 - (k-.1)/.9) * (dark ? .88 : .62);
+    requestAnimationFrame(step);
+  })(t0);
+}
+setInterval(emitPuff, 270);
+
+/* ================= 曳光弾 ================= */
+const tracers = document.getElementById('tracers');
+function fireBurst(){
+  const y0 = 366, x0 = 452;
+  for(let i=0;i<3;i++){
+    const ln = document.createElementNS('http://www.w3.org/2000/svg','line');
+    const x = x0 + i*96, y = y0 - i*24;
+    ln.setAttribute('x1',x); ln.setAttribute('y1',y);
+    ln.setAttribute('x2',x+38); ln.setAttribute('y2',y-11);
+    tracers.appendChild(ln);
+    setTimeout(()=>ln.remove(), 520 + i*70);
+  }
+}
+fireBurst(); setInterval(fireBurst, 1500);
+
+/* ================= フィルム風ポストエフェクト ================= */
+const PRESETS = [
+  {blur:0,   sat:1,   sep:0,   con:1,   grain:0,   scratch:0, dirt:0,  flick:0,   weave:0,   halo:0},
+  {blur:.3,  sat:.95, sep:.06, con:.99, grain:.15, scratch:1, dirt:.4, flick:.02, weave:.35, halo:.5},
+  {blur:.55, sat:.88, sep:.13, con:.96, grain:.28, scratch:2, dirt:1,  flick:.04, weave:.7,  halo:1},
+  {blur:.9,  sat:.76, sep:.24, con:.91, grain:.44, scratch:4, dirt:2,  flick:.07, weave:1.2, halo:1.5},
+];
+let level = 1, useWeave = true;
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const gCv = document.getElementById('filmGrain'), dCv = document.getElementById('filmDirt');
+const gx = gCv.getContext('2d'), dx = dCv.getContext('2d');
+const halo = document.getElementById('halo');
+let W=0, H=0, img=null, scratches=[], wx=0, wy=0, jumpT=0;
+
+function resize(){
+  const r = gCv.getBoundingClientRect();
+  W = Math.max(2, Math.round(r.width/2.2));
+  H = Math.max(2, Math.round(r.height/2.2));
+  gCv.width = dCv.width = W; gCv.height = dCv.height = H;
+  img = gx.createImageData(W,H);
+}
+addEventListener('resize', resize); resize();
+
+function newScratch(){
+  return {x:Math.random()*W, drift:(Math.random()-.5)*.35, life:3+Math.random()*22,
+          w:Math.random()<.75?1:2, bright:Math.random()<.6, a:.25+Math.random()*.5,
+          y0:Math.random()<.3?Math.random()*H*.6:0, y1:Math.random()<.3?H*(.4+Math.random()*.6):H,
+          wob:Math.random()*2};
+}
+
+function frame(){
+  const p = PRESETS[level];
+  const amp = p.grain*118;
+  if(amp > 0){
+    const d = img.data;
+    for(let i=0;i<d.length;i+=4){
+      const v = 128 + (Math.random()-.5)*amp;
+      d[i]=d[i+1]=d[i+2]=v; d[i+3]=255;
+    }
+    gx.putImageData(img,0,0);
+  } else gx.clearRect(0,0,W,H);
+
+  dx.clearRect(0,0,W,H);
+  if(p.scratch > 0){
+    while(scratches.length < p.scratch) scratches.push(newScratch());
+    while(scratches.length > p.scratch) scratches.pop();
+    scratches.forEach((s,i)=>{
+      s.life--; s.x += s.drift;
+      if(s.life <= 0 || s.x < -4 || s.x > W+4){ scratches[i] = newScratch(); return; }
+      dx.strokeStyle = s.bright ? `rgba(255,252,240,${s.a})` : `rgba(24,14,8,${s.a*.9})`;
+      dx.lineWidth = s.w;
+      dx.beginPath(); dx.moveTo(s.x, s.y0);
+      dx.quadraticCurveTo(s.x + s.wob, (s.y0+s.y1)/2, s.x, s.y1); dx.stroke();
+    });
+    for(let i=0;i<Math.round(p.dirt*5);i++){
+      if(Math.random() > .55) continue;
+      const x=Math.random()*W, y=Math.random()*H;
+      dx.strokeStyle = Math.random()<.5 ? 'rgba(255,250,235,.5)' : 'rgba(20,12,6,.45)';
+      dx.fillStyle = dx.strokeStyle; dx.lineWidth = 1;
+      if(Math.random()<.4){
+        dx.beginPath(); dx.moveTo(x,y);
+        dx.quadraticCurveTo(x+(Math.random()-.5)*10, y+(Math.random()-.5)*10,
+                            x+(Math.random()-.5)*14, y+(Math.random()-.5)*14);
+        dx.stroke();
+      } else dx.fillRect(x, y, 1+Math.random(), 1+Math.random());
+    }
+  }
+
+  let tx=0, ty=0;
+  if(useWeave && p.weave>0 && !reduced){
+    wx = (wx + (Math.random()-.5)*.5)*.82;
+    wy = (wy + (Math.random()-.5)*.4)*.82;
+    if(--jumpT <= 0 && Math.random() < .02){ wy += (Math.random()<.5?-1:1)*(2+Math.random()*3); jumpT = 20; }
+    tx = wx*p.weave; ty = wy*p.weave;
+  }
+  const flick = 1 + (Math.random()-.5)*p.flick*2;
+  stage.style.transform = `translate(${tx.toFixed(2)}px, ${ty.toFixed(2)}px)`;
+  stage.style.filter = `blur(${p.blur}px) saturate(${p.sat}) sepia(${p.sep}) contrast(${p.con}) brightness(${flick.toFixed(3)})`;
+  halo.style.opacity = p.halo;
+  gCv.style.opacity = p.grain>0 ? .85 : 0;
+  dCv.style.opacity = p.scratch>0 ? .9 : 0;
+}
+
+let last = 0;
+(function loop(t){
+  if(t - last >= 1000/24){ last = t; frame(); }
+  requestAnimationFrame(loop);
+})(0);
+
+document.querySelectorAll('#seg button').forEach(b=>{
+  b.addEventListener('click',()=>{
+    level = +b.dataset.lv;
+    document.querySelectorAll('#seg button').forEach(x=>x.setAttribute('aria-pressed', x===b?'true':'false'));
+  });
+});
+document.getElementById('weave').addEventListener('change', e=>{ useWeave = e.target.checked; });
+document.getElementById('smokeOn').addEventListener('change', e=>{ smokeOn = e.target.checked; });
+</script>
