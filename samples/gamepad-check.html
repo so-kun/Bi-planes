@@ -1,0 +1,328 @@
+<title>Bi-Planes ゲームパッド確認</title>
+<style>
+  :root{
+    --paper:#e9d6b4; --ink:#241a12; --ink-soft:#5b4632;
+    --red:#a8402c; --gold:#d59a34; --cream:#f4e6c8; --blue:#3c5a78; --green:#4a6b3f;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--paper); color:var(--ink);
+    font-family:Georgia,'Times New Roman','Hiragino Mincho ProN','Yu Mincho',serif;
+    line-height:1.7;
+    background-image:radial-gradient(ellipse at 18% 8%, rgba(255,255,255,.32), transparent 52%),
+                     radial-gradient(ellipse at 82% 92%, rgba(110,80,40,.15), transparent 56%);
+  }
+  .sheet{max-width:980px;margin:0 auto;padding:38px 26px 84px}
+  header{text-align:center;padding:22px 12px 6px}
+  .marq{display:inline-block;border:4px double var(--ink);padding:16px 38px 20px;
+    background:var(--cream);box-shadow:0 4px 0 rgba(36,26,18,.26)}
+  .eyebrow{font-size:12.5px;letter-spacing:.42em;text-transform:uppercase;color:var(--ink-soft);margin:0 0 6px}
+  h1{margin:0;font-size:clamp(28px,4.6vw,42px);line-height:1.12;letter-spacing:.04em;font-weight:900;
+    text-shadow:2px 2px 0 var(--gold)}
+  .sub{margin:9px 0 0;font-size:14.5px;color:var(--ink-soft);font-style:italic}
+  section{margin-top:46px}
+  .sec-head{display:flex;align-items:center;gap:15px;margin-bottom:8px}
+  .sec-head h2{margin:0;font-size:22px;letter-spacing:.14em;white-space:nowrap}
+  .sec-head .rule{flex:1;height:7px;border-top:2px solid var(--ink);border-bottom:2px solid var(--ink)}
+  .sec-note{margin:0 0 18px;color:var(--ink-soft);font-size:14.5px;max-width:70ch}
+  .card{border:3px solid var(--ink);border-radius:10px;background:var(--cream);
+    box-shadow:0 5px 0 rgba(36,26,18,.26);padding:20px 22px}
+
+  /* 待機 */
+  #waiting{text-align:center;padding:40px 20px;font-size:19px}
+  #waiting .blink{color:var(--red);font-weight:700}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+  #waiting .blink{animation:pulse 1.3s ease-in-out infinite}
+
+  /* パッドの素性 */
+  dl.facts{display:grid;grid-template-columns:auto 1fr;gap:5px 18px;margin:0}
+  dl.facts dt{color:var(--ink-soft);font-size:13.5px;letter-spacing:.1em}
+  dl.facts dd{margin:0;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13.5px;word-break:break-all}
+  .warn{margin-top:14px;padding:11px 14px;border-left:5px solid var(--red);background:rgba(168,64,44,.09);font-size:14px}
+  .ok{margin-top:14px;padding:11px 14px;border-left:5px solid var(--green);background:rgba(74,107,63,.1);font-size:14px}
+
+  /* 生の入力 */
+  .raw{display:grid;grid-template-columns:1fr 1fr;gap:26px}
+  @media(max-width:760px){.raw{grid-template-columns:1fr}}
+  h3{margin:0 0 10px;font-size:15px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-soft)}
+  .btns{display:flex;flex-wrap:wrap;gap:7px}
+  .btn-dot{width:42px;height:42px;border:2px solid var(--ink);border-radius:8px;background:var(--paper);
+    display:flex;align-items:center;justify-content:center;font-size:12.5px;
+    font-family:ui-monospace,Menlo,Consolas,monospace;position:relative;overflow:hidden}
+  .btn-dot .fill{position:absolute;inset:0;background:var(--red);transform-origin:bottom;transform:scaleY(0)}
+  .btn-dot span{position:relative;z-index:1}
+  .btn-dot.on{color:var(--cream);font-weight:700}
+  .axes{display:flex;flex-direction:column;gap:9px}
+  .axis{display:grid;grid-template-columns:34px 1fr 56px;gap:10px;align-items:center;font-size:13px;
+    font-family:ui-monospace,Menlo,Consolas,monospace}
+  .bar{height:14px;border:2px solid var(--ink);border-radius:4px;background:var(--paper);position:relative}
+  .bar i{position:absolute;top:0;bottom:0;width:4px;background:var(--blue);left:50%;transform:translateX(-50%)}
+  .bar::before{content:"";position:absolute;top:-3px;bottom:-3px;left:50%;width:1px;background:rgba(36,26,18,.3)}
+  .last{margin-top:14px;font-size:14px}
+  .last b{font-family:ui-monospace,Menlo,Consolas,monospace;background:var(--paper);
+    border:2px solid var(--ink);border-radius:5px;padding:1px 8px}
+
+  /* 割り当て試し */
+  .seg{display:inline-flex;border:3px solid var(--ink);border-radius:8px;overflow:hidden;box-shadow:0 3px 0 var(--ink);margin-bottom:20px}
+  .seg button{font-family:inherit;font-size:14px;padding:7px 16px;border:0;cursor:pointer;
+    background:var(--cream);color:var(--ink);border-right:2px solid var(--ink)}
+  .seg button:last-child{border-right:0}
+  .seg button[aria-pressed="true"]{background:var(--red);color:var(--cream);font-weight:700}
+  .acts{display:grid;grid-template-columns:repeat(auto-fit,minmax(184px,1fr));gap:13px}
+  .act{border:2px solid var(--ink);border-radius:9px;background:var(--paper);padding:12px 14px;transition:background .06s}
+  .act.on{background:var(--gold)}
+  .act .name{font-size:15px;font-weight:700;letter-spacing:.05em}
+  .act .src{font-size:12.5px;color:var(--ink-soft);margin-top:2px}
+  .act .val{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:20px;margin-top:6px}
+  .fires{margin-top:16px;font-size:14px;color:var(--ink-soft)}
+  .fires b{color:var(--ink);font-family:ui-monospace,Menlo,Consolas,monospace}
+  footer{margin-top:56px;text-align:center;color:var(--ink-soft);font-size:13px;font-style:italic}
+</style>
+
+<div class="sheet">
+  <header>
+    <div class="marq">
+      <p class="eyebrow">Bi-Planes / 操作の検討</p>
+      <h1>ゲームパッド確認</h1>
+      <p class="sub">お手元のパッドが認識されるか、どの番号がどのボタンかを調べます</p>
+    </div>
+  </header>
+
+  <section>
+    <div class="sec-head"><h2>1. パッドの素性</h2><div class="rule"></div></div>
+    <p class="sec-note">
+      ブラウザは、パッドのボタンが一度押されるまでその存在を教えてくれない決まりになっています。
+      つないだだけでは出てこないので、何かボタンを押してください。
+    </p>
+    <div class="card">
+      <div id="waiting"><span class="blink">パッドのボタンを押してください</span></div>
+      <div id="facts" hidden>
+        <dl class="facts">
+          <dt>名前</dt><dd id="f-id">—</dd>
+          <dt>番号</dt><dd id="f-index">—</dd>
+          <dt>配列</dt><dd id="f-mapping">—</dd>
+          <dt>ボタン数</dt><dd id="f-nbtn">—</dd>
+          <dt>スティック軸数</dt><dd id="f-naxis">—</dd>
+          <dt>つないだ数</dt><dd id="f-count">—</dd>
+        </dl>
+        <div id="verdict"></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><h2>2. 生の入力</h2><div class="rule"></div></div>
+    <p class="sec-note">
+      押したボタンの番号と、スティックの倒れ具合がそのまま出ます。
+      アナログのトリガーは、押し込む深さに応じて塗りつぶされます。
+    </p>
+    <div class="card raw">
+      <div>
+        <h3>ボタン</h3>
+        <div class="btns" id="btns"></div>
+        <p class="last">最後に押したボタン: <b id="lastBtn">—</b></p>
+      </div>
+      <div>
+        <h3>スティック / 十字キー</h3>
+        <div class="axes" id="axes"></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><h2>3. 割り当てを試す</h2><div class="rule"></div></div>
+    <p class="sec-note">
+      ゲームの操作は「機首の上下・ロール・全開・7.7mm・20mm」の5つです。
+      ロールを<b>スティックの左右</b>に置く案と<b>肩ボタン</b>に置く案の両方を用意したので、
+      実際に動かして手になじむほうを選んでください。
+    </p>
+    <div class="seg" id="scheme">
+      <button data-s="stick" aria-pressed="true">案A: ロールはスティック左右</button>
+      <button data-s="bumper" aria-pressed="false">案B: ロールは肩ボタン</button>
+    </div>
+    <div class="card">
+      <div class="acts" id="acts"></div>
+      <p class="fires">ロールが発動した回数 <b id="rollCount">0</b> ／ 20mm を撃った回数 <b id="cannonCount">0</b>
+        <span id="rollNote"></span></p>
+    </div>
+  </section>
+
+  <footer>このページはゲーム本体とは別の確認用です（samples/gamepad-check.html）</footer>
+</div>
+
+<script>
+// 標準配列（mapping === 'standard'）のボタン番号。
+// Xbox / PlayStation / Switch Pro などはたいていこれに従う
+const STD = {
+  south: 0, east: 1, west: 2, north: 3,   // A/B/X/Y ・ ×/○/□/△
+  lb: 4, rb: 5, lt: 6, rt: 7,
+  select: 8, start: 9, l3: 10, r3: 11,
+  up: 12, down: 13, left: 14, right: 15,
+};
+const AXIS = { lx: 0, ly: 1, rx: 2, ry: 3 };
+const DEADZONE = 0.25;    // スティックの中央の遊び
+const ROLL_EDGE = 0.6;    // ロールが発動する倒し込み量
+
+const el = (id) => document.getElementById(id);
+let scheme = 'stick';
+let lastBtn = '—';
+let rolls = 0, cannons = 0;
+let prevRoll = 0, prevCannon = false;
+let btnCells = [], axisRows = [];
+
+// --- 案ごとの割り当て ---
+function actionsFor(pad) {
+  const b = (i) => (pad.buttons[i] ? pad.buttons[i].value : 0);
+  const pressed = (i) => (pad.buttons[i] ? pad.buttons[i].pressed : false);
+  const ax = (i) => (pad.axes.length > i ? pad.axes[i] : 0);
+  const dz = (v) => (Math.abs(v) < DEADZONE ? 0 : v);
+
+  // 機首: スティック上下 + 十字キー上下。画面の上が正
+  let pitch = -dz(ax(AXIS.ly));
+  if (pressed(STD.up)) pitch = 1;
+  if (pressed(STD.down)) pitch = -1;
+
+  // ロール: 案によって取り方が変わる
+  let roll = 0, rollSrc;
+  if (scheme === 'stick') {
+    const lx = dz(ax(AXIS.lx));
+    roll = Math.abs(lx) >= ROLL_EDGE ? Math.sign(lx) : 0;
+    if (pressed(STD.left)) roll = -1;
+    if (pressed(STD.right)) roll = 1;
+    rollSrc = '左スティック左右 / 十字キー左右';
+  } else {
+    roll = (pressed(STD.rb) ? 1 : 0) - (pressed(STD.lb) ? 1 : 0);
+    rollSrc = 'LB / RB（肩ボタン）';
+  }
+
+  return [
+    { name: '機首 上下', src: '左スティック上下 / 十字キー上下', val: pitch, on: Math.abs(pitch) > 0 },
+    { name: 'ロール', src: rollSrc, val: roll, on: roll !== 0 },
+    { name: '全開', src: 'RT（右トリガー）', val: b(STD.rt), on: pressed(STD.rt) },
+    { name: '7.7mm', src: 'A / ×（押している間）', val: b(STD.south), on: pressed(STD.south) },
+    { name: '20mm', src: 'B / ○（単発）', val: b(STD.east), on: pressed(STD.east) },
+  ];
+}
+
+// --- 表示の組み立て ---
+function buildCells(pad) {
+  if (btnCells.length !== pad.buttons.length) {
+    el('btns').innerHTML = '';
+    btnCells = pad.buttons.map((_, i) => {
+      const d = document.createElement('div');
+      d.className = 'btn-dot';
+      d.innerHTML = '<i class="fill"></i><span>' + i + '</span>';
+      el('btns').appendChild(d);
+      return d;
+    });
+  }
+  if (axisRows.length !== pad.axes.length) {
+    el('axes').innerHTML = '';
+    axisRows = pad.axes.map((_, i) => {
+      const r = document.createElement('div');
+      r.className = 'axis';
+      r.innerHTML = '<span>' + i + '</span><div class="bar"><i></i></div><span class="num">0.00</span>';
+      el('axes').appendChild(r);
+      return r;
+    });
+  }
+}
+
+let actCells = null;
+function buildActs(list) {
+  if (!actCells || actCells.length !== list.length) {
+    el('acts').innerHTML = '';
+    actCells = list.map(() => {
+      const d = document.createElement('div');
+      d.className = 'act';
+      d.innerHTML = '<div class="name"></div><div class="src"></div><div class="val"></div>';
+      el('acts').appendChild(d);
+      return d;
+    });
+  }
+}
+
+function firstPad() {
+  const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+  for (const p of pads) if (p && p.connected) return p;
+  return null;
+}
+
+function tick() {
+  const pad = firstPad();
+  if (!pad) {
+    el('waiting').hidden = false;
+    el('facts').hidden = true;
+    requestAnimationFrame(tick);
+    return;
+  }
+  el('waiting').hidden = true;
+  el('facts').hidden = false;
+
+  // 素性
+  const pads = [...navigator.getGamepads()].filter(Boolean);
+  el('f-id').textContent = pad.id;
+  el('f-index').textContent = pad.index;
+  el('f-mapping').textContent = pad.mapping || '(空 = 標準ではない)';
+  el('f-nbtn').textContent = pad.buttons.length;
+  el('f-naxis').textContent = pad.axes.length;
+  el('f-count').textContent = pads.length + ' 台';
+  el('verdict').innerHTML = pad.mapping === 'standard'
+    ? '<div class="ok">標準配列として認識されています。ボタン番号は決まった並びなので、そのまま割り当てられます。</div>'
+    : '<div class="warn">標準配列ではありません。ボタンの並びがこのパッド固有なので、'
+      + '下の「生の入力」で番号を調べて、その番号で個別に割り当てる必要があります。</div>';
+
+  // 生の入力
+  buildCells(pad);
+  pad.buttons.forEach((b, i) => {
+    const c = btnCells[i];
+    c.classList.toggle('on', b.pressed);
+    c.querySelector('.fill').style.transform = 'scaleY(' + b.value.toFixed(3) + ')';
+    if (b.pressed && lastBtn !== String(i)) { lastBtn = String(i); el('lastBtn').textContent = i; }
+  });
+  pad.axes.forEach((v, i) => {
+    const r = axisRows[i];
+    r.querySelector('.bar i').style.left = ((v + 1) / 2 * 100).toFixed(2) + '%';
+    r.querySelector('.num').textContent = v.toFixed(2);
+  });
+
+  // 割り当て
+  const list = actionsFor(pad);
+  buildActs(list);
+  list.forEach((a, i) => {
+    const c = actCells[i];
+    c.classList.toggle('on', a.on);
+    c.querySelector('.name').textContent = a.name;
+    c.querySelector('.src').textContent = a.src;
+    c.querySelector('.val').textContent = a.val.toFixed(2);
+  });
+
+  // ロールと 20mm は「押した瞬間」だけ働くので、その回数を数えて手応えを見る
+  const roll = list[1].val;
+  if (roll !== 0 && prevRoll === 0) { rolls++; el('rollCount').textContent = rolls; }
+  prevRoll = roll;
+  const cannon = list[4].on;
+  if (cannon && !prevCannon) { cannons++; el('cannonCount').textContent = cannons; }
+  prevCannon = cannon;
+
+  el('rollNote').textContent = scheme === 'stick'
+    ? '（案A: 左に倒しながら機首も操作すると、ロールが暴発しないか確かめてください）'
+    : '';
+
+  requestAnimationFrame(tick);
+}
+
+el('scheme').addEventListener('click', (e) => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  scheme = b.dataset.s;
+  for (const x of el('scheme').querySelectorAll('button')) {
+    x.setAttribute('aria-pressed', String(x === b));
+  }
+  rolls = 0; el('rollCount').textContent = '0';
+});
+
+window.addEventListener('gamepadconnected', () => {});
+requestAnimationFrame(tick);
+</script>
