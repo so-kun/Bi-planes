@@ -34,6 +34,41 @@ function levelFlight(throttle, seconds = 40) {
   return { speed: Math.round(last.speed), y: Math.round(s.y), aoa: +(last.aoa * 180 / Math.PI).toFixed(1) };
 }
 
+/**
+ * 巡航で落ち着いたところから全開にして、速くなるまでの時間。
+ * 「吹かしたときの手応え」はここに出る ―― 最高速だけ上げても、
+ * そこへ届くのに時間がかかるなら速くなった気がしない
+ */
+function acceleration() {
+  // 高度を保つように舵を当てながら、巡航で落ち着かせてから全開にする
+  const run = (onSpeed) => {
+    const s = { x: 0, y: 360, vx: 270, vy: 0, pitch: 0, roll: 0, throttle: 0 };
+    const hold = () => Math.max(-1, Math.min(1, (s.y - 360) * 0.004 + s.vy * 0.02));
+    let last = null;
+    for (let i = 0; i < 40 / DT; i++) last = stepFlight(s, { pitch: hold() }, DT);
+    const from = last.speed;
+    s.throttle = 1;
+    for (let i = 0; i < 30 / DT; i++) {
+      last = stepFlight(s, { pitch: hold() }, DT);
+      if (onSpeed && onSpeed(last.speed, i * DT)) break;
+    }
+    return { from, top: last.speed };
+  };
+
+  const { from, top } = run(null);
+  let t50 = null, t90 = null;
+  run((speed, t) => {
+    const p = (speed - from) / (top - from);
+    if (t50 === null && p >= 0.5) t50 = +t.toFixed(2);
+    if (p >= 0.9) { t90 = +t.toFixed(2); return true; }
+    return false;
+  });
+  return {
+    巡航: Math.round(from), 全開: Math.round(top), 差: Math.round(top - from),
+    '半分まで秒': t50, '9割まで秒': t90,
+  };
+}
+
 /** 舵を引き続けたときに失速する速度 */
 function stallSpeed() {
   const s = { x: 0, y: 360, vx: 300, vy: 0, pitch: 0, roll: 0, throttle: 1 };
@@ -111,6 +146,8 @@ for (let t = 0; t < names.length; t++) {
   const held = Math.abs(r.y - 360) < 40 ? '高度を維持' : r.y > 360 ? `沈む (y=${r.y})` : `上昇 (y=${r.y})`;
   console.log(`  ${names[t].padEnd(6, '　')} 速度 ${String(r.speed).padStart(4)}  迎え角 ${String(r.aoa).padStart(5)}°  ${held}`);
 }
+console.log('\n■ 全開にしたときの加速');
+console.log(' ', JSON.stringify(acceleration()));
 console.log('\n■ 失速');
 console.log(`  舵を引き続けて失速に入る速度: ${stallSpeed()}`);
 console.log('\n■ 巡航のまま上昇を続けたとき');
