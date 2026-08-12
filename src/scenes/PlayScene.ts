@@ -35,6 +35,8 @@ export class PlayScene extends Phaser.Scene {
   private hud!: Phaser.GameObjects.Graphics;
   private hudText!: Phaser.GameObjects.Text;
   private debugText!: Phaser.GameObjects.Text;
+  /** 撃墜されている間の表示。何も出ないと操縦不能になったように見えるため */
+  private downedText!: Phaser.GameObjects.Text;
   private showDebug = true;
 
   constructor() {
@@ -119,6 +121,10 @@ export class PlayScene extends Phaser.Scene {
       'W/S 機首  A/D ロール  E 全開（押している間）  F 7.7mm  G 20mm   ｜  1-5 フィルム  B BGM  M 消音  Tab 計器', {
         fontFamily: 'Georgia, serif', fontSize: '15px', color: '#f4e6c8',
       }).setDepth(71).setAlpha(0.75);
+    this.downedText = this.add.text(VIEW.width / 2, VIEW.height / 2 - 40, '', {
+      fontFamily: 'Georgia, "Times New Roman", serif', fontSize: '34px', color: '#f4e6c8',
+      align: 'center', stroke: '#241a12', strokeThickness: 6,
+    }).setOrigin(0.5).setDepth(72).setVisible(false);
     this.debugText = this.add.text(24, 122, '', {
       fontFamily: 'ui-monospace, monospace', fontSize: '14px', color: '#f4e6c8',
       backgroundColor: 'rgba(24,16,10,0.45)', padding: { x: 8, y: 6 },
@@ -170,9 +176,12 @@ export class PlayScene extends Phaser.Scene {
       this.warnStall(dt);
     } else {
       this.respawnTimer -= dt;
+      this.downedText.setVisible(true);
+      this.downedText.setText(`撃墜\n再出撃まで ${Math.max(0, this.respawnTimer).toFixed(1)}`);
       if (this.respawnTimer <= 0) {
         this.plane.reset(Phaser.Math.Between(200, VIEW.width - 200), 300, 1);
         this.lastEngineState = '';
+        this.downedText.setVisible(false);
       }
     }
 
