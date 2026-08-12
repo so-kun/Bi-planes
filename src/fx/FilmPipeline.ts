@@ -12,7 +12,13 @@ import { FILM_PRESETS, FILM_DEFAULT, FILM_FPS } from '../config';
 const FRAG = `
 #define SHADER_NAME BI_PLANES_FILM
 
+// 粒やゆらぎは時間を種にしているので、時間が大きくなると精度が足りなくなり、
+// 粒が止まって「膜が剥がれた」ように見える。使える環境では高精度を使う
+#ifdef GL_FRAGMENT_PRECISION_HIGH
+precision highp float;
+#else
 precision mediump float;
+#endif
 
 uniform sampler2D uMainSampler;
 uniform vec2 uResolution;
@@ -91,9 +97,15 @@ void main() {
 }
 `;
 
+/**
+ * 時間の折り返し。1/FILM_FPS 秒の整数倍にしてある（16 x 24 = 384）。
+ * 時間を増やし続けると、シェーダ側の浮動小数の精度が足りなくなって
+ * 粒が動かなくなる ―― 長く遊ぶとフィルムの質感が消えていく原因になる
+ */
+const TIME_WRAP = 16;
+
 export class FilmPipeline extends Phaser.Renderer.WebGL.Pipelines.PostFXPipeline {
   private level = FILM_DEFAULT;
-  private time = 0;
 
   constructor(game: Phaser.Game) {
     super({ game, name: 'Film', fragShader: FRAG } as never);
@@ -108,14 +120,12 @@ export class FilmPipeline extends Phaser.Renderer.WebGL.Pipelines.PostFXPipeline
     return this.level;
   }
 
-  /** ゲーム側から毎フレーム呼ぶ。時間はコマ速に量子化する */
-  advance(dt: number): void {
-    this.time += dt;
-  }
-
   override onPreRender(): void {
     const p = FILM_PRESETS[this.level];
-    const quantized = Math.floor(this.time * FILM_FPS) / FILM_FPS;
+    // 時間は自前で持つ。ゲーム側から送る形にすると、
+    // 何かの拍子にパイプラインが作り直されたときに時間が進まなくなる
+    const t = (performance.now() / 1000) % TIME_WRAP;
+    const quantized = Math.floor(t * FILM_FPS) / FILM_FPS;
     this.set2f('uResolution', this.renderer.width, this.renderer.height);
     this.set1f('uTime', quantized);
     this.set1f('uBlur', p.blur);
