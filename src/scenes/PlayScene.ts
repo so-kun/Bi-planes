@@ -9,7 +9,7 @@ import Phaser from 'phaser';
 import {
   BALLOON, FILM_DEFAULT, FLIGHT, PLANE, SCORE, SMOKE, THROTTLE_NAMES, VIEW, WEAPON,
 } from '../config';
-import { Sfx } from '../audio';
+import { sfx } from '../audio';
 import { FilmPipeline } from '../fx/FilmPipeline';
 import { Particles } from '../fx/Particles';
 import { Plane, type Facing } from '../objects/Plane';
@@ -20,6 +20,12 @@ import { PadInput, type PadState } from '../input/PadInput';
 import { Pilot, AI_LEVELS } from '../ai/Pilot';
 
 const KEY = Phaser.Input.Keyboard.KeyCodes;
+
+/**
+ * 開始の合図の長さ（秒）。READY? → 3 → 2 → 1 → GO! の順に出す。
+ * numbers は数字1つぶん、go は GO! を出している時間
+ */
+const COUNT = { ready: 0.9, numbers: 0.55, go: 0.5, total: 0.9 + 0.55 * 3 + 0.5 };
 
 type Key = Phaser.Input.Keyboard.Key;
 
@@ -56,7 +62,6 @@ export class PlayScene extends Phaser.Scene {
   private particles!: Particles;
   private balloons!: Balloons;
   private bullets!: Bullets;
-  private sfx = new Sfx();
   private film: FilmPipeline | null = null;
 
   /** 全キー。押しっぱなしの見張りに渡す */
@@ -70,6 +75,15 @@ export class PlayScene extends Phaser.Scene {
   private filmWatchdog = 1;
   /** 勝った側。決まるまで null */
   private winner: Player | null = null;
+  /** タイトルで選んだ操縦。0 = 人、1..3 = コンピュータの腕前 */
+  private startAi: number[] = [0, 0];
+  /**
+   * 開始の合図の残り時間。0 になったら試合開始。
+   * この間は操作を受け付けず、機体は出撃位置で待つ
+   */
+  private countdown = 0;
+  /** 直前に鳴らした数字。同じ数字で二度鳴らさないための記録 */
+  private lastBeep = -1;
 
   private hud!: Phaser.GameObjects.Graphics;
   private hudTexts: Phaser.GameObjects.Text[] = [];
@@ -79,10 +93,15 @@ export class PlayScene extends Phaser.Scene {
   private downedTexts: Phaser.GameObjects.Text[] = [];
   private aiBadges: Phaser.GameObjects.Text[] = [];
   private resultText!: Phaser.GameObjects.Text;
+  private countText!: Phaser.GameObjects.Text;
   private showDebug = false;
 
   constructor() {
     super('Play');
+  }
+
+  init(data: { p1Ai?: number; p2Ai?: number }): void {
+    this.startAi = [data?.p1Ai ?? 0, data?.p2Ai ?? 0];
   }
 
   create(): void {
@@ -106,6 +125,78 @@ export class PlayScene extends Phaser.Scene {
 
     // 最初は的が空にあったほうが試しやすい
     this.balloons.spawn(760, false);
+
+    // タイトルで選んだ操縦を反映してから、開始の合図に入る
+    this.players.forEach((p, i) => {
+      for (let n = 0; n < this.startAi[i]; n++) this.cycleAi(p);
+    });
+    this.aiText.setAlpha(0);
+    this.beginCountdown();
+  }
+
+  // ---------------------------------------------------------------- 開始の合図
+
+  /**
+   * 「READY?」から「GO!」まで。
+   * この間は操作を受け付けず、機体は出撃位置で止まって待つ。
+   * 飛ばしたまま待たせると、合図の前に落ちたり流されたりしてしまう
+   */
+  private beginCountdown(): void {
+    this.countdown = COUNT.total;
+    this.lastBeep = -1;
+    for (const p of this.players) {
+      p.plane.reset(p.home.x, p.home.y, p.home.facing);
+      p.lastEngineState = '';
+      this.downedTexts[p.id].setVisible(false);
+    }
+    this.countText.setVisible(true);
+  }
+
+  /** @returns 合図が終わって試合が動いているか */
+  private tickCountdown(dt: number): boolean {
+    if (this.countdown <= 0) return true;
+    this.countdown -= dt;
+
+    // 機体は出撃位置に据え置く。合図の間に動きださないように
+    for (const p of this.players) {
+      p.plane.state.x = p.home.x;
+      p.plane.state.y = p.home.y;
+      p.plane.state.vx = p.home.facing * 260;
+      p.plane.state.vy = 0;
+      p.plane.container.setPosition(p.home.x, p.home.y);
+    }
+
+    if (this.countdown <= 0) {
+      this.countdown = 0;
+      this.countText.setVisible(false);
+      return true;
+    }
+
+    // 残り時間から「今どの表示か」を出す。READY? のあとに 3・2・1、最後に GO!
+    const left = this.countdown - COUNT.go;
+    let label: string;
+    let beepAt: number;
+    if (left <= 0) {
+      label = 'GO!';
+      beepAt = 0;
+    } else if (left <= COUNT.numbers * 3) {
+      const n = Math.ceil(left / COUNT.numbers);
+      label = String(n);
+      beepAt = n;
+    } else {
+      label = 'READY?';
+      beepAt = -1;
+    }
+
+    if (beepAt !== this.lastBeep) {
+      this.lastBeep = beepAt;
+      if (beepAt >= 0) sfx.beep(beepAt === 0);
+    }
+
+    this.countText.setText(label);
+    this.countText.setColor(label === 'GO!' ? '#ffd76b' : '#f4e6c8');
+    this.countText.setFontSize(label === 'READY?' ? 54 : 78);
+    return false;
   }
 
   // ---------------------------------------------------------------- 入力
@@ -118,7 +209,7 @@ export class PlayScene extends Phaser.Scene {
       p1Throttle: KEY.E, p1Mg: KEY.F, p1Cannon: KEY.G,
       p2Up: KEY.UP, p2Down: KEY.DOWN, p2RollL: KEY.LEFT, p2RollR: KEY.RIGHT,
       p2Throttle: KEY.SHIFT, p2Mg: KEY.COMMA, p2Cannon: KEY.PERIOD,
-      restart: KEY.ENTER, ai1: KEY.V, ai2: KEY.C,
+      restart: KEY.ENTER, title: KEY.ESC, ai1: KEY.V, ai2: KEY.C,
       mute: KEY.M, bgm: KEY.B, debug: KEY.TAB,
       f0: KEY.ONE, f1: KEY.TWO, f2: KEY.THREE, f3: KEY.FOUR, f4: KEY.FIVE,
     }) as Record<string, Key>;
@@ -160,7 +251,7 @@ export class PlayScene extends Phaser.Scene {
     }
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.keyGuard.detach();
-      this.sfx.stopEngines();
+      sfx.stopEngines();
       window.removeEventListener('blur', releaseAll);
       window.removeEventListener('focus', releaseAll);
       document.removeEventListener('visibilitychange', onVisibility);
@@ -177,10 +268,11 @@ export class PlayScene extends Phaser.Scene {
     }
 
     k.restart.on('down', () => { if (this.winner) this.restart(); });
+    k.title.on('down', () => { sfx.stopEngines(); this.scene.start('Title'); });
     k.ai1.on('down', () => this.cycleAi(this.players[0]));
     k.ai2.on('down', () => this.cycleAi(this.players[1]));
-    k.mute.on('down', () => this.sfx.toggleMute());
-    k.bgm.on('down', () => { this.bgmOn = this.sfx.toggleBgm(); });
+    k.mute.on('down', () => sfx.toggleMute());
+    k.bgm.on('down', () => { this.bgmOn = sfx.toggleBgm(); });
     k.debug.on('down', () => {
       this.showDebug = !this.showDebug;
       this.debugText.setVisible(this.showDebug);
@@ -240,13 +332,13 @@ export class PlayScene extends Phaser.Scene {
   private get running(): boolean { return this.winner === null; }
 
   private wakeAudio(): void {
-    this.sfx.resume();
-    this.sfx.startEngines(this.players.length);
+    sfx.resume();
+    sfx.startEngines(this.players.length);
     // BGM は最初から鳴らす。ブラウザの決まりで音を出せるようになった時点が
     // この呼び出しなので、ここで始める（B キーで止められる）
     if (!this.bgmStarted) {
       this.bgmStarted = true;
-      this.bgmOn = this.sfx.toggleBgm();
+      this.bgmOn = sfx.toggleBgm();
     }
   }
 
@@ -270,7 +362,8 @@ export class PlayScene extends Phaser.Scene {
       this.wakeAudio();
     }
 
-    if (this.running) {
+    const live = this.tickCountdown(dt);
+    if (this.running && live) {
       for (const p of this.players) this.updatePlayer(p, dt);
     }
 
@@ -344,7 +437,7 @@ export class PlayScene extends Phaser.Scene {
     const m = p.plane.muzzle();
     this.bullets.fire('mg', m.x, m.y, m.ux, m.uy, p.id);
     p.plane.noteMgFired();
-    this.sfx.mg();
+    sfx.mg();
   }
 
   private fireCannon(p: Player): void {
@@ -353,13 +446,13 @@ export class PlayScene extends Phaser.Scene {
     this.bullets.fire('cannon', m.x, m.y, m.ux, m.uy, p.id);
     p.plane.noteCannonFired();
     this.particles.muzzleSmoke(m.x, m.y);
-    this.sfx.cannon();
+    sfx.cannon();
   }
 
   /** 地面への激突。撃たれたわけではないので、相手には自滅ぶんの点が入る */
   private crash(p: Player): void {
     this.particles.explode(p.plane.x, VIEW.groundY, true);
-    this.sfx.explosion();
+    sfx.explosion();
     this.downPlane(p, this.other(p), SCORE.suicide);
   }
 
@@ -368,7 +461,7 @@ export class PlayScene extends Phaser.Scene {
     p.plane.destroy();
     p.respawnTimer = PLANE.respawnDelay;
     // 落ちた機のエンジン音は絞る。鳴ったままだと空にいない機の音が残る
-    this.sfx.setEngine(p.id, 1, false);
+    sfx.setEngine(p.id, 1, false);
     p.lastEngineState = '';
     if (credit) this.addScore(credit, points);
   }
@@ -389,9 +482,11 @@ export class PlayScene extends Phaser.Scene {
       q.plane.setThrottle(0);
       this.downedTexts[q.id].setVisible(false);
     }
-    this.sfx.setEngine(0, 1, false);
-    this.sfx.setEngine(1, 1, false);
-    this.resultText.setText(`${p.name} の勝ち\n\n${this.players[0].score} 対 ${this.players[1].score}\nEnter でもう一度`);
+    sfx.setEngine(0, 1, false);
+    sfx.setEngine(1, 1, false);
+    this.resultText.setText(
+      `${p.name} の勝ち\n\n${this.players[0].score} 対 ${this.players[1].score}\n`
+      + 'Enter でもう一度　　Esc でタイトルへ');
     this.resultText.setColor(p.id === 0 ? '#e8836a' : '#8fb6d8');
     this.resultText.setVisible(true);
   }
@@ -402,13 +497,12 @@ export class PlayScene extends Phaser.Scene {
     for (const p of this.players) {
       p.score = 0;
       p.respawnTimer = 0;
-      p.lastEngineState = '';
       p.pilot.reset();
-      p.plane.reset(p.home.x, p.home.y, p.home.facing);
-      this.downedTexts[p.id].setVisible(false);
     }
     for (const b of [...this.balloons.list]) this.balloons.pop(b);
     this.bullets.list.length = 0;
+    // やり直しにも開始の合図を入れる。いきなり始まると身構える間がない
+    this.beginCountdown();
   }
 
   /**
@@ -433,11 +527,11 @@ export class PlayScene extends Phaser.Scene {
         p.plane.takeDamage(b.damage, along >= 0 ? 'engine' : 'handling');
         this.bullets.remove(b);
         consumed = true;
-        this.sfx.hit();
+        sfx.hit();
 
         if (p.plane.hp <= 0) {
           this.particles.explode(p.plane.x, p.plane.y, false);
-          this.sfx.explosion();
+          sfx.explosion();
           this.downPlane(p, this.players[b.owner] ?? null, SCORE.kill);
         }
         break;
@@ -450,7 +544,7 @@ export class PlayScene extends Phaser.Scene {
         this.bullets.remove(b);
         this.balloons.pop(balloon);
         this.particles.popBalloon(hb.x, hb.y);
-        this.sfx.pop();
+        sfx.pop();
         const shooter = this.players[b.owner];
         if (shooter) {
           if (balloon.gold) this.repair(shooter);
@@ -481,7 +575,7 @@ export class PlayScene extends Phaser.Scene {
     if (key === p.lastEngineState) return;
     p.lastEngineState = key;
     // EngineVoice の段階は 1..3。巡航を 2、全開を 3 に対応させる
-    this.sfx.setEngine(p.id, p.plane.state.throttle + 2, damaged);
+    sfx.setEngine(p.id, p.plane.state.throttle + 2, damaged);
   }
 
   /**
@@ -514,7 +608,7 @@ export class PlayScene extends Phaser.Scene {
     p.stallSoundTimer = Math.max(0, p.stallSoundTimer - dt);
     const r = p.plane.readout;
     if (r.stalled && r.speed < FLIGHT.stallWarnSpeed && p.stallSoundTimer <= 0) {
-      this.sfx.stall();
+      sfx.stall();
       p.stallSoundTimer = 2.2;
     }
   }
@@ -570,10 +664,15 @@ export class PlayScene extends Phaser.Scene {
     this.add.text(VIEW.width / 2, VIEW.height - 21,
       '1P  W/S 機首  A/D ロール  E 全開  F 7.7mm  G 20mm　　' +
       '2P  ↑/↓ 機首  ←/→ ロール  Shift 全開  , 7.7mm  . 20mm　　' +
-      'V/C CPU 操縦（1P/2P）  1-5 フィルム  B BGM  M 消音  Tab 計器', {
+      'V/C CPU 操縦（1P/2P）  Esc タイトル  1-5 フィルム  B BGM  M 消音  Tab 計器', {
         fontFamily: 'Georgia, serif', fontSize: '14px', color: '#f4e6c8',
         backgroundColor: 'rgba(24,16,10,0.5)', padding: { x: 12, y: 5 },
       }).setOrigin(0.5).setDepth(71).setAlpha(0.9);
+
+    this.countText = this.add.text(VIEW.width / 2, VIEW.height / 2 - 60, '', {
+      fontFamily: 'Georgia, "Times New Roman", serif', fontSize: '78px', color: '#f4e6c8',
+      align: 'center', stroke: '#241a12', strokeThickness: 9,
+    }).setOrigin(0.5).setDepth(73).setVisible(false);
 
     this.resultText = this.add.text(VIEW.width / 2, VIEW.height / 2 - 40, '', {
       fontFamily: 'Georgia, "Times New Roman", serif', fontSize: '44px', color: '#f4e6c8',
