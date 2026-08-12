@@ -100,7 +100,15 @@ export class Plane {
   }
 
   get rolling(): boolean { return this.rollT < 1; }
-  get inverted(): boolean { return Math.cos(this.state.roll) < 0; }
+  /**
+   * 見た目が背面か。
+   * 左へ飛ぶ機は roll が π でも正立なので（宙返りで左を向いた状態と同じ）、
+   * ロール角だけでは決まらない。機首の向きと合わせて見る
+   */
+  get inverted(): boolean {
+    const upSign = Math.cos(this.state.roll) >= 0 ? 1 : -1;
+    return Math.cos(this.state.pitch) * upSign < 0;
+  }
 
   /** スロットルは押している間だけ全開。毎フレーム外から設定する */
   setThrottle(level: number): void {

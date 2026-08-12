@@ -14,10 +14,11 @@ export class Sfx {
   private musicBus!: GainNode;
   /** エンジン音は鳴りっぱなしなので、単発の効果音とは別に音量を持たせる */
   private engineBus!: GainNode;
-  private engine: EngineVoice | null = null;
+  /** 機体ごとのエンジン音。2人対戦では2つ鳴る */
+  private engines: (EngineVoice | null)[] = [];
   /** 音を鳴らせるようになる前に要求された段階。鳴らしはじめるときに使う */
-  private engineLevel = 2;
-  private engineDamaged = false;
+  private engineLevel: number[] = [];
+  private engineDamaged: boolean[] = [];
   private bgm: Bgm | null = null;
   muted = false;
 
@@ -217,27 +218,43 @@ export class Sfx {
   }
 
   /**
-   * エンジン音を鳴らしはじめる。
+   * エンジン音を count 機ぶん鳴らしはじめる。
    *
    * 音はブラウザの決まりで操作があるまで鳴らせないので、この呼び出しは
    * ゲームが動きはじめたあとになる。それまでに要求された段階を覚えておいて、
    * 作った瞬間からその段階で鳴らす。覚えずにいると、段階が変わるまで
    * 既定のままの音が鳴り続ける
    */
-  startEngine(): void {
-    if (!this.ac || this.engine) return;
-    this.engine = new EngineVoice(this.ac, this.engineBus, this.engineLevel, this.engineDamaged);
+  startEngines(count: number): void {
+    if (!this.ac) return;
+    for (let i = 0; i < count; i++) {
+      if (this.engines[i]) continue;
+      this.engines[i] = new EngineVoice(
+        this.ac, this.engineBus, this.engineLevel[i] ?? 2, this.engineDamaged[i] ?? false,
+      );
+    }
+    this.balanceEngines();
   }
 
-  setEngine(level: number, damaged: boolean): void {
-    this.engineLevel = level;
-    this.engineDamaged = damaged;
-    this.engine?.set(level, damaged);
+  setEngine(index: number, level: number, damaged: boolean): void {
+    this.engineLevel[index] = level;
+    this.engineDamaged[index] = damaged;
+    this.engines[index]?.set(level, damaged);
   }
 
-  stopEngine(): void {
-    this.engine?.stop();
-    this.engine = null;
+  stopEngines(): void {
+    for (const e of this.engines) e?.stop();
+    this.engines = [];
+  }
+
+  /**
+   * 鳴っている数だけ音が重なって大きくなるので、まとめて絞る。
+   * 2機で単純に2倍にはせず、耳で感じる大きさが揃うくらいにする
+   */
+  private balanceEngines(): void {
+    const n = this.engines.filter(Boolean).length;
+    if (!n) return;
+    this.engineBus.gain.value = AUDIO.engine / Math.sqrt(n);
   }
 
   toggleBgm(): boolean {
