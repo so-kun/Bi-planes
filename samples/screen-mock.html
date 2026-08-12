@@ -81,9 +81,9 @@
 <div class="sheet">
   <header>
     <div class="marq">
-      <p class="eyebrow">Screen Mock — Rev.4</p>
+      <p class="eyebrow">Screen Mock — Rev.5</p>
       <h1>BI-PLANES<br>実画面モック</h1>
-      <p class="sub">飛行する機体・煙の軌跡・2種類の弾道・撃墜と激突の爆発</p>
+      <p class="sub">ロール・気球・煙の軌跡・2種類の弾道・撃墜と激突の爆発</p>
     </div>
   </header>
 
@@ -93,7 +93,8 @@
       機体を実際に飛ばしています。<b>通常飛行中も薄い白煙を引く</b>ので、どこをどう飛んだかが残ります。
       被弾している P2（青）は、そこに濃い黒煙が重なります。
       フィルム処理は<b>「既定」＝弱と標準の中間</b>で確定しています。
-      武装と爆発は下のボタンで試せます ―― 弾道の違いと、空中撃墜／地面激突の爆発をご確認ください。
+      <b>ロール（正立⇄背面）</b>と<b>気球</b>を追加しました。武装・爆発とあわせて下のボタンで試せます。
+      P1（赤）は5秒ごとに自動でロールします。
     </p>
 
     <div class="projector" id="proj">
@@ -154,6 +155,8 @@
     <div class="controls">
       <button class="btn" id="fireMg">7.7mm を連射</button>
       <button class="btn" id="fireCannon">20mm を発射</button>
+      <button class="btn" id="rollP1">ロール（正立 ⇄ 背面）</button>
+      <button class="btn" id="balloonBtn">気球を出す</button>
       <button class="btn" id="killAir">20mm で撃墜（空中爆発）</button>
       <button class="btn" id="killGround">地面に激突</button>
       <label class="toggle"><input type="checkbox" id="trailOn" checked>通常飛行の白煙</label>
@@ -202,6 +205,27 @@
         </ul>
       </div>
       <div class="card">
+        <h3>ロール（正立 ⇄ 背面）</h3>
+        <p>横から見た機体が機軸まわりに回る動きを、いただいた上面図・下面図を中間コマとして補間しています。</p>
+        <ul class="spec">
+          <li><b>0°</b>側面図（正立）</li>
+          <li><b>90°</b>上面図。翼が画面いっぱいに開いて見える</li>
+          <li><b>180°</b>側面図を上下反転（背面飛行）</li>
+          <li><b>270°</b>下面図</li>
+          <li><b>補間</b>翼の見かけの高さは sin に比例するので、上面図・下面図を縦に潰しながら側面図と入れ替える</li>
+          <li><b>所要</b>180°で 0.45秒（出だしと終わりを緩める）</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>気球</h3>
+        <p>下からランダムに上がってくる的。7.7mm でも 20mm でも割れます。当たり判定は球皮だけで、籠や索には当たりません。</p>
+        <ul class="spec">
+          <li><b>大きさ</b>画面幅の 7.5%（機体は 8%）</li>
+          <li><b>上昇</b>毎秒 34〜54px、左右にゆっくり揺れる</li>
+          <li><b>割れる</b>小さな火の玉＋黒煙＋布の破片</li>
+        </ul>
+      </div>
+      <div class="card">
         <h3>爆発</h3>
         <p>火の玉・黒煙・土煙は、<b>提供いただいた煙の絵を火や土の色に染め直して</b>作っています。別の絵を用意すると絵柄が浮くためです。</p>
         <ul class="spec">
@@ -231,12 +255,14 @@
         <li><b>煙</b> — 通常飛行は薄い白煙の軌跡、被弾は濃い黒煙</li>
         <li><b>武装</b> — 7.7mm は直線・高速・射程は画面幅の約60%・連射、20mm は低速・より短射程・山なり。発射炎あり</li>
         <li><b>爆発</b> — 空中撃墜と地面への激突で、火の広がり方と土煙の有無を描き分け</li>
+        <li><b>ロール</b> — 上面図・下面図を中間コマに使い、正立と背面を 0.45秒で入れ替え</li>
+        <li><b>気球</b> — 下から上昇する的。撃つと割れる</li>
         <li><b>HUD</b> — クリーム地＋黒枠</li>
       </ol>
     </div>
   </section>
 
-  <footer>BI-PLANES PROJECT — SCREEN MOCK — REV.4</footer>
+  <footer>BI-PLANES PROJECT — SCREEN MOCK — REV.5</footer>
 </div>
 
 <div id="assets" aria-hidden="true">
@@ -250,6 +276,11 @@
   <img id="pl2" src="../assets/art/smoke/puff-light-02.png" alt="">
   <img id="pl3" src="../assets/art/smoke/puff-light-03.png" alt="">
   <img id="pl4" src="../assets/art/smoke/puff-light-04.png" alt="">
+  <img id="imgBalloon" src="../assets/art/props/baloon.png" alt="">
+  <img id="imgRedTop" src="../assets/art/planes/plane-red-top.png" alt="">
+  <img id="imgRedUnder" src="../assets/art/planes/plane-red-under.png" alt="">
+  <img id="imgBlueTop" src="../assets/art/planes/plane-blue-top.png" alt="">
+  <img id="imgBlueUnder" src="../assets/art/planes/plane-blue-under.png" alt="">
 </div>
 
 <script>
@@ -263,6 +294,11 @@ const fc = fx.getContext('2d');
 const IMG = {
   red: document.getElementById('imgRed'),
   blue: document.getElementById('imgBlue'),
+  balloon: document.getElementById('imgBalloon'),
+  redTop: document.getElementById('imgRedTop'),
+  redUnder: document.getElementById('imgRedUnder'),
+  blueTop: document.getElementById('imgBlueTop'),
+  blueUnder: document.getElementById('imgBlueUnder'),
   dark:  [1,2,3,4].map(i=>document.getElementById('pd'+i)),
   light: [1,2,3,4].map(i=>document.getElementById('pl'+i)),
 };
@@ -313,9 +349,31 @@ addEventListener('resize', fxResize); fxResize();
 /* ===================== 機体 ===================== */
 // 原画は機首が左。右向きに飛ぶ機体は左右反転して使う
 const planes = [
-  {img:IMG.red,  x:-140, y:470, vx:255, faceRight:true,  amp:62, freq:.52, phase:0,   damaged:false},
-  {img:IMG.blue, x:1420, y:250, vx:-235, faceRight:false, amp:54, freq:.63, phase:1.4, damaged:true },
+  {img:IMG.red,  top:IMG.redTop,  under:IMG.redUnder,
+   x:-140, y:470, vx:255,  faceRight:true,  amp:62, freq:.52, phase:0,   damaged:false,
+   roll:0, rollFrom:0, rollTo:0, rollT:1},
+  {img:IMG.blue, top:IMG.blueTop, under:IMG.blueUnder,
+   x:1420, y:250, vx:-235, faceRight:false, amp:54, freq:.63, phase:1.4, damaged:true,
+   roll:0, rollFrom:0, rollTo:0, rollT:1},
 ];
+const ROLL_DUR = .45;                 // 180度ロールにかける秒数
+
+function startRoll(p, dir){
+  if(p.rollT < 1) return;             // ロール中は受け付けない
+  p.rollFrom = p.roll;
+  p.rollTo = p.roll + Math.PI * (dir || 1);
+  p.rollT = 0;
+}
+function updateRoll(p, dt){
+  if(p.rollT >= 1) return;
+  p.rollT = Math.min(1, p.rollT + dt / ROLL_DUR);
+  const t = p.rollT;
+  const e = t < .5 ? 2*t*t : 1 - Math.pow(-2*t + 2, 2)/2;   // 出だしと終わりを緩める
+  p.roll = p.rollFrom + (p.rollTo - p.rollFrom) * e;
+  if(p.rollT >= 1){
+    p.roll = ((p.rollTo % (Math.PI*2)) + Math.PI*2) % (Math.PI*2);
+  }
+}
 const PLANE_W = LW * 0.08;                       // 画面幅の 8%
 // 煙と発射炎の大きさは機体サイズに追従させる。
 // 機体だけ縮めると煙が相対的に大きくなり、承認時の見え方が崩れるため
@@ -356,13 +414,32 @@ function enginePos(p){
   return {x: m.x - m.ux * PLANE_W * 0.16, y: m.y - m.uy * PLANE_W * 0.16 - PLANE_W*0.04};
 }
 
+// ロールの見え方:
+//   横から見た機体が機軸まわりに回ると、
+//     0度   = 側面図（正立）
+//     90度  = 上面図（背中がこちらを向く。翼が画面いっぱいに開いて見える）
+//     180度 = 側面図を上下反転（背面飛行）
+//     270度 = 下面図（腹がこちらを向く）
+//   翼の見かけの高さは sin に比例するので、上面図・下面図は縦に潰して補間する
+function drawView(img, w, scaleY, alpha){
+  const h = w * (img.naturalHeight || 1024) / (img.naturalWidth || 1536);
+  fc.save();
+  fc.globalAlpha = alpha;
+  fc.scale(1, scaleY);
+  fc.drawImage(img, -w/2, -h/2, w, h);
+  fc.restore();
+}
 function drawPlane(p){
-  const {w,h} = planeSize(p);
+  const {w} = planeSize(p);
+  const r = p.roll || 0, cs = Math.cos(r), sn = Math.sin(r);
   fc.save();
   fc.translate(p.x, p.y);
   fc.rotate(p.ang);
   if(p.faceRight) fc.scale(-1, 1);   // 原画の機首は左。反転して右向きにする
-  fc.drawImage(p.img, -w/2, -h/2, w, h);
+  const aSide = Math.min(1, Math.abs(cs) * 1.8);
+  if(aSide > .012) drawView(p.img, w, cs < 0 ? -1 : 1, aSide);   // 背面では上下反転
+  const aTop = Math.min(1, Math.abs(sn) * 1.8);
+  if(aTop > .012) drawView(sn > 0 ? p.top : p.under, w, Math.abs(sn), aTop);
   fc.restore();
 }
 
@@ -405,6 +482,79 @@ function drawPuffs(list, dt){
     fc.drawImage(q.img, -s/2, -s/2, s, s);
     fc.restore();
   }
+}
+
+/* ===================== 気球 ===================== */
+// ランダムに下から上がってくる的。撃つと割れて得点になる
+const balloons = [];
+function spawnBalloon(x){
+  balloons.push({
+    x: x !== undefined ? x : 180 + Math.random()*920,
+    y: LH + 90,
+    vy: -(34 + Math.random()*20),
+    w: LW * 0.075,
+    sway: Math.random()*6.3, swayAmp: 6 + Math.random()*10,
+  });
+}
+function balloonHitBox(b){
+  const h = b.w * (IMG.balloon.naturalHeight || 1254) / (IMG.balloon.naturalWidth || 1254);
+  // 当たり判定は球皮の部分だけ。籠や索は当たらない
+  return {cx: b.x, cy: b.y - h*0.16, r: b.w*0.40};
+}
+function popBalloon(b){
+  const hb = balloonHitBox(b);
+  for(let i=0;i<5;i++){
+    const a = Math.random()*Math.PI*2, sp = PLANE_W*(.3+Math.random()*.5);
+    pushPuff(firePuffs, {
+      img: IMG.fire[Math.floor(Math.random()*4)], x: hb.cx, y: hb.cy,
+      life: .34+Math.random()*.18, size: PLANE_W*(.22+Math.random()*.18), grow:1.7, peak:.9,
+      vx: Math.cos(a)*sp, vy: Math.sin(a)*sp - PLANE_W*.2, delay: Math.random()*.05,
+    });
+  }
+  for(let i=0;i<4;i++){
+    const a = Math.random()*Math.PI*2, sp = PLANE_W*(.25+Math.random()*.4);
+    pushPuff(topPuffs, {
+      img: IMG.dark[Math.floor(Math.random()*4)], x: hb.cx, y: hb.cy,
+      life: 1.0+Math.random()*.6, size: PLANE_W*(.24+Math.random()*.2), grow:2.0, peak:.7,
+      vx: Math.cos(a)*sp, vy: Math.sin(a)*sp - PLANE_W*.4, delay: .1+Math.random()*.16,
+    });
+  }
+  for(let i=0;i<7;i++){
+    const a = Math.random()*Math.PI*2, sp = PLANE_W*(.6+Math.random()*1.6);
+    shards.push({
+      x: hb.cx, y: hb.cy, vx: Math.cos(a)*sp, vy: Math.sin(a)*sp - PLANE_W*.5,
+      rot: Math.random()*6.3, spin:(Math.random()-.5)*12,
+      w: PLANE_W*(.014+Math.random()*.020), h: PLANE_W*(.010+Math.random()*.014),
+      t:0, life: .9+Math.random()*.6,
+    });
+  }
+}
+function updateBalloons(dt){
+  for(let i=balloons.length-1;i>=0;i--){
+    const b = balloons[i];
+    b.y += b.vy*dt; b.sway += dt*1.4;
+    b.x += Math.sin(b.sway) * b.swayAmp * dt;
+    if(b.y < -140){ balloons.splice(i,1); continue; }
+    const hb = balloonHitBox(b);
+    for(let j=bullets.length-1;j>=0;j--){
+      const q = bullets[j];
+      if((q.x-hb.cx)**2 + (q.y-hb.cy)**2 < hb.r*hb.r){
+        bullets.splice(j,1); popBalloon(b); balloons.splice(i,1); break;
+      }
+    }
+  }
+}
+function drawBalloons(){
+  const img = IMG.balloon;
+  const ar = (img.naturalHeight || 1254) / (img.naturalWidth || 1254);
+  balloons.forEach(b=>{
+    const h = b.w * ar;
+    fc.save();
+    fc.translate(b.x, b.y);
+    fc.rotate(Math.sin(b.sway)*.05);
+    fc.drawImage(img, -b.w/2, -h/2, b.w, h);
+    fc.restore();
+  });
 }
 
 /* ===================== 弾 ===================== */
@@ -639,13 +789,13 @@ function drawFlashes(dt){
 
 /* ===================== メインループ ===================== */
 let trailOn = true, damageOn = true;
-let trailAcc = 0, dmgAcc = 0, mgAcc = 0, burst = 0, cycle = 0;
+let trailAcc = 0, dmgAcc = 0, mgAcc = 0, burst = 0, cycle = 0, balloonAcc = 5.5, rollAcc = 0;
 let prev = performance.now(), clock = 0;
 
 function tick(now){
   const dt = Math.min(.05, (now - prev)/1000); prev = now; clock += dt;
 
-  planes.forEach(p => updatePlane(p, clock, dt));
+  planes.forEach(p => { updatePlane(p, clock, dt); updateRoll(p, dt); });
 
   // 通常飛行の白煙（両機）
   trailAcc += dt;
@@ -661,7 +811,13 @@ function tick(now){
     addPuff(e.x, e.y, 'damage');
   }
 
-  // 自動射撃: 7.7mm を連射 → 少し置いて 20mm を1発
+  updateBalloons(dt);
+  balloonAcc += dt;
+  if(balloonAcc >= 7.5){ balloonAcc = 0; spawnBalloon(); }
+
+  // 自動ロール（P1）と自動射撃
+  rollAcc += dt;
+  if(rollAcc > 5.0){ rollAcc = 0; startRoll(planes[0]); }
   cycle += dt;
   if(cycle > 3.2){ cycle = 0; burst = 10; }
   if(burst > 0){
@@ -672,6 +828,7 @@ function tick(now){
   fc.setTransform(scale, 0, 0, scale, 0, 0);
   fc.clearRect(0, 0, LW, LH);
   drawPuffs(puffs, dt);          // 機体の下（飛行中の煙）
+  drawBalloons();
   planes.forEach(drawPlane);
   drawPuffs(topPuffs, dt);       // 機体の上（爆発の煙）
   drawPuffs(firePuffs, dt);      // さらに上（火の玉）
@@ -693,7 +850,8 @@ function start(){
   IMG.bsmoke= IMG.dark.map(i => tint(i, '#3a332b', .35, 0, true));   // 爆発の黒煙
   requestAnimationFrame(t=>{ prev = t; tick(t); });
 }
-const all = [IMG.red, IMG.blue, ...IMG.dark, ...IMG.light];
+const all = [IMG.red, IMG.blue, IMG.balloon, IMG.redTop, IMG.redUnder,
+             IMG.blueTop, IMG.blueUnder, ...IMG.dark, ...IMG.light];
 let pending = all.filter(i => !i.complete).length;
 if(pending === 0) start();
 else all.forEach(i => i.complete || i.addEventListener('load', ()=>{ if(--pending === 0) start(); }));
@@ -703,6 +861,8 @@ document.getElementById('fireMg').addEventListener('click', ()=>{
   const id = setInterval(()=>{ fire(planes[0],'mg'); if(--n === 0) clearInterval(id); }, 90);
 });
 document.getElementById('fireCannon').addEventListener('click', ()=> fire(planes[0],'cannon'));
+document.getElementById('rollP1').addEventListener('click', ()=> startRoll(planes[0]));
+document.getElementById('balloonBtn').addEventListener('click', ()=> spawnBalloon(300 + Math.random()*680));
 document.getElementById('killAir').addEventListener('click', ()=>{
   const p = planes[1];                       // 被弾している P2 が撃墜される
   explode(p.x, p.y, 'air');

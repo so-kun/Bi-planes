@@ -24,6 +24,16 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC = os.path.join(ROOT, "assets/art/original")
 OUT_PLANES = os.path.join(ROOT, "assets/art/planes")
 OUT_BG = os.path.join(ROOT, "assets/art/bg")
+OUT_PROPS = os.path.join(ROOT, "assets/art/props")
+
+# 機体（側面・上面・下面）
+PLANES = (
+    "plane-blue", "plane-red", "plane-blue-smoke",
+    "plane-blue-top", "plane-blue-under",
+    "plane-red-top", "plane-red-under",
+)
+# その他の絵（気球など）
+PROPS = ("baloon",)
 
 # 紙とみなす色距離の上限。これを超える画素は「絵」として不透明で残す
 BG_TOLERANCE = 42.0
@@ -95,16 +105,18 @@ def cut_paper(path: str):
 def main():
     os.makedirs(OUT_PLANES, exist_ok=True)
     os.makedirs(OUT_BG, exist_ok=True)
+    os.makedirs(OUT_PROPS, exist_ok=True)
 
-    for name in ("plane-blue", "plane-red", "plane-blue-smoke"):
-        src = os.path.join(SRC, f"{name}.png")
-        if not os.path.exists(src):
-            print(f"skip (原本なし): {name}")
-            continue
-        img = cut_paper(src)
-        dst = os.path.join(OUT_PLANES, f"{name}.png")
-        img.save(dst)
-        print(f"{name}: {img.size} -> {os.path.relpath(dst, ROOT)}")
+    for out_dir, names in ((OUT_PLANES, PLANES), (OUT_PROPS, PROPS)):
+        for name in names:
+            src = os.path.join(SRC, f"{name}.png")
+            if not os.path.exists(src):
+                print(f"skip (原本なし): {name}")
+                continue
+            img = cut_paper(src)
+            dst = os.path.join(out_dir, f"{name}.png")
+            img.save(dst)
+            print(f"{name}: {img.size} -> {os.path.relpath(dst, ROOT)}")
 
     bg_src = os.path.join(SRC, "stage-sunset.png")
     if os.path.exists(bg_src):
