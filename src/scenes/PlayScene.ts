@@ -4,13 +4,14 @@
  */
 
 import Phaser from 'phaser';
-import { BALLOON, FLIGHT, PLANE, SCORE, SMOKE, THROTTLE_NAMES, VIEW, WEAPON } from '../config';
+import { BALLOON, FILM_DEFAULT, FLIGHT, PLANE, SCORE, SMOKE, THROTTLE_NAMES, VIEW, WEAPON } from '../config';
 import { Sfx } from '../audio';
 import { FilmPipeline } from '../fx/FilmPipeline';
 import { Particles } from '../fx/Particles';
 import { Plane } from '../objects/Plane';
 import { Balloons } from '../objects/Balloons';
 import { Bullets } from '../objects/Bullets';
+import { StuckKeyGuard } from '../input/StuckKeyGuard';
 
 const KEY = Phaser.Input.Keyboard.KeyCodes;
 
@@ -23,6 +24,8 @@ export class PlayScene extends Phaser.Scene {
   private film: FilmPipeline | null = null;
 
   private keys!: Record<string, Phaser.Input.Keyboard.Key>;
+  /** 押しっぱなしになったキーを見つけて解除する。ブラウザによって keyup が届かないことがある */
+  private keyGuard!: StuckKeyGuard;
   private score = 0;
   private respawnTimer = 0;
   /** 損傷の種類ごとの煙のタイマー */
@@ -31,6 +34,8 @@ export class PlayScene extends Phaser.Scene {
   private bgmOn = false;
   /** エンジン音を鳴らし直す判定用。段階が変わったときだけ更新する */
   private lastEngineState = '';
+  /** フィルム処理が外れていないか見張る間隔 */
+  private filmWatchdog = 1;
 
   private hud!: Phaser.GameObjects.Graphics;
   private hudText!: Phaser.GameObjects.Text;
@@ -90,6 +95,9 @@ export class PlayScene extends Phaser.Scene {
     kb.on('keydown', wake);
     this.input.on('pointerdown', wake);
 
+    this.keyGuard = new StuckKeyGuard(this.keys);
+    this.keyGuard.attach();
+
     // キーを押したまま別のタブやウィンドウへ移ると、キーを離したイベントが届かず、
     // 戻ってきたときに押しっぱなしの状態が残る。
     // 離脱と復帰の両方で押下状態を消す。ブラウザのイベントは環境によって
@@ -104,6 +112,7 @@ export class PlayScene extends Phaser.Scene {
       this.game.events.on(ev, releaseAll);
     }
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.keyGuard.detach();
       window.removeEventListener('blur', releaseAll);
       window.removeEventListener('focus', releaseAll);
       document.removeEventListener('visibilitychange', onVisibility);
@@ -141,6 +150,24 @@ export class PlayScene extends Phaser.Scene {
     renderer.pipelines.addPostPipeline('Film', FilmPipeline);
     this.cameras.main.setPostPipeline(FilmPipeline);
     this.film = this.cameras.main.getPostPipeline(FilmPipeline) as FilmPipeline;
+  }
+
+  /**
+   * フィルム処理が外れていないか、ときどき見張る。
+   * WebGL の描画コンテキストが失われて復帰したときなどに、
+   * カメラからポストパイプラインが外れたままになることがある。
+   * そうなると絵はそのまま出るのにフィルムの質感だけが消え、
+   * 「膜が剥がれた」ように見えてしまう
+   */
+  private watchFilm(dt: number): void {
+    if (!(this.game.renderer instanceof Phaser.Renderer.WebGL.WebGLRenderer)) return;
+    this.filmWatchdog -= dt;
+    if (this.filmWatchdog > 0) return;
+    this.filmWatchdog = 1;
+    if (this.cameras.main.getPostPipeline(FilmPipeline)) return;
+    const level = this.film?.getLevel() ?? FILM_DEFAULT;
+    this.setupFilm();
+    this.film?.setLevel(level);
   }
 
   private setupHud(): void {
@@ -188,7 +215,8 @@ export class PlayScene extends Phaser.Scene {
 
   override update(_time: number, delta: number): void {
     const dt = Math.min(0.05, delta / 1000);
-    this.film?.advance(dt);
+    this.keyGuard.update();
+    this.watchFilm(dt);
 
     if (this.plane.alive) {
       const up = this.keys.up.isDown || this.keys.upAlt.isDown;
@@ -336,6 +364,8 @@ export class PlayScene extends Phaser.Scene {
         `気球   ${this.balloons.list.length}/${BALLOON.maxAlive}`,
         `フィルム ${['切', '弱', '既定', '標準', '強'][this.film?.getLevel() ?? 2]}` +
           `${this.film ? '' : '（WebGL 無効）'}  BGM ${this.bgmOn ? 'on' : 'off'}`,
+        `キー   ${this.keyGuard.heldNames().join(' ') || '(なし)'}` +
+          `${this.keyGuard.releasedCount ? `  ／ 押しっぱなしを解除 ${this.keyGuard.releasedCount}回` : ''}`,
       ].join('\n'));
     }
   }
