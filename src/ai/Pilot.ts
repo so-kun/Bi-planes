@@ -55,8 +55,17 @@ export const AI_LEVELS: Level[] = [
   { name: '強', aim: 0.06, react: 0.10, lead: 1.00, jitter: 0.03, mgRange: 1.00, cannon: true },
 ];
 
-/** 地面からこの距離まで近づいたら、何を措いても引き起こす */
-const GROUND_MARGIN = 190;
+/**
+ * 引き起こしを始める余裕。
+ *
+ * 「今の高さ」だけで決めると、突っ込んでいる最中は手遅れになる。
+ * 宙返りの半径が 135px ほどあるうえ、迷ってから動くまでの間もあるので、
+ * 降下が速いほど早く引き起こす必要がある。
+ * この秒数だけ先の高さを見て、そこが危なければ引く
+ */
+const GROUND_LOOKAHEAD = 1.1;
+/** 先を読んだ位置が、地面からこれより近ければ引き起こす */
+const GROUND_MARGIN = 150;
 /** 押し続けることになるなら背面に返す、と判断する角度 */
 const ROLL_THRESHOLD = 0.7;
 /** 20mm を撃つ距離。山なりに落ちるので、当たるのは近くだけ */
@@ -110,14 +119,19 @@ export class Pilot {
     const forward = Math.cos(s.pitch) >= 0 ? 1 : -1;
     let desired: number;
     let urgent = false;
-    if (me.y > VIEW.groundY - GROUND_MARGIN && s.vy > -40) {
+    // 今いる高さではなく、少し先の高さで判断する。降下が速いほど早く引き起こす
+    const ahead = me.y + Math.max(0, s.vy) * GROUND_LOOKAHEAD;
+    if (ahead > VIEW.groundY - GROUND_MARGIN) {
       desired = Math.atan2(-0.95, forward * 0.5);   // 上へ逃げる
       urgent = true;
     } else if (me.readout.stalled && speed < FLIGHT.stallWarnSpeed) {
       desired = Math.atan2(0.75, forward * 0.7);    // 下を向いて速度を稼ぐ
       urgent = true;
     } else if (aim) {
-      desired = Math.atan2(aim.y - me.y, aim.x - me.x) + this.jitterAngle;
+      // 地面すれすれの相手を追って一緒に突っ込まないよう、狙う高さに底を設ける。
+      // 撃つのを諦める代わりに墜ちない ―― 追い詰めるのは相手が上がってきてからでいい
+      const aimY = Math.min(aim.y, VIEW.groundY - GROUND_MARGIN);
+      desired = Math.atan2(aimY - me.y, aim.x - me.x) + this.jitterAngle;
     } else {
       desired = Math.atan2(0, forward);             // 目標がなければ水平に流す
     }
@@ -136,13 +150,25 @@ export class Pilot {
       rollEdge = 1;
     }
 
-    // 誤差が小さいうちは舵を緩める。全開のままだと目標を行き過ぎて左右に揺れる
-    const gain = Math.min(1, Math.abs(err) / 0.25);
+    // 誤差が小さいうちは舵を緩める。全開のままだと目標を行き過ぎて左右に揺れる。
+    // ただし地面や失速から逃げているときは緩めない ―― 加減している場合ではない
+    let gain = urgent ? 1 : Math.min(1, Math.abs(err) / 0.25);
+
+    // 失速させない。舵を引くと迎え角が増えるので、失速角に近づいたら緩める。
+    // 速度で加減する手もあるが、失速を決めているのは迎え角そのものなので、
+    // そちらを直接見るほうが効く。逆向き（迎え角を減らす向き）の舵は妨げない
+    const aoa = me.readout.aoa;
+    const limit = FLIGHT.stallAoa * 0.8;
+    if (pull === Math.sign(aoa) && Math.abs(aoa) > limit) {
+      gain *= Math.max(0, 1 - (Math.abs(aoa) - limit) / (FLIGHT.stallAoa - limit));
+    }
     const pitch = pull * gain;
 
     // 引き金。狙いが乗っていて、届く距離にいるときだけ
     const dist = aim ? Math.hypot(aim.x - me.x, aim.y - me.y) : Infinity;
-    const onTarget = aim !== null && Math.abs(err) < lv.aim;
+    // 地面や失速から逃げている間は、機首が相手ではなく逃げる方へ向いている。
+    // このとき撃つと、あらぬ方向へ撃つことになる
+    const onTarget = !urgent && aim !== null && Math.abs(err) < lv.aim;
     const inMgRange = dist < WEAPON.mg.speed * WEAPON.mg.life * lv.mgRange;
     const wants = onTarget && inMgRange;
 
@@ -158,8 +184,9 @@ export class Pilot {
     return {
       pitch,
       rollEdge,
-      // 遅いか遠いときは吹かす。近づいたら緩めて、行き過ぎないようにする
-      throttle: speed < 215 || dist > 340,
+      // 遅いか遠いときは吹かす。近づいたら緩めて、行き過ぎないようにする。
+      // 逃げている最中は速度が要るので必ず吹かす
+      throttle: urgent || speed < 215 || dist > 340,
       mg: firing && !useCannon,
       cannonEdge: useCannon,
     };
