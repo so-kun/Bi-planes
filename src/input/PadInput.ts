@@ -36,8 +36,12 @@ export class PadInput {
   private prevRoll: -1 | 0 | 1 = 0;
   private prevCannon = false;
 
+  /** @param index 標準配列のパッドの何台目を使うか。1P = 0、2P = 1 */
+  constructor(private index = 0) {}
+
   /**
-   * つながっているパッドのうち、標準配列の最初の1台。
+   * つながっているパッドのうち、標準配列のものを数えて index 番目。
+   * 1P は 0 番目、2P は 1 番目を使う。つないだ順に割り当たる。
    *
    * 標準配列でないものは受け付けない。並びが機種固有なので、
    * 番号をそのまま読むと見当違いのボタンが操作に化けるため。
@@ -47,12 +51,17 @@ export class PadInput {
   private pick(): { pad: Gamepad | null; other: Gamepad | null } {
     if (!navigator.getGamepads) return { pad: null, other: null };
     let other: Gamepad | null = null;
+    let n = 0;
     for (const p of navigator.getGamepads()) {
       if (!p || !p.connected) continue;
-      if (p.mapping === 'standard') return { pad: p, other: null };
+      if (p.mapping === 'standard') {
+        if (n++ === this.index) return { pad: p, other: null };
+        continue;
+      }
       other ??= p;
     }
-    return { pad: null, other };
+    // 標準配列でないパッドの警告は 1P 側だけが出す。2人分並べても仕方がない
+    return { pad: null, other: this.index === 0 ? other : null };
   }
 
   read(): PadState {

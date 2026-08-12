@@ -1,14 +1,18 @@
 /**
- * M1: 1P プレイテスト版。
- * 目的は操作感と効果音の確認なので、対戦相手はまだ出さず、気球と空だけ。
+ * M2: 2人対戦版。
+ *
+ * 二機が同じ空を飛び、撃ち落として得点を競う。規定点数に達した側が勝ち。
+ * 気球は共通の的で、撃った側の得点になる。金色の気球を撃つと自機が直る。
  */
 
 import Phaser from 'phaser';
-import { BALLOON, FILM_DEFAULT, FLIGHT, PLANE, SCORE, SMOKE, THROTTLE_NAMES, VIEW, WEAPON } from '../config';
+import {
+  BALLOON, FILM_DEFAULT, FLIGHT, PLANE, SCORE, SMOKE, THROTTLE_NAMES, VIEW, WEAPON,
+} from '../config';
 import { Sfx } from '../audio';
 import { FilmPipeline } from '../fx/FilmPipeline';
 import { Particles } from '../fx/Particles';
-import { Plane } from '../objects/Plane';
+import { Plane, type Facing } from '../objects/Plane';
 import { Balloons } from '../objects/Balloons';
 import { Bullets } from '../objects/Bullets';
 import { StuckKeyGuard } from '../input/StuckKeyGuard';
@@ -16,38 +20,57 @@ import { PadInput, type PadState } from '../input/PadInput';
 
 const KEY = Phaser.Input.Keyboard.KeyCodes;
 
+type Key = Phaser.Input.Keyboard.Key;
+
+/** 1人分の操作キー */
+interface PlayerKeys {
+  up: Key; down: Key; rollL: Key; rollR: Key;
+  throttle: Key; mg: Key; cannon: Key;
+}
+
+/** 1人分の持ち物。機体・入力・得点・タイマー類 */
+interface Player {
+  id: number;
+  name: string;
+  /** HUD と煙の見分けに使う色 */
+  color: number;
+  plane: Plane;
+  keys: PlayerKeys;
+  pad: PadInput;
+  padState: PadState;
+  score: number;
+  respawnTimer: number;
+  smokeTimer: { engine: number; handling: number };
+  stallSoundTimer: number;
+  lastEngineState: string;
+  /** 出撃位置 */
+  home: { x: number; y: number; facing: Facing };
+}
+
 export class PlayScene extends Phaser.Scene {
-  private plane!: Plane;
+  private players: Player[] = [];
   private particles!: Particles;
   private balloons!: Balloons;
   private bullets!: Bullets;
   private sfx = new Sfx();
   private film: FilmPipeline | null = null;
 
-  private keys!: Record<string, Phaser.Input.Keyboard.Key>;
-  /** 押しっぱなしになったキーを見つけて解除する。ブラウザによって keyup が届かないことがある */
+  /** 全キー。押しっぱなしの見張りに渡す */
+  private keys!: Record<string, Key>;
   private keyGuard!: StuckKeyGuard;
-  private pad = new PadInput();
-  private padState: PadState = this.pad.read();
   /** パッドを認識したときに一度だけ音を起こす */
   private padWoke = false;
-  private score = 0;
-  private respawnTimer = 0;
-  /** 損傷の種類ごとの煙のタイマー */
-  private smokeTimer = { engine: 0, handling: 0 };
-  private stallSoundTimer = 0;
-  private bgmOn = false;
-  /** エンジン音を鳴らし直す判定用。段階が変わったときだけ更新する */
-  private lastEngineState = '';
   /** フィルム処理が外れていないか見張る間隔 */
   private filmWatchdog = 1;
+  /** 勝った側。決まるまで null */
+  private winner: Player | null = null;
 
   private hud!: Phaser.GameObjects.Graphics;
-  private hudText!: Phaser.GameObjects.Text;
+  private hudTexts: Phaser.GameObjects.Text[] = [];
   private debugText!: Phaser.GameObjects.Text;
-  /** 撃墜されている間の表示。何も出ないと操縦不能になったように見えるため */
-  private downedText!: Phaser.GameObjects.Text;
-  private showDebug = true;
+  private downedTexts: Phaser.GameObjects.Text[] = [];
+  private resultText!: Phaser.GameObjects.Text;
+  private showDebug = false;
 
   constructor() {
     super('Play');
@@ -68,29 +91,42 @@ export class PlayScene extends Phaser.Scene {
     this.balloons = new Balloons(this, balloonLayer);
     this.bullets = new Bullets(this, 60);
 
-    this.plane = new Plane(this, {
-      side: 'plane-red', top: 'plane-red-top', under: 'plane-red-under',
-    }, 220, 380, 1);
-    this.plane.container.setDepth(30);
-
     this.setupInput();
     this.setupHud();
     this.setupFilm();
 
     // 最初は的が空にあったほうが試しやすい
-    this.balloons.spawn(760);
+    this.balloons.spawn(760, false);
   }
+
+  // ---------------------------------------------------------------- 入力
 
   private setupInput(): void {
     const kb = this.input.keyboard!;
+    // 1P は左手側、2P は矢印まわり。上下が機首、左右がロールで両者そろえてある
     this.keys = kb.addKeys({
-      up: KEY.W, down: KEY.S, upAlt: KEY.UP, downAlt: KEY.DOWN,
-      rollL: KEY.A, rollR: KEY.D, rollLAlt: KEY.LEFT, rollRAlt: KEY.RIGHT,
-      throttle: KEY.E, mg: KEY.F, cannon: KEY.G,
-      hitEngine: KEY.Z, hitHandling: KEY.X, repair: KEY.C,
+      p1Up: KEY.W, p1Down: KEY.S, p1RollL: KEY.A, p1RollR: KEY.D,
+      p1Throttle: KEY.E, p1Mg: KEY.F, p1Cannon: KEY.G,
+      p2Up: KEY.UP, p2Down: KEY.DOWN, p2RollL: KEY.LEFT, p2RollR: KEY.RIGHT,
+      p2Throttle: KEY.SHIFT, p2Mg: KEY.COMMA, p2Cannon: KEY.PERIOD,
+      restart: KEY.ENTER,
       mute: KEY.M, bgm: KEY.B, debug: KEY.TAB,
       f0: KEY.ONE, f1: KEY.TWO, f2: KEY.THREE, f3: KEY.FOUR, f4: KEY.FIVE,
-    }) as Record<string, Phaser.Input.Keyboard.Key>;
+    }) as Record<string, Key>;
+
+    const k = this.keys;
+    this.players = [
+      this.makePlayer(0, '1P', 0xa8402c,
+        { side: 'plane-red', top: 'plane-red-top', under: 'plane-red-under' },
+        { up: k.p1Up, down: k.p1Down, rollL: k.p1RollL, rollR: k.p1RollR,
+          throttle: k.p1Throttle, mg: k.p1Mg, cannon: k.p1Cannon },
+        { x: 230, y: 380, facing: 1 }),
+      this.makePlayer(1, '2P', 0x3c5a78,
+        { side: 'plane-blue', top: 'plane-blue-top', under: 'plane-blue-under' },
+        { up: k.p2Up, down: k.p2Down, rollL: k.p2RollL, rollR: k.p2RollR,
+          throttle: k.p2Throttle, mg: k.p2Mg, cannon: k.p2Cannon },
+        { x: VIEW.width - 230, y: 380, facing: -1 }),
+    ];
 
     // ブラウザは操作があるまで音を鳴らせない
     const wake = (): void => this.wakeAudio();
@@ -115,6 +151,7 @@ export class PlayScene extends Phaser.Scene {
     }
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.keyGuard.detach();
+      this.sfx.stopEngines();
       window.removeEventListener('blur', releaseAll);
       window.removeEventListener('focus', releaseAll);
       document.removeEventListener('visibilitychange', onVisibility);
@@ -123,50 +160,302 @@ export class PlayScene extends Phaser.Scene {
       }
     });
 
-    // ロールは左右で回る向きが変わる。どちらも 180度 回って正立と背面が入れ替わる
-    for (const k of ['rollL', 'rollLAlt']) this.keys[k].on('down', () => { this.plane.roll(-1); });
-    for (const k of ['rollR', 'rollRAlt']) this.keys[k].on('down', () => { this.plane.roll(1); });
-    this.keys.cannon.on('down', () => this.fireCannon());
-    this.keys.mute.on('down', () => this.sfx.toggleMute());
-    this.keys.bgm.on('down', () => { this.bgmOn = this.sfx.toggleBgm(); });
-    this.keys.debug.on('down', () => {
+    // ロールと 20mm は押した瞬間だけ。押しっぱなしで連続させない
+    for (const p of this.players) {
+      p.keys.rollL.on('down', () => { if (this.running) p.plane.roll(-1); });
+      p.keys.rollR.on('down', () => { if (this.running) p.plane.roll(1); });
+      p.keys.cannon.on('down', () => { if (this.running) this.fireCannon(p); });
+    }
+
+    k.restart.on('down', () => { if (this.winner) this.restart(); });
+    k.mute.on('down', () => this.sfx.toggleMute());
+    k.bgm.on('down', () => this.sfx.toggleBgm());
+    k.debug.on('down', () => {
       this.showDebug = !this.showDebug;
       this.debugText.setVisible(this.showDebug);
     });
     for (let i = 0; i < 5; i++) {
-      this.keys[`f${i}`].on('down', () => this.film?.setLevel(i));
+      k[`f${i}`].on('down', () => this.film?.setLevel(i));
     }
-
-    // M1 には敵機がいないので、被弾の演出はキーで試せるようにしておく（プレイテスト用）
-    this.keys.hitEngine.on('down', () => { this.plane.takeDamage(WEAPON.mg.damage, 'engine'); this.sfx.hit(); });
-    this.keys.hitHandling.on('down', () => { this.plane.takeDamage(WEAPON.mg.damage, 'handling'); this.sfx.hit(); });
-    this.keys.repair.on('down', () => {
-      this.plane.hp = PLANE.maxHp;
-      this.plane.damage = { engine: 1, handling: 1 };
-    });
   }
+
+  private makePlayer(
+    id: number, name: string, color: number,
+    art: { side: string; top: string; under: string },
+    keys: PlayerKeys,
+    home: { x: number; y: number; facing: Facing },
+  ): Player {
+    const plane = new Plane(this, art, home.x, home.y, home.facing);
+    plane.container.setDepth(30);
+    return {
+      id, name, color, plane, keys,
+      pad: new PadInput(id),
+      padState: { connected: false, id: '', unsupported: false, pitch: 0, rollEdge: 0, throttle: false, mg: false, cannonEdge: false },
+      score: 0,
+      respawnTimer: 0,
+      smokeTimer: { engine: 0, handling: 0 },
+      stallSoundTimer: 0,
+      lastEngineState: '',
+      home,
+    };
+  }
+
+  /** 試合中か。勝敗が決まったら操作を受け付けない */
+  private get running(): boolean { return this.winner === null; }
 
   private wakeAudio(): void {
     this.sfx.resume();
-    this.sfx.startEngine();
+    this.sfx.startEngines(this.players.length);
+  }
+
+  // ---------------------------------------------------------------- 進行
+
+  override update(_time: number, delta: number): void {
+    const dt = Math.min(0.05, delta / 1000);
+    this.keyGuard.update();
+    this.watchFilm(dt);
+
+    for (const p of this.players) {
+      // 撃墜されている間も読む。読まずにいると立ち上がりの記録が古びて、
+      // 再出撃した瞬間に押しっぱなしのボタンが暴発する
+      p.padState = p.pad.read();
+    }
+    // パッドしか触らない人にも音を出す。ただしブラウザによっては
+    // パッドの操作を「音を鳴らしてよい合図」と認めないので、
+    // そのときはキーを1つ押すかクリックしてもらう必要がある
+    if (!this.padWoke && this.players.some((p) => p.padState.connected)) {
+      this.padWoke = true;
+      this.wakeAudio();
+    }
+
+    if (this.running) {
+      for (const p of this.players) this.updatePlayer(p, dt);
+    }
+
+    this.bullets.update(dt);
+    this.balloons.update(dt);
+    this.particles.update(dt);
+    this.checkHits();
+    this.bullets.draw();
+    this.drawHud();
+  }
+
+  private updatePlayer(p: Player, dt: number): void {
+    if (!p.plane.alive) {
+      p.respawnTimer -= dt;
+      p.plane.setThrottle(0);
+      this.downedTexts[p.id].setVisible(true);
+      this.downedTexts[p.id].setText(`${p.name} 撃墜\n再出撃まで ${Math.max(0, p.respawnTimer).toFixed(1)}`);
+      if (p.respawnTimer <= 0) {
+        p.plane.reset(p.home.x, p.home.y, p.home.facing);
+        p.lastEngineState = '';
+        this.downedTexts[p.id].setVisible(false);
+      }
+      return;
+    }
+
+    // キーボードは倒し切りの3値、パッドは倒した量がそのまま出る。
+    // 両方触っている場合は、深く入れているほうを採る
+    const byKey = (p.keys.up.isDown ? 1 : 0) - (p.keys.down.isDown ? 1 : 0);
+    const pitch = Math.abs(p.padState.pitch) > Math.abs(byKey) ? p.padState.pitch : byKey;
+
+    // スロットルは押している間だけ全開。離せば巡航に戻る
+    p.plane.setThrottle(p.keys.throttle.isDown || p.padState.throttle ? 1 : 0);
+    p.plane.update(pitch, dt);
+    this.syncEngineSound(p);
+
+    if (p.padState.rollEdge !== 0) p.plane.roll(p.padState.rollEdge);
+    if (p.padState.cannonEdge) this.fireCannon(p);
+    if (p.keys.mg.isDown || p.padState.mg) this.fireMg(p);
+
+    // 地面への激突は自滅。相手に点が入る
+    if (p.plane.y >= VIEW.groundY) this.crash(p);
+
+    this.emitSmoke(p, dt);
+    this.warnStall(p, dt);
+  }
+
+  // ---------------------------------------------------------------- 射撃と撃墜
+
+  private fireMg(p: Player): void {
+    if (!p.plane.canFireMg()) return;
+    const m = p.plane.muzzle();
+    this.bullets.fire('mg', m.x, m.y, m.ux, m.uy, p.id);
+    p.plane.noteMgFired();
+    this.sfx.mg();
+  }
+
+  private fireCannon(p: Player): void {
+    if (!p.plane.canFireCannon()) return;
+    const m = p.plane.muzzle();
+    this.bullets.fire('cannon', m.x, m.y, m.ux, m.uy, p.id);
+    p.plane.noteCannonFired();
+    this.particles.muzzleSmoke(m.x, m.y);
+    this.sfx.cannon();
+  }
+
+  /** 地面への激突。撃たれたわけではないので、相手には自滅ぶんの点が入る */
+  private crash(p: Player): void {
+    this.particles.explode(p.plane.x, VIEW.groundY, true);
+    this.sfx.explosion();
+    this.downPlane(p, this.other(p), SCORE.suicide);
+  }
+
+  /** 撃墜された側の後始末と、仕留めた側への加点 */
+  private downPlane(p: Player, credit: Player | null, points: number): void {
+    p.plane.destroy();
+    p.respawnTimer = PLANE.respawnDelay;
+    // 落ちた機のエンジン音は絞る。鳴ったままだと空にいない機の音が残る
+    this.sfx.setEngine(p.id, 1, false);
+    p.lastEngineState = '';
+    if (credit) this.addScore(credit, points);
+  }
+
+  private other(p: Player): Player {
+    return this.players[p.id === 0 ? 1 : 0];
+  }
+
+  private addScore(p: Player, points: number): void {
+    if (!this.running) return;
+    p.score += points;
+    if (p.score >= SCORE.winning) this.finish(p);
+  }
+
+  private finish(p: Player): void {
+    this.winner = p;
+    for (const q of this.players) {
+      q.plane.setThrottle(0);
+      this.downedTexts[q.id].setVisible(false);
+    }
+    this.sfx.setEngine(0, 1, false);
+    this.sfx.setEngine(1, 1, false);
+    this.resultText.setText(`${p.name} の勝ち\n\n${this.players[0].score} 対 ${this.players[1].score}\nEnter でもう一度`);
+    this.resultText.setColor(p.id === 0 ? '#e8836a' : '#8fb6d8');
+    this.resultText.setVisible(true);
+  }
+
+  private restart(): void {
+    this.winner = null;
+    this.resultText.setVisible(false);
+    for (const p of this.players) {
+      p.score = 0;
+      p.respawnTimer = 0;
+      p.lastEngineState = '';
+      p.plane.reset(p.home.x, p.home.y, p.home.facing);
+      this.downedTexts[p.id].setVisible(false);
+    }
+    for (const b of [...this.balloons.list]) this.balloons.pop(b);
+    this.bullets.list.length = 0;
   }
 
   /**
-   * パッドの状態。つないでも出てこないときに、原因が切り分けられるようにする。
-   * ブラウザはボタンが一度押されるまでパッドを見せてくれない決まりなので、
-   * 「つないだのに出ない」は正常なこともある
+   * 当たり判定。弾は自機以外の機体と気球に当たる。
+   *
+   * 機体に当たったときは、当たりどころで壊れる場所が決まる（2026-08-12 決定）:
+   * 機首側ならエンジン、尾翼側なら舵。狙って壊し分けられるようにするため
    */
-  private padLabel(): string {
-    const p = this.padState;
-    if (p.unsupported) return `${p.id.slice(0, 34)}（標準配列でないため使いません）`;
-    if (!p.connected) return '未接続（ボタンを一度押すと認識されます）';
-    const held = [
-      p.pitch > 0.1 ? '機首↑' : p.pitch < -0.1 ? '機首↓' : '',
-      p.throttle ? '全開' : '',
-      p.mg ? '7.7mm' : '',
-    ].filter(Boolean).join(' ');
-    return `${p.id.slice(0, 28)}  ${held || '(操作なし)'}  傾き ${p.pitch.toFixed(2)}`;
+  private checkHits(): void {
+    for (const b of [...this.bullets.list]) {
+      let consumed = false;
+
+      for (const p of this.players) {
+        if (p.id === b.owner || !p.plane.alive) continue;
+        const dx = b.x - p.plane.x;
+        const dy = b.y - p.plane.y;
+        if (dx * dx + dy * dy > PLANE.hitRadius * PLANE.hitRadius) continue;
+
+        // 機体の前後どちらに当たったか。機軸に沿って射影する
+        const along = dx * Math.cos(p.plane.state.pitch) + dy * Math.sin(p.plane.state.pitch);
+        p.plane.takeDamage(b.damage, along >= 0 ? 'engine' : 'handling');
+        this.bullets.remove(b);
+        consumed = true;
+        this.sfx.hit();
+
+        if (p.plane.hp <= 0) {
+          this.particles.explode(p.plane.x, p.plane.y, false);
+          this.sfx.explosion();
+          this.downPlane(p, this.players[b.owner] ?? null, SCORE.kill);
+        }
+        break;
+      }
+      if (consumed) continue;
+
+      for (const balloon of [...this.balloons.list]) {
+        const hb = this.balloons.hitBox(balloon);
+        if ((b.x - hb.x) ** 2 + (b.y - hb.y) ** 2 >= hb.r * hb.r) continue;
+        this.bullets.remove(b);
+        this.balloons.pop(balloon);
+        this.particles.popBalloon(hb.x, hb.y);
+        this.sfx.pop();
+        const shooter = this.players[b.owner];
+        if (shooter) {
+          if (balloon.gold) this.repair(shooter);
+          this.addScore(shooter, SCORE.balloon);
+        }
+        break;
+      }
+    }
   }
+
+  /** 金色の気球の効果。傷んだ機体が直る */
+  private repair(p: Player): void {
+    const k = BALLOON.goldRepair;
+    p.plane.hp = Math.min(PLANE.maxHp, p.plane.hp + PLANE.maxHp * k);
+    p.plane.damage.engine = Math.min(1, p.plane.damage.engine + (1 - p.plane.damage.engine) * k);
+    p.plane.damage.handling = Math.min(1, p.plane.damage.handling + (1 - p.plane.damage.handling) * k);
+    p.smokeTimer.engine = 0;
+    p.smokeTimer.handling = 0;
+    p.lastEngineState = '';
+  }
+
+  // ---------------------------------------------------------------- 音と煙
+
+  /** スロットルや損傷が変わったときだけエンジン音を鳴らし直す */
+  private syncEngineSound(p: Player): void {
+    const damaged = p.plane.hp < 70;
+    const key = `${p.plane.state.throttle}/${damaged}`;
+    if (key === p.lastEngineState) return;
+    p.lastEngineState = key;
+    // EngineVoice の段階は 1..3。巡航を 2、全開を 3 に対応させる
+    this.sfx.setEngine(p.id, p.plane.state.throttle + 2, damaged);
+  }
+
+  /**
+   * 煙の発生。通常飛行では出さない。
+   * 損傷したときだけ、どこをやられたかが色でわかるように出し分ける:
+   *   エンジン損傷 → 黒煙 / 操作系（舵）損傷 → 白煙
+   * 傷が深いほど間隔が詰まる。フレームが落ちている環境でも途切れないよう、
+   * 1 フレームに複数出すことがある（上限つき）
+   */
+  private emitSmoke(p: Player, dt: number): void {
+    const e = p.plane.enginePos();
+    for (const part of ['engine', 'handling'] as const) {
+      const hurt = p.plane.hurt(part);
+      if (hurt < SMOKE.damageThreshold) {
+        p.smokeTimer[part] = 0;
+        continue;
+      }
+      const interval = SMOKE.damageInterval / hurt;
+      p.smokeTimer[part] += dt;
+      let guard = 4;
+      while (p.smokeTimer[part] >= interval && guard-- > 0) {
+        p.smokeTimer[part] -= interval;
+        this.particles.damage(e.x, e.y, part);
+      }
+      if (p.smokeTimer[part] > interval) p.smokeTimer[part] = 0;
+    }
+  }
+
+  private warnStall(p: Player, dt: number): void {
+    p.stallSoundTimer = Math.max(0, p.stallSoundTimer - dt);
+    const r = p.plane.readout;
+    if (r.stalled && r.speed < FLIGHT.stallWarnSpeed && p.stallSoundTimer <= 0) {
+      this.sfx.stall();
+      p.stallSoundTimer = 2.2;
+    }
+  }
+
+  // ---------------------------------------------------------------- 見た目
 
   private setupFilm(): void {
     const renderer = this.game.renderer;
@@ -196,221 +485,124 @@ export class PlayScene extends Phaser.Scene {
 
   private setupHud(): void {
     this.hud = this.add.graphics().setDepth(70);
-    this.hudText = this.add.text(0, 0, '', {
-      fontFamily: 'Georgia, "Times New Roman", serif', fontSize: '24px', color: '#241a12',
-    }).setDepth(71);
-    this.add.text(20, VIEW.height - 34,
-      'W/S 機首  A/D ロール  E 全開（押している間）  F 7.7mm  G 20mm   ｜  Z/X 被弾（エンジン/舵・テスト用）  C 修理  ｜  1-5 フィルム  B BGM  M 消音  Tab 計器', {
-        fontFamily: 'Georgia, serif', fontSize: '15px', color: '#f4e6c8',
-      }).setDepth(71).setAlpha(0.75);
-    this.downedText = this.add.text(VIEW.width / 2, VIEW.height / 2 - 40, '', {
-      fontFamily: 'Georgia, "Times New Roman", serif', fontSize: '34px', color: '#f4e6c8',
-      align: 'center', stroke: '#241a12', strokeThickness: 6,
-    }).setOrigin(0.5).setDepth(72).setVisible(false);
-    this.debugText = this.add.text(24, 122, '', {
-      fontFamily: 'ui-monospace, monospace', fontSize: '14px', color: '#f4e6c8',
+    for (const p of this.players) {
+      this.hudTexts[p.id] = this.add.text(0, 0, '', {
+        fontFamily: 'Georgia, "Times New Roman", serif', fontSize: '22px', color: '#f4e6c8',
+      }).setDepth(71);
+      this.downedTexts[p.id] = this.add.text(
+        p.id === 0 ? VIEW.width * 0.27 : VIEW.width * 0.73, VIEW.height / 2 - 30, '', {
+          fontFamily: 'Georgia, "Times New Roman", serif', fontSize: '28px', color: '#f4e6c8',
+          align: 'center', stroke: '#241a12', strokeThickness: 6,
+        }).setOrigin(0.5).setDepth(72).setVisible(false);
+    }
+
+    // 操作の説明は地面の絵の上に出るので、そのままでは読めない。敷き紙を1枚挟む
+    this.add.text(VIEW.width / 2, VIEW.height - 21,
+      '1P  W/S 機首  A/D ロール  E 全開  F 7.7mm  G 20mm　　' +
+      '2P  ↑/↓ 機首  ←/→ ロール  Shift 全開  , 7.7mm  . 20mm　　' +
+      '1-5 フィルム  B BGM  M 消音  Tab 計器', {
+        fontFamily: 'Georgia, serif', fontSize: '14px', color: '#f4e6c8',
+        backgroundColor: 'rgba(24,16,10,0.5)', padding: { x: 12, y: 5 },
+      }).setOrigin(0.5).setDepth(71).setAlpha(0.9);
+
+    this.resultText = this.add.text(VIEW.width / 2, VIEW.height / 2 - 40, '', {
+      fontFamily: 'Georgia, "Times New Roman", serif', fontSize: '44px', color: '#f4e6c8',
+      align: 'center', stroke: '#241a12', strokeThickness: 8,
+    }).setOrigin(0.5).setDepth(73).setVisible(false);
+
+    this.debugText = this.add.text(24, 128, '', {
+      fontFamily: 'ui-monospace, monospace', fontSize: '13px', color: '#f4e6c8',
       backgroundColor: 'rgba(24,16,10,0.45)', padding: { x: 8, y: 6 },
-    }).setDepth(71);
-  }
-
-  private fireMg(): void {
-    if (!this.plane.canFireMg()) return;
-    const m = this.plane.muzzle();
-    this.bullets.fire('mg', m.x, m.y, m.ux, m.uy, 0);
-    this.plane.noteMgFired();
-    this.sfx.mg();
-  }
-
-  private fireCannon(): void {
-    if (!this.plane.canFireCannon()) return;
-    const m = this.plane.muzzle();
-    this.bullets.fire('cannon', m.x, m.y, m.ux, m.uy, 0);
-    this.plane.noteCannonFired();
-    this.particles.muzzleSmoke(m.x, m.y);
-    this.sfx.cannon();
-  }
-
-  private crash(): void {
-    this.particles.explode(this.plane.x, VIEW.groundY, true);
-    this.sfx.explosion();
-    this.plane.destroy();
-    this.respawnTimer = PLANE.respawnDelay;
-  }
-
-  override update(_time: number, delta: number): void {
-    const dt = Math.min(0.05, delta / 1000);
-    this.keyGuard.update();
-    // 撃墜されている間も読む。読まずにいると立ち上がりの記録が古びて、
-    // 再出撃した瞬間に押しっぱなしのボタンが暴発する
-    this.padState = this.pad.read();
-    // パッドしか触らない人にも音を出す。ただしブラウザによっては
-    // パッドの操作を「音を鳴らしてよい合図」と認めないので、
-    // そのときはキーを1つ押すかクリックしてもらう必要がある
-    if (this.padState.connected && !this.padWoke) {
-      this.padWoke = true;
-      this.wakeAudio();
-    }
-    this.watchFilm(dt);
-
-    if (this.plane.alive) {
-      const up = this.keys.up.isDown || this.keys.upAlt.isDown;
-      const down = this.keys.down.isDown || this.keys.downAlt.isDown;
-      // キーボードは倒し切りの3値、パッドは倒した量がそのまま出る。
-      // 両方触っている場合は、深く入れているほうを採る
-      const byKey = (up ? 1 : 0) - (down ? 1 : 0);
-      const pitch = Math.abs(this.padState.pitch) > Math.abs(byKey) ? this.padState.pitch : byKey;
-
-      // スロットルは押している間だけ全開。離せば巡航に戻る
-      this.plane.setThrottle(this.keys.throttle.isDown || this.padState.throttle ? 1 : 0);
-      this.plane.update(pitch, dt);
-      this.syncEngineSound();
-
-      // ロールと 20mm は押した瞬間だけ。キーボード側はキーの down で拾っている
-      if (this.padState.rollEdge !== 0) this.plane.roll(this.padState.rollEdge);
-      if (this.padState.cannonEdge) this.fireCannon();
-
-      if (this.keys.mg.isDown || this.padState.mg) this.fireMg();
-
-      // 地面への激突
-      if (this.plane.y >= VIEW.groundY) this.crash();
-
-      this.emitSmoke(dt);
-      this.warnStall(dt);
-    } else {
-      this.respawnTimer -= dt;
-      this.downedText.setVisible(true);
-      this.downedText.setText(`撃墜\n再出撃まで ${Math.max(0, this.respawnTimer).toFixed(1)}`);
-      if (this.respawnTimer <= 0) {
-        this.plane.reset(Phaser.Math.Between(200, VIEW.width - 200), 300, 1);
-        this.lastEngineState = '';
-        this.downedText.setVisible(false);
-      }
-    }
-
-    this.bullets.update(dt);
-    this.balloons.update(dt);
-    this.particles.update(dt);
-    this.checkHits();
-    this.bullets.draw();
-    this.drawHud();
-  }
-
-  /** スロットルや損傷が変わったときだけエンジン音を鳴らし直す */
-  private syncEngineSound(): void {
-    const damaged = this.plane.hp < 70;
-    const key = `${this.plane.state.throttle}/${damaged}`;
-    if (key === this.lastEngineState) return;
-    this.lastEngineState = key;
-    // EngineVoice の段階は 1..3。巡航を 2、全開を 3 に対応させる
-    this.sfx.setEngine(this.plane.state.throttle + 2, damaged);
-  }
-
-  /**
-   * 煙の発生。通常飛行では出さない。
-   * 損傷したときだけ、どこをやられたかが色でわかるように出し分ける:
-   *   エンジン損傷 → 黒煙 / 操作系（舵）損傷 → 白煙
-   * 傷が深いほど間隔が詰まる。フレームが落ちている環境でも途切れないよう、
-   * 1 フレームに複数出すことがある（上限つき）
-   */
-  private emitSmoke(dt: number): void {
-    const e = this.plane.enginePos();
-    for (const part of ['engine', 'handling'] as const) {
-      const hurt = this.plane.hurt(part);
-      if (hurt < SMOKE.damageThreshold) {
-        this.smokeTimer[part] = 0;
-        continue;
-      }
-      const interval = SMOKE.damageInterval / hurt;
-      this.smokeTimer[part] += dt;
-      let guard = 4;
-      while (this.smokeTimer[part] >= interval && guard-- > 0) {
-        this.smokeTimer[part] -= interval;
-        this.particles.damage(e.x, e.y, part);
-      }
-      if (this.smokeTimer[part] > interval) this.smokeTimer[part] = 0;
-    }
-  }
-
-  private warnStall(dt: number): void {
-    this.stallSoundTimer = Math.max(0, this.stallSoundTimer - dt);
-    const r = this.plane.readout;
-    if (r.stalled && r.speed < FLIGHT.stallWarnSpeed && this.stallSoundTimer <= 0) {
-      this.sfx.stall();
-      this.stallSoundTimer = 2.2;
-    }
-  }
-
-  private checkHits(): void {
-    for (const b of [...this.bullets.list]) {
-      for (const balloon of [...this.balloons.list]) {
-        const hb = this.balloons.hitBox(balloon);
-        if ((b.x - hb.x) ** 2 + (b.y - hb.y) ** 2 < hb.r * hb.r) {
-          this.bullets.remove(b);
-          this.balloons.pop(balloon);
-          this.particles.popBalloon(hb.x, hb.y);
-          this.sfx.pop();
-          this.score += SCORE.balloon;
-          break;
-        }
-      }
-    }
+    }).setDepth(71).setVisible(this.showDebug);
   }
 
   private drawHud(): void {
     const g = this.hud;
     g.clear();
+    for (const p of this.players) this.drawPanel(p);
+    if (!this.showDebug) return;
+    this.debugText.setText([
+      ...this.players.map((p) => this.debugLines(p)),
+      `気球 ${this.balloons.list.length}/${BALLOON.maxAlive}（金 ${this.balloons.list.filter((b) => b.gold).length}）` +
+        `  弾 ${this.bullets.list.length}` +
+        `  フィルム ${['切', '弱', '既定', '標準', '強'][this.film?.getLevel() ?? 2]}${this.film ? '' : '（WebGL 無効）'}`,
+      `キー ${this.keyGuard.heldNames().join(' ') || '(なし)'}` +
+        `${this.keyGuard.releasedCount ? `  ／ 押しっぱなしを解除 ${this.keyGuard.releasedCount}回` : ''}`,
+    ].join('\n'));
+  }
+
+  /** 1人分の計器。1P は左端、2P は右端に置いて左右対称に並べる */
+  private drawPanel(p: Player): void {
+    const g = this.hud;
+    const w = 262;
+    const x = p.id === 0 ? 22 : VIEW.width - 22 - w;
+    const y = 20;
+    const tabW = 68;
+    // 名札は外側（画面の端側）に寄せる。視線が自陣側にまとまる
+    const tabX = p.id === 0 ? x : x + w - tabW;
+    const barX = p.id === 0 ? x + 84 : x + 6;
+
     g.fillStyle(0xf4e6c8, 1).lineStyle(5, 0x241a12, 1);
-    g.fillRoundedRect(22, 20, 262, 84, 9);
-    g.strokeRoundedRect(22, 20, 262, 84, 9);
-    g.fillStyle(0xa8402c, 1);
-    g.fillRoundedRect(22, 20, 68, 84, 9);
-    g.strokeRoundedRect(22, 20, 68, 84, 9);
+    g.fillRoundedRect(x, y, w, 84, 9);
+    g.strokeRoundedRect(x, y, w, 84, 9);
+    g.fillStyle(p.color, 1);
+    g.fillRoundedRect(tabX, y, tabW, 84, 9);
+    g.strokeRoundedRect(tabX, y, tabW, 84, 9);
 
     // HP
     g.fillStyle(0xd3bd93, 1).lineStyle(3, 0x241a12, 1);
-    g.fillRoundedRect(106, 64, 150, 13, 6.5);
-    g.strokeRoundedRect(106, 64, 150, 13, 6.5);
-    g.fillStyle(0xa8402c, 1);
-    g.fillRoundedRect(109, 67, 144 * (this.plane.hp / PLANE.maxHp), 7, 3.5);
+    g.fillRoundedRect(barX, y + 44, 150, 13, 6.5);
+    g.strokeRoundedRect(barX, y + 44, 150, 13, 6.5);
+    g.fillStyle(p.color, 1);
+    g.fillRoundedRect(barX + 3, y + 47, 144 * (p.plane.hp / PLANE.maxHp), 7, 3.5);
 
     // 20mm 残弾
     for (let i = 0; i < WEAPON.cannon.ammo; i++) {
-      g.fillStyle(i < this.plane.cannonAmmo ? 0xd59a34 : 0xc4b087, 1);
+      g.fillStyle(i < p.plane.cannonAmmo ? 0xd59a34 : 0xc4b087, 1);
       g.lineStyle(3, 0x241a12, 1);
-      g.fillRoundedRect(106 + i * 14, 82, 9, 14, 3);
-      g.strokeRoundedRect(106 + i * 14, 82, 9, 14, 3);
+      g.fillRoundedRect(barX + i * 14, y + 62, 9, 14, 3);
+      g.strokeRoundedRect(barX + i * 14, y + 62, 9, 14, 3);
     }
 
     // スロットル計
-    const th = this.plane.state.throttle;
+    const gx = p.id === 0 ? x + 232 : x + 30;
     g.lineStyle(3, 0x241a12, 1);
     g.beginPath();
-    g.arc(254, 94, 16, Math.PI, 0);
+    g.arc(gx, y + 74, 16, Math.PI, 0);
     g.strokePath();
-    const a = Math.PI + (th + 0.5) / THROTTLE_NAMES.length * Math.PI;
-    g.lineStyle(4, 0xa8402c, 1);
-    g.lineBetween(254, 94, 254 + Math.cos(a) * 14, 94 + Math.sin(a) * 14);
+    const a = Math.PI + (p.plane.state.throttle + 0.5) / THROTTLE_NAMES.length * Math.PI;
+    g.lineStyle(4, p.color, 1);
+    g.lineBetween(gx, y + 74, gx + Math.cos(a) * 14, y + 74 + Math.sin(a) * 14);
 
-    this.hudText.setPosition(38, 42);
-    this.hudText.setText('P1');
-    this.hudText.setColor('#f4e6c8');
+    // 名札と得点
+    const t = this.hudTexts[p.id];
+    t.setText(`${p.name}\n${p.score} / ${SCORE.winning}`);
+    t.setAlign('center');
+    t.setOrigin(0.5, 0);
+    t.setPosition(tabX + tabW / 2, y + 16);
+  }
 
-    const r = this.plane.readout;
-    if (this.showDebug) {
-      this.debugText.setText([
-        `得点   ${this.score}`,
-        `速度   ${r.speed.toFixed(0)}  ${r.stalled ? '★失速★' : ''}`,
-        `迎え角 ${(r.aoa * 180 / Math.PI).toFixed(1)}°`,
-        `スロットル ${THROTTLE_NAMES[this.plane.state.throttle]}${this.plane.state.throttle === 1 ? '（E を押している間）' : ''}`,
-        `姿勢   ${this.plane.inverted ? '背面' : '正立'}${this.plane.rolling ? '（ロール中）' : ''}`,
-        `HP     ${this.plane.hp}  エンジン${(this.plane.damage.engine * 100).toFixed(0)}%（黒煙） 舵${(this.plane.damage.handling * 100).toFixed(0)}%（白煙）`,
-        `気球   ${this.balloons.list.length}/${BALLOON.maxAlive}`,
-        `フィルム ${['切', '弱', '既定', '標準', '強'][this.film?.getLevel() ?? 2]}` +
-          `${this.film ? '' : '（WebGL 無効）'}  BGM ${this.bgmOn ? 'on' : 'off'}`,
-        `キー   ${this.keyGuard.heldNames().join(' ') || '(なし)'}` +
-          `${this.keyGuard.releasedCount ? `  ／ 押しっぱなしを解除 ${this.keyGuard.releasedCount}回` : ''}`,
-        `パッド ${this.padLabel()}`,
-      ].join('\n'));
-    }
+  private debugLines(p: Player): string {
+    const r = p.plane.readout;
+    return [
+      `${p.name} 得点 ${p.score}  速度 ${r.speed.toFixed(0)}${r.stalled ? ' ★失速★' : ''}` +
+        `  迎え角 ${(r.aoa * 180 / Math.PI).toFixed(1)}°  ${p.plane.inverted ? '背面' : '正立'}` +
+        `${p.plane.rolling ? '(ロール中)' : ''}`,
+      `   HP ${p.plane.hp}  エンジン${(p.plane.damage.engine * 100).toFixed(0)}%（黒煙）` +
+        ` 舵${(p.plane.damage.handling * 100).toFixed(0)}%（白煙）  20mm ${p.plane.cannonAmmo}発`,
+      `   パッド ${this.padLabel(p)}`,
+    ].join('\n');
+  }
+
+  /**
+   * パッドの状態。つないでも出てこないときに、原因が切り分けられるようにする。
+   * ブラウザはボタンが一度押されるまでパッドを見せてくれない決まりなので、
+   * 「つないだのに出ない」は正常なこともある
+   */
+  private padLabel(p: Player): string {
+    const s = p.padState;
+    if (s.unsupported) return `${s.id.slice(0, 30)}（標準配列でないため使いません）`;
+    if (!s.connected) return '未接続（ボタンを一度押すと認識されます）';
+    return `${s.id.slice(0, 26)}  傾き ${s.pitch.toFixed(2)}`;
   }
 }
