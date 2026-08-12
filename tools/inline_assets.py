@@ -51,17 +51,7 @@ def main():
             print(f"  埋め込み: {rel}  ({len(cache[rel])//1024} KB)")
         return f"{m.group(1)}{cache[rel]}{m.group(3)}"
 
-    # 先に、テンプレートリテラルで組み立てている煙のパスを実体に展開する
-    html = html.replace(
-        "const DARK  = [1,2,3,4].map(i=>`../assets/art/smoke/puff-dark-0${i}.png`);",
-        "const DARK  = [" + ",".join(f'"{encode(f"../assets/art/smoke/puff-dark-0{i}.png")}"' for i in range(1, 5)) + "];",
-    )
-    html = html.replace(
-        "const LIGHT = [1,2,3,4].map(i=>`../assets/art/smoke/puff-light-0${i}.png`);",
-        "const LIGHT = [" + ",".join(f'"{encode(f"../assets/art/smoke/puff-light-0{i}.png")}"' for i in range(1, 5)) + "];",
-    )
-
-    # 残りの src="../assets/..." を置換する
+    # src="../assets/..." を data URI に置き換える
     html = re.sub(r'(src=")(\.\./assets/[^"$]+)(")', sub, html)
 
     if "../assets/" in html:
