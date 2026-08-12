@@ -73,29 +73,20 @@ export class Particles {
     });
   }
 
-  /** 通常飛行の白い航跡 */
-  trail(x: number, y: number): void {
+  /**
+   * 被弾の煙。どこをやられたかが色でわかるようにする。
+   * エンジン損傷は黒煙、操作系（舵）損傷は白煙。
+   */
+  damage(x: number, y: number, kind: 'engine' | 'handling'): void {
     const w = PLANE.width;
-    this.spawn(this.below, pick(WHITE), x, y, {
-      life: rand(SMOKE.trailLife[0], SMOKE.trailLife[1]),
-      size: w * rand(SMOKE.trailSize[0], SMOKE.trailSize[1]),
-      grow: 2.2,
-      vx: rand(-6, 6),
-      vy: rand(-10, -3),
-      peak: SMOKE.trailAlpha,
-    });
-  }
-
-  /** 被弾の黒煙 */
-  damage(x: number, y: number): void {
-    const w = PLANE.width;
-    this.spawn(this.below, pick(DARK), x, y, {
+    const engine = kind === 'engine';
+    this.spawn(this.below, pick(engine ? DARK : WHITE), x, y, {
       life: rand(SMOKE.damageLife[0], SMOKE.damageLife[1]),
       size: w * rand(SMOKE.damageSize[0], SMOKE.damageSize[1]),
       grow: 1.7,
       vx: rand(26, 48),
       vy: rand(-32, -16),
-      peak: SMOKE.damageAlpha,
+      peak: engine ? SMOKE.damageAlpha.engine : SMOKE.damageAlpha.handling,
     });
   }
 

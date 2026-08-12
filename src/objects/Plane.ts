@@ -116,11 +116,21 @@ export class Plane {
     this.cannonAmmo--;
   }
 
-  takeDamage(amount: number): void {
+  /** @param part 当たりどころ。省略すると半々でどちらかが鈍る */
+  takeDamage(amount: number, part?: 'engine' | 'handling'): void {
     this.hp = Math.max(0, this.hp - amount);
-    // 被弾ごとにエンジンか舵のどちらかが鈍る
-    if (Math.random() < 0.5) this.damage.engine = Math.max(0.55, this.damage.engine - 0.09);
-    else this.damage.handling = Math.max(0.5, this.damage.handling - 0.1);
+    const hit = part ?? (Math.random() < 0.5 ? 'engine' : 'handling');
+    if (hit === 'engine') {
+      this.damage.engine = Math.max(PLANE.damageFloor.engine, this.damage.engine - PLANE.damageStep.engine);
+    } else {
+      this.damage.handling = Math.max(PLANE.damageFloor.handling, this.damage.handling - PLANE.damageStep.handling);
+    }
+  }
+
+  /** 損傷の度合いを 0（無傷）〜1（下限まで落ちた）で返す。煙の量に使う */
+  hurt(part: 'engine' | 'handling'): number {
+    const floor = PLANE.damageFloor[part];
+    return Math.min(1, Math.max(0, (1 - this.damage[part]) / (1 - floor)));
   }
 
   reset(x: number, y: number, facing: Facing): void {

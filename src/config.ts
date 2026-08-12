@@ -25,11 +25,15 @@ export const PLANE = {
   width: VIEW.width * 0.08,
   /** 当たり判定の半径 */
   hitRadius: VIEW.width * 0.026,
-  /** 180度ロールにかける秒数 */
-  rollDuration: 0.45,
+  /** 180度ロールにかける秒数。速すぎると一瞬で終わって手応えがない */
+  rollDuration: 0.85,
   /** リスポーンまでの秒数 */
   respawnDelay: 2.4,
   maxHp: 100,
+  /** 被弾で性能が落ちる下限。ここまで落ちても飛べなくはしない */
+  damageFloor: { engine: 0.55, handling: 0.5 },
+  /** 被弾1発あたりの性能低下 */
+  damageStep: { engine: 0.09, handling: 0.10 },
 };
 
 /**
@@ -162,15 +166,18 @@ export const FILM_DEFAULT = 2;
 /** エフェクト層の更新レート。絵は 60fps でも粒だけ古いコマ速で動かす */
 export const FILM_FPS = 24;
 
+/**
+ * 煙。
+ * 通常飛行では出さない。損傷したときだけ、どこをやられたかが色でわかるようにする:
+ *   エンジン損傷 → 黒煙
+ *   操作系（舵）損傷 → 白煙
+ */
 export const SMOKE = {
-  /** 通常飛行の白い航跡 */
-  trailInterval: 0.06,
-  trailLife: [3.6, 5.4] as const,
-  trailSize: [0.19, 0.26] as const,   // 機体幅に対する比
-  trailAlpha: 0.38,
-  /** 被弾の黒煙 */
+  /** 損傷が最大のときの発生間隔。軽傷ならこれを損傷度で割った間隔になる */
   damageInterval: 0.12,
   damageLife: [2.1, 2.9] as const,
-  damageSize: [0.42, 0.62] as const,
-  damageAlpha: 0.9,
+  damageSize: [0.42, 0.62] as const,   // 機体幅に対する比
+  /** 損傷度がこれ未満なら煙を出さない */
+  damageThreshold: 0.06,
+  damageAlpha: { engine: 0.9, handling: 0.7 },
 };

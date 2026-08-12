@@ -25,8 +25,8 @@ export class PlayScene extends Phaser.Scene {
   private keys!: Record<string, Phaser.Input.Keyboard.Key>;
   private score = 0;
   private respawnTimer = 0;
-  private trailTimer = 0;
-  private damageTimer = 0;
+  /** 損傷の種類ごとの煙のタイマー */
+  private smokeTimer = { engine: 0, handling: 0 };
   private stallSoundTimer = 0;
   private bgmOn = false;
   /** エンジン音を鳴らし直す判定用。段階が変わったときだけ更新する */
@@ -77,6 +77,7 @@ export class PlayScene extends Phaser.Scene {
       up: KEY.W, down: KEY.S, upAlt: KEY.UP, downAlt: KEY.DOWN,
       rollL: KEY.A, rollR: KEY.D, rollLAlt: KEY.LEFT, rollRAlt: KEY.RIGHT,
       throttle: KEY.E, mg: KEY.F, cannon: KEY.G,
+      hitEngine: KEY.Z, hitHandling: KEY.X, repair: KEY.C,
       mute: KEY.M, bgm: KEY.B, debug: KEY.TAB,
       f0: KEY.ONE, f1: KEY.TWO, f2: KEY.THREE, f3: KEY.FOUR, f4: KEY.FIVE,
     }) as Record<string, Phaser.Input.Keyboard.Key>;
@@ -88,6 +89,28 @@ export class PlayScene extends Phaser.Scene {
     };
     kb.on('keydown', wake);
     this.input.on('pointerdown', wake);
+
+    // キーを押したまま別のタブやウィンドウへ移ると、キーを離したイベントが届かず、
+    // 戻ってきたときに押しっぱなしの状態が残る。
+    // 離脱と復帰の両方で押下状態を消す。ブラウザのイベントは環境によって
+    // 飛んでこないことがあるので、Phaser 側の通知も併せて拾う
+    const releaseAll = (): void => { kb.resetKeys(); };
+    const onVisibility = (): void => { if (document.hidden) releaseAll(); };
+    window.addEventListener('blur', releaseAll);
+    window.addEventListener('focus', releaseAll);
+    document.addEventListener('visibilitychange', onVisibility);
+    const core = Phaser.Core.Events;
+    for (const ev of [core.BLUR, core.FOCUS, core.PAUSE, core.RESUME, core.HIDDEN, core.VISIBLE]) {
+      this.game.events.on(ev, releaseAll);
+    }
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      window.removeEventListener('blur', releaseAll);
+      window.removeEventListener('focus', releaseAll);
+      document.removeEventListener('visibilitychange', onVisibility);
+      for (const ev of [core.BLUR, core.FOCUS, core.PAUSE, core.RESUME, core.HIDDEN, core.VISIBLE]) {
+        this.game.events.off(ev, releaseAll);
+      }
+    });
 
     // ロールは左右で回る向きが変わる。どちらも 180度 回って正立と背面が入れ替わる
     for (const k of ['rollL', 'rollLAlt']) this.keys[k].on('down', () => { this.plane.roll(-1); });
@@ -102,6 +125,14 @@ export class PlayScene extends Phaser.Scene {
     for (let i = 0; i < 5; i++) {
       this.keys[`f${i}`].on('down', () => this.film?.setLevel(i));
     }
+
+    // M1 には敵機がいないので、被弾の演出はキーで試せるようにしておく（プレイテスト用）
+    this.keys.hitEngine.on('down', () => { this.plane.takeDamage(WEAPON.mg.damage, 'engine'); this.sfx.hit(); });
+    this.keys.hitHandling.on('down', () => { this.plane.takeDamage(WEAPON.mg.damage, 'handling'); this.sfx.hit(); });
+    this.keys.repair.on('down', () => {
+      this.plane.hp = PLANE.maxHp;
+      this.plane.damage = { engine: 1, handling: 1 };
+    });
   }
 
   private setupFilm(): void {
@@ -118,7 +149,7 @@ export class PlayScene extends Phaser.Scene {
       fontFamily: 'Georgia, "Times New Roman", serif', fontSize: '24px', color: '#241a12',
     }).setDepth(71);
     this.add.text(20, VIEW.height - 34,
-      'W/S 機首  A/D ロール  E 全開（押している間）  F 7.7mm  G 20mm   ｜  1-5 フィルム  B BGM  M 消音  Tab 計器', {
+      'W/S 機首  A/D ロール  E 全開（押している間）  F 7.7mm  G 20mm   ｜  Z/X 被弾（エンジン/舵・テスト用）  C 修理  ｜  1-5 フィルム  B BGM  M 消音  Tab 計器', {
         fontFamily: 'Georgia, serif', fontSize: '15px', color: '#f4e6c8',
       }).setDepth(71).setAlpha(0.75);
     this.downedText = this.add.text(VIEW.width / 2, VIEW.height / 2 - 40, '', {
@@ -204,27 +235,28 @@ export class PlayScene extends Phaser.Scene {
   }
 
   /**
-   * 煙の発生。フレームが落ちている環境でも軌跡が途切れないよう、
+   * 煙の発生。通常飛行では出さない。
+   * 損傷したときだけ、どこをやられたかが色でわかるように出し分ける:
+   *   エンジン損傷 → 黒煙 / 操作系（舵）損傷 → 白煙
+   * 傷が深いほど間隔が詰まる。フレームが落ちている環境でも途切れないよう、
    * 1 フレームに複数出すことがある（上限つき）
    */
   private emitSmoke(dt: number): void {
     const e = this.plane.enginePos();
-    this.trailTimer += dt;
-    let guard = 6;
-    while (this.trailTimer >= SMOKE.trailInterval && guard-- > 0) {
-      this.trailTimer -= SMOKE.trailInterval;
-      this.particles.trail(e.x, e.y);
-    }
-    if (this.trailTimer > SMOKE.trailInterval) this.trailTimer = 0;
-
-    if (this.plane.hp < 70) {
-      this.damageTimer += dt;
-      guard = 4;
-      while (this.damageTimer >= SMOKE.damageInterval && guard-- > 0) {
-        this.damageTimer -= SMOKE.damageInterval;
-        this.particles.damage(e.x, e.y);
+    for (const part of ['engine', 'handling'] as const) {
+      const hurt = this.plane.hurt(part);
+      if (hurt < SMOKE.damageThreshold) {
+        this.smokeTimer[part] = 0;
+        continue;
       }
-      if (this.damageTimer > SMOKE.damageInterval) this.damageTimer = 0;
+      const interval = SMOKE.damageInterval / hurt;
+      this.smokeTimer[part] += dt;
+      let guard = 4;
+      while (this.smokeTimer[part] >= interval && guard-- > 0) {
+        this.smokeTimer[part] -= interval;
+        this.particles.damage(e.x, e.y, part);
+      }
+      if (this.smokeTimer[part] > interval) this.smokeTimer[part] = 0;
     }
   }
 
@@ -300,7 +332,7 @@ export class PlayScene extends Phaser.Scene {
         `迎え角 ${(r.aoa * 180 / Math.PI).toFixed(1)}°`,
         `スロットル ${THROTTLE_NAMES[this.plane.state.throttle]}${this.plane.state.throttle === 1 ? '（E を押している間）' : ''}`,
         `姿勢   ${this.plane.inverted ? '背面' : '正立'}${this.plane.rolling ? '（ロール中）' : ''}`,
-        `HP     ${this.plane.hp}  エンジン${(this.plane.damage.engine * 100).toFixed(0)}% 舵${(this.plane.damage.handling * 100).toFixed(0)}%`,
+        `HP     ${this.plane.hp}  エンジン${(this.plane.damage.engine * 100).toFixed(0)}%（黒煙） 舵${(this.plane.damage.handling * 100).toFixed(0)}%（白煙）`,
         `気球   ${this.balloons.list.length}/${BALLOON.maxAlive}`,
         `フィルム ${['切', '弱', '既定', '標準', '強'][this.film?.getLevel() ?? 2]}` +
           `${this.film ? '' : '（WebGL 無効）'}  BGM ${this.bgmOn ? 'on' : 'off'}`,
