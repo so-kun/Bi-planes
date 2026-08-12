@@ -1,0 +1,590 @@
+<title>Bi-Planes スタイル見本帖 第二号</title>
+<style>
+  :root{
+    --paper:#ecdcb8; --ink:#221510; --ink-soft:#5c4634;
+    --red:#b53a28; --mustard:#d9a441; --cream:#f6ecd4;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--paper); color:var(--ink);
+    font-family:Georgia,'Times New Roman','Hiragino Mincho ProN','Yu Mincho',serif;
+    line-height:1.75;
+    background-image:radial-gradient(ellipse at 20% 10%, rgba(255,255,255,.35), transparent 50%),
+                     radial-gradient(ellipse at 80% 90%, rgba(120,90,40,.12), transparent 55%);
+  }
+  .sheet{max-width:1060px;margin:0 auto;padding:40px 28px 90px}
+  header{text-align:center;padding:34px 12px 8px}
+  .marq{display:inline-block;border:4px double var(--ink);padding:20px 44px 24px;
+    background:var(--cream);box-shadow:0 4px 0 rgba(34,21,16,.25);position:relative}
+  .marq::before,.marq::after{content:"★";position:absolute;top:50%;transform:translateY(-50%);color:var(--red);font-size:20px}
+  .marq::before{left:14px}.marq::after{right:14px}
+  .eyebrow{font-size:13px;letter-spacing:.42em;text-transform:uppercase;color:var(--ink-soft);margin:0 0 6px}
+  h1{margin:0;font-size:clamp(36px,6vw,58px);line-height:1.1;letter-spacing:.04em;font-weight:900;
+    text-wrap:balance;text-shadow:2px 2px 0 var(--mustard)}
+  .sub{margin:10px 0 0;font-size:15px;color:var(--ink-soft);font-style:italic}
+  section{margin-top:72px}
+  .sec-head{display:flex;align-items:center;gap:16px;margin-bottom:8px}
+  .sec-head h2{margin:0;font-size:26px;letter-spacing:.14em;white-space:nowrap}
+  .sec-head .rule{flex:1;height:7px;border-top:2px solid var(--ink);border-bottom:2px solid var(--ink)}
+  .sec-note{margin:0 0 22px;color:var(--ink-soft);font-size:15px;max-width:64ch}
+  .screen-wrap{border:5px solid var(--ink);border-radius:10px;overflow:hidden;
+    box-shadow:0 10px 0 rgba(34,21,16,.28);position:relative;background:#9db6c4}
+  .screen-wrap svg{display:block;width:100%;height:auto}
+  .vignette{position:absolute;inset:0;pointer-events:none;
+    background:radial-gradient(ellipse at center, transparent 55%, rgba(40,22,14,.36) 100%)}
+  .caption{font-size:13.5px;color:var(--ink-soft);margin-top:12px;text-align:center;font-style:italic}
+  .hero-card{background:var(--cream);border:3px solid var(--ink);border-radius:8px;
+    box-shadow:0 5px 0 rgba(34,21,16,.22);overflow:hidden}
+  .hero-card .art{background:
+      radial-gradient(ellipse at 30% 20%, rgba(255,255,255,.5), transparent 55%),
+      linear-gradient(#b7d2cd,#e9dbb0)}
+  .hero-card .art svg{display:block;width:100%;height:auto}
+  .hero-card .txt{padding:14px 20px 16px;border-top:3px solid var(--ink)}
+  .hero-card h3{margin:0 0 4px;font-size:18px;letter-spacing:.08em}
+  .hero-card p{margin:0;font-size:13.5px;color:var(--ink-soft)}
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:20px;margin-top:24px}
+  .card{background:var(--cream);border:3px solid var(--ink);border-radius:8px;
+    padding:14px 16px;box-shadow:0 5px 0 rgba(34,21,16,.22)}
+  .card .art{background:linear-gradient(#bcd4cd,#e6d9ab);border:2px solid var(--ink);
+    border-radius:6px;margin-bottom:12px;overflow:hidden}
+  .card .art svg{display:block;width:100%;height:auto}
+  .card h3{margin:0 0 4px;font-size:16.5px;letter-spacing:.06em}
+  .card p{margin:0;font-size:13px;color:var(--ink-soft);line-height:1.6}
+  .check{background:var(--cream);border:3px solid var(--ink);border-radius:8px;
+    padding:20px 26px;box-shadow:0 5px 0 rgba(34,21,16,.22)}
+  .check ol{margin:8px 0 0;padding-left:24px}
+  .check li{margin:7px 0;font-size:15px}
+  .check li b{color:var(--red)}
+  footer{margin-top:70px;text-align:center;font-size:12.5px;color:var(--ink-soft);letter-spacing:.2em}
+  .propblur{animation:flick .16s steps(2,end) infinite}
+  @keyframes flick{0%{opacity:.55}50%{opacity:.95}100%{opacity:.55}}
+  .bob{animation:bob 3.4s ease-in-out infinite}
+  @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+  .drift{animation:drift 40s linear infinite}
+  @keyframes drift{from{transform:translateX(0)}to{transform:translateX(70px)}}
+  .puff{transform-box:fill-box;transform-origin:center;animation:puff 1.7s ease-out infinite}
+  .puff.p2{animation-delay:.55s}.puff.p3{animation-delay:1.1s}
+  @keyframes puff{
+    0%{opacity:0;transform:translate(0,0) scale(.4)}
+    16%{opacity:.9}
+    100%{opacity:0;transform:translate(52px,-24px) scale(1.6)}
+  }
+  @media (prefers-reduced-motion:reduce){.propblur,.bob,.drift,.puff{animation:none}}
+</style>
+
+<div class="sheet">
+  <header>
+    <div class="marq">
+      <p class="eyebrow">Art Proposal — No.2</p>
+      <h1>BI-PLANES<br>スタイル見本帖 第二号</h1>
+      <p class="sub">水彩背景 × セルシェード複葉機 — Cuphead 基準の描き直し（アートのみ・音は第一号で採用済み）</p>
+    </div>
+  </header>
+
+  <!-- ================= ゲーム画面 ================= -->
+  <section>
+    <div class="sec-head"><h2>一、ゲーム画面イメージ（改）</h2><div class="rule"></div></div>
+    <p class="sec-note">
+      背景は<b>輪郭線なしの水彩ウォッシュ</b>（にじみ・顔料の粒状感・夕暮れのグラデーション）、
+      手前はシルエットの丘と茂み。機体は<b>太い黒輪郭＋エナメルの艶</b>で描き直しました。
+      引き続きすべてコード描画です。
+    </p>
+    <div class="screen-wrap">
+      <svg viewBox="0 0 1280 720" role="img" aria-label="ゲーム画面のモックアップ 第二号">
+        <defs>
+          <linearGradient id="sky2" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#5e9cc4"/>
+            <stop offset=".38" stop-color="#93bcc6"/>
+            <stop offset=".62" stop-color="#d8d3b2"/>
+            <stop offset=".8" stop-color="#eec894"/>
+            <stop offset="1" stop-color="#e8a870"/>
+          </linearGradient>
+          <radialGradient id="glow2" cx=".5" cy=".5" r=".5">
+            <stop offset="0" stop-color="#f7e3b0" stop-opacity=".85"/>
+            <stop offset="1" stop-color="#f7e3b0" stop-opacity="0"/>
+          </radialGradient>
+          <!-- 水彩のにじみエッジ -->
+          <filter id="wc" x="-15%" y="-15%" width="130%" height="130%">
+            <feTurbulence type="fractalNoise" baseFrequency="0.012 0.028" numOctaves="3" seed="7" result="n"/>
+            <feDisplacementMap in="SourceGraphic" in2="n" scale="24"/>
+          </filter>
+          <filter id="wcSoft" x="-15%" y="-15%" width="130%" height="130%">
+            <feTurbulence type="fractalNoise" baseFrequency="0.02 0.04" numOctaves="3" seed="3" result="n"/>
+            <feDisplacementMap in="SourceGraphic" in2="n" scale="16"/>
+            <feGaussianBlur stdDeviation="1.2"/>
+          </filter>
+          <!-- 顔料の粒状感 -->
+          <filter id="granul"><feTurbulence type="fractalNoise" baseFrequency=".55" numOctaves="3" result="n"/>
+            <feColorMatrix in="n" type="matrix" values="0 0 0 0 .32  0 0 0 0 .2  0 0 0 0 .1  0 0 0 .09 0"/></filter>
+          <filter id="grain2"><feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="2" result="n"/>
+            <feColorMatrix in="n" type="matrix" values="0 0 0 0 .2  0 0 0 0 .14  0 0 0 0 .08  0 0 0 .05 0"/></filter>
+        </defs>
+
+        <rect width="1280" height="720" fill="url(#sky2)"/>
+        <ellipse cx="430" cy="600" rx="430" ry="230" fill="url(#glow2)"/>
+
+        <!-- ===== 水彩の雲（輪郭線なし・レイヤー重ね） ===== -->
+        <g class="drift">
+          <!-- 上層: 桃色がかった帯雲 -->
+          <g filter="url(#wc)" fill="#f2e0d2">
+            <ellipse cx="220" cy="120" rx="240" ry="34"/><ellipse cx="380" cy="96" rx="160" ry="26"/>
+            <ellipse cx="90" cy="100" rx="120" ry="22"/>
+            <ellipse cx="1080" cy="80" rx="260" ry="30"/><ellipse cx="920" cy="105" rx="150" ry="22"/>
+          </g>
+          <g filter="url(#wcSoft)" fill="#d9b3ad" opacity=".45" style="mix-blend-mode:multiply">
+            <ellipse cx="240" cy="136" rx="220" ry="16"/><ellipse cx="1060" cy="94" rx="230" ry="13"/>
+          </g>
+          <!-- 中層: 白い入道雲塊 -->
+          <g filter="url(#wc)" fill="#f7f1e2">
+            <ellipse cx="640" cy="240" rx="130" ry="42"/><ellipse cx="560" cy="215" rx="70" ry="34"/>
+            <ellipse cx="720" cy="212" rx="80" ry="36"/><ellipse cx="640" cy="200" rx="60" ry="34"/>
+          </g>
+          <g filter="url(#wcSoft)" fill="#a8b8c2" opacity=".5" style="mix-blend-mode:multiply">
+            <ellipse cx="645" cy="268" rx="115" ry="14"/>
+          </g>
+          <!-- 下層: 夕陽を受けたクリーム色の帯 -->
+          <g filter="url(#wc)" fill="#f4dfb2" opacity=".9">
+            <ellipse cx="180" cy="360" rx="210" ry="24"/><ellipse cx="330" cy="340" rx="120" ry="18"/>
+            <ellipse cx="1120" cy="330" rx="190" ry="22"/><ellipse cx="990" cy="352" rx="110" ry="16"/>
+          </g>
+          <g filter="url(#wcSoft)" fill="#cf9e7e" opacity=".4" style="mix-blend-mode:multiply">
+            <ellipse cx="200" cy="372" rx="190" ry="10"/><ellipse cx="1100" cy="342" rx="160" ry="9"/>
+          </g>
+        </g>
+
+        <!-- ===== 遠景: 空気遠近で3層に重ねた山なみ ===== -->
+        <!-- 地平のヘイズ -->
+        <g filter="url(#wcSoft)">
+          <path d="M0 462 C 220 446 420 458 640 450 C 880 442 1080 458 1280 448 L1280 560 L0 560 Z"
+                fill="#ecd3ae" opacity=".5"/>
+        </g>
+
+        <!-- 最遠の峰: 淡い藤色 -->
+        <g filter="url(#wc)" opacity=".6">
+          <path d="M0 540 C 40 528 70 500 104 452 Q118 430 132 452 C 158 496 190 528 224 540
+                   C 258 528 282 500 312 468 Q326 452 340 470 C 364 502 396 530 430 540
+                   C 470 526 500 490 532 442 Q546 422 560 444 C 588 490 620 526 656 540
+                   C 692 528 718 500 748 462 Q762 444 776 464 C 802 500 834 528 868 540
+                   C 906 526 934 492 964 446 Q978 426 992 448 C 1018 494 1050 528 1086 540
+                   C 1122 528 1150 502 1182 466 Q1196 448 1210 468 C 1234 502 1258 528 1280 538
+                   L1280 640 L0 640 Z" fill="#a690b6"/>
+        </g>
+
+        <!-- 中景の峰: 藤紫 -->
+        <g filter="url(#wc)">
+          <path d="M0 596 C 30 584 52 556 76 508 Q90 486 104 510 C 130 558 168 588 208 596
+                   C 246 582 276 548 306 496 Q320 474 334 498 C 362 550 400 586 442 596
+                   C 480 584 508 552 536 508 Q550 486 564 510 C 592 556 630 588 672 596
+                   C 712 582 742 546 772 492 Q786 470 800 494 C 828 548 868 586 910 596
+                   C 948 584 976 552 1004 506 Q1018 484 1032 508 C 1060 556 1098 588 1140 596
+                   C 1178 584 1208 552 1236 508 Q1250 486 1264 508 C 1270 518 1276 528 1280 534
+                   L1280 680 L0 680 Z" fill="#8f76a0"/>
+        </g>
+        <!-- 陽の当たる斜面（左向き） -->
+        <g filter="url(#wcSoft)" opacity=".38" style="mix-blend-mode:screen">
+          <path d="M104 510 Q90 486 76 508 C 52 556 30 584 0 596 L0 612 C 40 600 74 566 104 510 Z
+                   M334 498 Q320 474 306 496 C 276 548 246 582 208 596 L208 612 C 254 598 296 558 334 498 Z
+                   M564 510 Q550 486 536 508 C 508 552 480 584 442 596 L442 612 C 486 600 528 562 564 510 Z
+                   M800 494 Q786 470 772 492 C 742 546 712 582 672 596 L672 612 C 718 600 762 556 800 494 Z
+                   M1032 508 Q1018 484 1004 506 C 976 552 948 584 910 596 L910 612 C 956 600 996 562 1032 508 Z
+                   M1264 508 Q1250 486 1236 508 C 1208 552 1178 584 1140 596 L1140 612 C 1186 600 1228 560 1264 508 Z"
+                fill="#e2d2e6"/>
+        </g>
+        <!-- 谷あいのヘイズ -->
+        <g filter="url(#wcSoft)" opacity=".45">
+          <path d="M0 606 C 260 590 520 616 780 600 C 1000 586 1140 606 1280 594 L1280 634 L0 634 Z" fill="#d7bfae"/>
+        </g>
+
+        <!-- 近景の尾根: 深い葡萄色 -->
+        <g filter="url(#wc)">
+          <path d="M0 646 C 34 636 62 612 92 570 Q106 550 120 572 C 148 616 186 642 226 650
+                   C 268 638 300 610 332 566 Q346 546 360 570 C 390 616 430 644 474 650
+                   C 514 640 546 614 578 574 Q592 554 606 576 C 636 620 678 646 720 652
+                   C 762 640 794 612 826 570 Q840 550 854 572 C 884 618 926 644 968 650
+                   C 1010 638 1042 610 1074 568 Q1088 548 1102 570 C 1132 616 1174 642 1216 650
+                   C 1244 644 1264 626 1280 606 L1280 720 L0 720 Z" fill="#6b4f6e"/>
+        </g>
+        <g filter="url(#wcSoft)" opacity=".42" style="mix-blend-mode:multiply">
+          <path d="M0 676 C 300 662 620 688 940 668 C 1120 657 1200 672 1280 664 L1280 720 L0 720 Z" fill="#46304d"/>
+        </g>
+
+        <!-- 稜線のシルエット小物: 天文台と給水塔 -->
+        <g fill="#46304d" filter="url(#wcSoft)">
+          <path d="M186 604 a24 24 0 0 1 48 0 Z"/><rect x="182" y="602" width="56" height="9"/>
+          <rect x="205" y="570" width="6" height="36" transform="rotate(18 208 588)"/>
+          <g transform="translate(1010 566)">
+            <rect x="-4" y="28" width="8" height="44"/><rect x="-28" y="38" width="7" height="38" transform="rotate(14)"/>
+            <rect x="21" y="38" width="7" height="38" transform="rotate(-14)"/>
+            <path d="M-28 6 h56 v24 a28 11 0 0 1 -56 0 Z"/><path d="M-30 6 L0 -12 L30 6 Z"/>
+          </g>
+        </g>
+
+        <!-- ===== 中景: 緑の丘と木立 ===== -->
+        <g filter="url(#wc)">
+          <path d="M0 682 C 180 660 340 686 520 674 C 700 662 880 688 1060 672 C 1160 663 1220 678 1280 670
+                   L1280 720 L0 720 Z" fill="#57724f"/>
+        </g>
+        <g fill="#3c5739" filter="url(#wcSoft)">
+          <path d="M96 682 l12 -28 l12 28 Z"/><path d="M124 686 l10 -22 l10 22 Z"/>
+          <path d="M404 676 l13 -30 l13 30 Z"/><path d="M436 680 l9 -20 l9 20 Z"/>
+          <path d="M690 684 l11 -26 l11 26 Z"/><path d="M716 688 l9 -20 l9 20 Z"/>
+          <path d="M896 678 l12 -28 l12 28 Z"/><path d="M926 682 l9 -20 l9 20 Z"/>
+          <path d="M1186 674 l11 -26 l11 26 Z"/>
+        </g>
+        <g filter="url(#wcSoft)" opacity=".45" style="mix-blend-mode:multiply">
+          <path d="M0 702 C 300 690 620 712 940 696 C 1120 686 1200 700 1280 692 L1280 720 L0 720 Z" fill="#33502f"/>
+        </g>
+
+        <!-- ===== 手前: 濃い茂みと巨大サボテン（額縁） ===== -->
+        <g filter="url(#wc)" fill="#38523f">
+          <ellipse cx="60" cy="704" rx="150" ry="52"/><ellipse cx="200" cy="714" rx="120" ry="44"/>
+          <ellipse cx="340" cy="706" rx="115" ry="40"/><ellipse cx="500" cy="716" rx="130" ry="42"/>
+          <ellipse cx="660" cy="708" rx="120" ry="40"/><ellipse cx="820" cy="714" rx="130" ry="42"/>
+          <ellipse cx="980" cy="706" rx="120" ry="42"/><ellipse cx="1130" cy="714" rx="130" ry="44"/>
+          <ellipse cx="1262" cy="704" rx="120" ry="50"/>
+        </g>
+        <g filter="url(#wc)" fill="#24382c">
+          <ellipse cx="0" cy="716" rx="140" ry="46"/><ellipse cx="150" cy="726" rx="120" ry="40"/>
+          <ellipse cx="300" cy="720" rx="110" ry="36"/><ellipse cx="460" cy="728" rx="125" ry="38"/>
+          <ellipse cx="620" cy="722" rx="115" ry="36"/><ellipse cx="790" cy="728" rx="125" ry="38"/>
+          <ellipse cx="950" cy="720" rx="115" ry="38"/><ellipse cx="1110" cy="728" rx="125" ry="40"/>
+          <ellipse cx="1260" cy="718" rx="130" ry="42"/>
+        </g>
+        <g filter="url(#wcSoft)" fill="#24382c">
+          <path d="M226 716 q-16 -86 6 -140 q16 -38 34 -2 q20 42 8 142 Z"/>
+          <path d="M248 628 q-32 -12 -36 -50 q-2 -24 16 -12 q20 12 28 54 Z"/>
+          <path d="M264 640 q32 -16 34 -54 q2 -24 -16 -10 q-20 14 -26 56 Z"/>
+          <path d="M1052 716 q-14 -70 4 -112 q14 -32 30 -2 q18 34 6 114 Z"/>
+          <path d="M1070 646 q28 -12 30 -46 q2 -20 -14 -8 q-18 12 -22 48 Z"/>
+        </g>
+
+        <!-- 遠くの鳥 -->
+        <g stroke="#6b5a68" stroke-width="3" fill="none" opacity=".5" stroke-linecap="round">
+          <path d="M405 175 q9 -7 18 0 q9 -7 18 0"/>
+          <path d="M448 196 q7 -6 14 0 q7 -6 14 0"/>
+          <path d="M383 205 q6 -5 12 0 q6 -5 12 0"/>
+        </g>
+
+        <!-- ===== 気球 ===== -->
+        <g class="bob"><g id="balloon2" transform="translate(770 400) scale(1.05)"></g></g>
+
+        <!-- ===== P1 機（赤・右向き） ===== -->
+        <g id="scene-p1" transform="translate(320 380) rotate(-10) scale(.62)"></g>
+        <g stroke="#ffe9a3" stroke-width="7" stroke-linecap="round" opacity=".95">
+          <line x1="470" y1="352" x2="508" y2="341"/><line x1="560" y1="326" x2="598" y2="315"/>
+          <line x1="650" y1="300" x2="688" y2="290"/>
+        </g>
+
+        <!-- ===== P2 機（青緑・左向き・白煙） ===== -->
+        <g transform="translate(965 205)">
+          <g class="puff"><circle cx="128" cy="-2" r="20" fill="#f3ede0" stroke="#221510" stroke-width="5"/></g>
+          <g class="puff p2"><circle cx="126" cy="-10" r="15" fill="#ddd5c4" stroke="#221510" stroke-width="5"/></g>
+          <g class="puff p3"><circle cx="130" cy="8" r="12" fill="#f3ede0" stroke="#221510" stroke-width="5"/></g>
+          <g id="scene-p2" transform="rotate(7) scale(.62)"></g>
+        </g>
+
+        <!-- ===== HUD ===== -->
+        <g font-family="Georgia, serif">
+          <g stroke="#221510" stroke-width="5">
+            <rect x="24" y="22" width="264" height="86" rx="10" fill="#f6ecd4"/>
+            <rect x="24" y="22" width="70" height="86" rx="10" fill="#b53a28"/>
+          </g>
+          <text x="59" y="80" font-size="40" font-weight="900" fill="#f6ecd4" text-anchor="middle">P1</text>
+          <text x="110" y="56" font-size="26" font-weight="900" fill="#221510">★ 3<tspan font-size="15" font-weight="400" fill="#5c4634">／10</tspan></text>
+          <g transform="translate(110 66)">
+            <rect width="150" height="14" rx="7" fill="#d8c69a" stroke="#221510" stroke-width="3"/>
+            <rect x="3" y="3" width="98" height="8" rx="4" fill="#b53a28"/>
+          </g>
+          <g transform="translate(110 92)" stroke="#221510" stroke-width="3">
+            <rect x="0" y="-8" width="9" height="14" rx="3" fill="#d9a441"/><rect x="14" y="-8" width="9" height="14" rx="3" fill="#d9a441"/>
+            <rect x="28" y="-8" width="9" height="14" rx="3" fill="#d9a441"/><rect x="42" y="-8" width="9" height="14" rx="3" fill="#cdbd94"/>
+            <rect x="56" y="-8" width="9" height="14" rx="3" fill="#cdbd94"/>
+          </g>
+          <text x="196" y="97" font-size="13" fill="#5c4634" font-style="italic">throttle</text>
+          <g transform="translate(258 90)" stroke="#221510" stroke-width="3">
+            <path d="M-14 6 A 16 16 0 0 1 14 6" fill="none"/>
+            <line x1="0" y1="6" x2="9" y2="-6" stroke-width="4" stroke="#b53a28"/>
+          </g>
+          <g stroke="#221510" stroke-width="5">
+            <rect x="992" y="22" width="264" height="86" rx="10" fill="#f6ecd4"/>
+            <rect x="1186" y="22" width="70" height="86" rx="10" fill="#2f6f74"/>
+          </g>
+          <text x="1221" y="80" font-size="40" font-weight="900" fill="#f6ecd4" text-anchor="middle">P2</text>
+          <text x="1010" y="56" font-size="26" font-weight="900" fill="#221510">★ 5<tspan font-size="15" font-weight="400" fill="#5c4634">／10</tspan></text>
+          <g transform="translate(1010 66)">
+            <rect width="150" height="14" rx="7" fill="#d8c69a" stroke="#221510" stroke-width="3"/>
+            <rect x="3" y="3" width="62" height="8" rx="4" fill="#2f6f74"/>
+          </g>
+          <g transform="translate(1010 92)" stroke="#221510" stroke-width="3">
+            <rect x="0" y="-8" width="9" height="14" rx="3" fill="#d9a441"/><rect x="14" y="-8" width="9" height="14" rx="3" fill="#d9a441"/>
+            <rect x="28" y="-8" width="9" height="14" rx="3" fill="#cdbd94"/><rect x="42" y="-8" width="9" height="14" rx="3" fill="#cdbd94"/>
+            <rect x="56" y="-8" width="9" height="14" rx="3" fill="#cdbd94"/>
+          </g>
+          <text x="1096" y="97" font-size="13" fill="#5c4634" font-style="italic">throttle</text>
+          <g transform="translate(1158 90)" stroke="#221510" stroke-width="3">
+            <path d="M-14 6 A 16 16 0 0 1 14 6" fill="none"/>
+            <line x1="0" y1="6" x2="-4" y2="-8" stroke-width="4" stroke="#2f6f74"/>
+          </g>
+        </g>
+
+        <!-- 顔料の粒状感 + フィルムグレイン -->
+        <rect width="1280" height="720" filter="url(#granul)" opacity=".55"/>
+        <rect width="1280" height="720" filter="url(#grain2)" opacity=".55"/>
+      </svg>
+      <div class="vignette"></div>
+    </div>
+    <p class="caption">図1 — 第二号。水彩の雲、空気遠近で3層に重ねた山なみ、木立と巨大サボテンの額縁。機体は新デザイン。</p>
+  </section>
+
+  <!-- ================= 機体ショーケース ================= -->
+  <section>
+    <div class="sec-head"><h2>二、機体「レッド・バロン号」新デザイン</h2><div class="rule"></div></div>
+    <p class="sec-note">
+      参考画像に寄せた複葉機。<b>太い黒輪郭</b>、エナメルの艶（背に走るハイライト）、大きなスピナーコーンと
+      回転ブラーのプロペラ円盤、キャンディストライプの尾翼。手前の翼と<b>奥の翼を描き分けて</b>立体感を出しています。
+      パイロットは載せていません。
+    </p>
+    <div class="hero-card">
+      <div class="art"><svg viewBox="-215 -145 430 290"><g id="hero-p1"></g></svg></div>
+      <div class="txt">
+        <h3>P1「レッド・バロン号」</h3>
+        <p>1つの描画関数からパレット違いで両機を生成する方式は継続。ゲーム内ではこのイラストがそのまま飛びます。</p>
+      </div>
+    </div>
+    <div class="cards">
+      <div class="card">
+        <div class="art"><svg viewBox="-215 -145 430 290"><g id="cu2-p2"></g></svg></div>
+        <h3>P2「ブルーバード号」— 無傷</h3>
+        <p>青緑×クリームのパレット違い。尾翼のストライプとホイールは共通の意匠。</p>
+      </div>
+      <div class="card">
+        <div class="art"><svg viewBox="-215 -145 430 290">
+          <g transform="translate(-118 -6)">
+            <g class="puff"><circle r="20" fill="#f3ede0" stroke="#221510" stroke-width="6"/></g>
+            <g class="puff p2"><circle cy="-14" r="15" fill="#ddd5c4" stroke="#221510" stroke-width="5"/></g>
+          </g>
+          <g id="cu2-p2w"></g>
+        </svg></div>
+        <h3>白煙（HP 70 以下）</h3>
+        <p>機首エンジンから白煙。性能低下（小）。煙は輪郭線つきのカートゥーン調。</p>
+      </div>
+      <div class="card">
+        <div class="art"><svg viewBox="-215 -145 430 290">
+          <g transform="translate(-118 -10)">
+            <g class="puff"><circle r="22" fill="#4a4038" stroke="#221510" stroke-width="6"/></g>
+            <g class="puff p2"><circle cy="-16" r="17" fill="#6a5c4d" stroke="#221510" stroke-width="5"/></g>
+            <g class="puff p3"><circle cy="10" r="13" fill="#4a4038" stroke="#221510" stroke-width="5"/></g>
+          </g>
+          <g id="cu2-p2b" transform="rotate(-6)"></g>
+          <g stroke="#e8a13a" stroke-width="4" stroke-linecap="round">
+            <line x1="-96" y1="24" x2="-78" y2="16"/><line x1="-88" y1="36" x2="-68" y2="30"/>
+          </g>
+        </svg></div>
+        <h3>黒煙（HP 40 以下）</h3>
+        <p>黒煙と排気の火花。性能低下（大）。次の一撃が致命傷になる緊張の状態。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 判断ポイント ================= -->
+  <section>
+    <div class="sec-head"><h2>三、ご判断いただきたい点</h2><div class="rule"></div></div>
+    <div class="check">
+      <ol>
+        <li><b>背景の水彩タッチ</b> — にじみ・粒状感・夕暮れの色はこの方向でよいか（昼・朝焼けなど時間帯バリエーションも作れます）</li>
+        <li><b>機体のディテール</b> — 輪郭の太さ、艶、スピナーコーン、ストライプ尾翼。さらに寄せる要素（機首の排気管、翼のリブ線、ノーズアートなど）があれば具体的に</li>
+        <li><b>コード描画の限界判断</b> — この密度で足りるか。不足なら高解像度スプライト画像方式へ切替を検討</li>
+      </ol>
+    </div>
+  </section>
+
+  <footer>BI-PLANES PROJECT — SAMPLE No.2 — WATERCOLOR SKIES &amp; ENAMEL PLANES</footer>
+</div>
+
+<script>
+/* ================================================================
+   複葉機 第二世代 — 太い黒輪郭 + セルシェード + エナメルの艶
+   ローカル座標: 機首 +x / viewBox目安 -215..215 × -145..145
+   ================================================================ */
+function planeSVG2(c, facing, idp){
+  const I=c.ink, W=6.5;
+  // 奥側の翼を暗色で先に描き、胴体、手前側の翼の順に重ねて立体感を出す
+  return `
+  <g transform="scale(${facing},1)" stroke-linejoin="round" stroke-linecap="round">
+    <defs>
+      <clipPath id="${idp}-fus">
+        <path d="M100,-30 C78,-42 40,-46 -4,-42 C-58,-37 -104,-26 -132,-12 C-142,-7 -142,9 -132,14 C-104,26 -58,34 -4,37 C42,39 80,35 100,29 Z"/>
+      </clipPath>
+      <clipPath id="${idp}-wU">
+        <path d="M52,-86 C68,-86 70,-64 52,-63 C10,-62 -40,-58 -84,-52 C-100,-50 -103,-70 -88,-72 C-46,-78 6,-84 52,-86 Z"/>
+      </clipPath>
+      <clipPath id="${idp}-wL">
+        <path d="M44,26 C60,26 62,48 44,49 C4,52 -36,56 -74,60 C-90,62 -92,42 -77,40 C-40,34 4,29 44,26 Z"/>
+      </clipPath>
+      <clipPath id="${idp}-fin">
+        <path d="M-100,-6 C-112,-26 -126,-50 -140,-68 C-148,-78 -160,-73 -158,-60 L-149,-2 Z"/>
+      </clipPath>
+      <clipPath id="${idp}-tail">
+        <path d="M-100,-4 C-88,-4 -88,12 -100,13 L-156,19 C-171,20 -172,-2 -157,-3 Z"/>
+      </clipPath>
+    </defs>
+
+    <!-- ===== 奥側の上翼（手前の翼のすぐ奥に覗かせて立体感を出す） ===== -->
+    <path d="M46,-100 C60,-100 62,-80 46,-79 C8,-78 -34,-74 -70,-69 C-84,-67 -87,-85 -73,-87 C-38,-92 6,-98 46,-100 Z"
+          fill="${c.creamSh}" stroke="${I}" stroke-width="5.5"/>
+    <path d="M-42,-96 L-24,-97 L-20,-72 L-40,-71 Z" fill="${c.bodySh}"/>
+    <path d="M46,-100 C60,-100 62,-80 46,-79 C8,-78 -34,-74 -70,-69 C-84,-67 -87,-85 -73,-87 C-38,-92 6,-98 46,-100 Z"
+          fill="none" stroke="${I}" stroke-width="5.5"/>
+
+    <!-- ===== 垂直尾翼（キャンディストライプ） ===== -->
+    <path d="M-100,-6 C-112,-26 -126,-50 -140,-68 C-148,-78 -160,-73 -158,-60 L-149,-2 Z"
+          fill="${c.cream}" stroke="${I}" stroke-width="${W}"/>
+    <g clip-path="url(#${idp}-fin)">
+      <path d="M-186,-58 L-158,-84 L-140,-64 L-168,-38 Z" fill="${c.body}"/>
+      <path d="M-166,-26 L-138,-52 L-120,-32 L-148,-6 Z" fill="${c.body}"/>
+      <path d="M-146,6 L-118,-20 L-100,0 L-128,26 Z" fill="${c.body}"/>
+      <path d="M-168,-12 C-140,2 -114,8 -96,8 L-96,22 L-176,22 Z" fill="#221510" opacity=".18"/>
+    </g>
+    <path d="M-100,-6 C-112,-26 -126,-50 -140,-68 C-148,-78 -160,-73 -158,-60 L-149,-2 Z"
+          fill="none" stroke="${I}" stroke-width="${W}"/>
+    <path d="M-141,-63 L-151,-6" fill="none" stroke="${I}" stroke-width="3.5" opacity=".65"/>
+
+    <!-- ===== 水平尾翼 ===== -->
+    <path d="M-100,-4 C-88,-4 -88,12 -100,13 L-156,19 C-171,20 -172,-2 -157,-3 Z"
+          fill="${c.cream}" stroke="${I}" stroke-width="5.5"/>
+    <g clip-path="url(#${idp}-tail)">
+      <path d="M-180,-10 L-150,-12 L-148,24 L-180,24 Z" fill="${c.body}"/>
+      <path d="M-176,10 L-94,4 L-94,24 L-176,24 Z" fill="#221510" opacity=".2"/>
+    </g>
+    <path d="M-100,-4 C-88,-4 -88,12 -100,13 L-156,19 C-171,20 -172,-2 -157,-3 Z"
+          fill="none" stroke="${I}" stroke-width="5.5"/>
+
+    <!-- ===== 支柱（胴体に隠れて上下の隙間にだけ見える） ===== -->
+    <g stroke="${I}" stroke-width="6">
+      <line x1="-30" y1="-58" x2="-34" y2="54"/><line x1="-76" y1="-53" x2="-80" y2="58"/>
+    </g>
+    <g stroke="${I}" stroke-width="2.6" opacity=".5">
+      <line x1="-30" y1="-58" x2="-80" y2="58"/><line x1="-76" y1="-53" x2="-34" y2="54"/>
+    </g>
+
+    <!-- ===== 胴体 ===== -->
+    <path d="M100,-30 C78,-42 40,-46 -4,-42 C-58,-37 -104,-26 -132,-12 C-142,-7 -142,9 -132,14 C-104,26 -58,34 -4,37 C42,39 80,35 100,29 Z"
+          fill="${c.body}" stroke="${I}" stroke-width="${W}"/>
+    <g clip-path="url(#${idp}-fus)">
+      <path d="M104,12 C74,26 30,33 -12,31 C-64,28 -108,18 -142,4 L-142,46 L104,46 Z" fill="#221510" opacity=".24"/>
+      <path d="M78,-35 C52,-42 16,-45 -16,-42 C-46,-40 -74,-34 -98,-26 C-72,-36 -38,-42 -8,-43 C28,-45 60,-41 78,-35 Z"
+            fill="#ffffff" opacity=".55"/>
+      <path d="M56,-48 L72,-48 L72,46 L56,46 Z" fill="${c.cream}"/>
+      <path d="M56,-48 L61,-48 L61,46 L56,46 Z" fill="#221510" opacity=".16"/>
+      <ellipse cx="-14" cy="-26" rx="22" ry="10" fill="#241812" stroke="${I}" stroke-width="5"/>
+      <circle cx="-58" cy="0" r="18" fill="${c.cream}" stroke="${I}" stroke-width="5"/>
+      <circle cx="-58" cy="0" r="9" fill="${c.body}" stroke="${I}" stroke-width="3.5"/>
+      <g fill="#221510" opacity=".4">
+        <circle cx="48" cy="-26" r="2.3"/><circle cx="48" cy="-10" r="2.3"/>
+        <circle cx="48" cy="6" r="2.3"/><circle cx="48" cy="22" r="2.3"/>
+      </g>
+    </g>
+    <path d="M100,-30 C78,-42 40,-46 -4,-42 C-58,-37 -104,-26 -132,-12 C-142,-7 -142,9 -132,14 C-104,26 -58,34 -4,37 C42,39 80,35 100,29 Z"
+          fill="none" stroke="${I}" stroke-width="${W}"/>
+    <path d="M10,-36 L17,-50 L25,-47 L19,-33 Z" fill="#cfe3e8" opacity=".92" stroke="${I}" stroke-width="4"/>
+
+    <!-- ===== エンジンカウル + スピナー ===== -->
+    <path d="M96,-34 L110,-34 C130,-34 139,-19 139,0 C139,19 130,33 110,33 L96,33 Z"
+          fill="${c.cream}" stroke="${I}" stroke-width="${W}"/>
+    <path d="M96,33 L110,33 C122,33 130,27 135,17 L96,17 Z" fill="#221510" opacity=".18"/>
+    <path d="M100,-28 L110,-28 C119,-28 124,-24 127,-19 L100,-19 Z" fill="#ffffff" opacity=".6"/>
+    <g fill="#221510" opacity=".45"><circle cx="103" cy="-8" r="2.6"/><circle cx="103" cy="4" r="2.6"/><circle cx="103" cy="16" r="2.6"/></g>
+    <path d="M84,30 L100,38 L95,48 L79,39 Z" fill="#7d6a51" stroke="${I}" stroke-width="4"/>
+    <path d="M139,-15 C158,-11 171,-5 177,0 C171,5 158,11 139,15 Z" fill="${c.cream}" stroke="${I}" stroke-width="5.5"/>
+    <path d="M139,3 C154,5 167,4 177,0 C171,5 158,11 139,15 Z" fill="#221510" opacity=".2"/>
+
+    <!-- キャバン支柱 -->
+    <g stroke="${I}" stroke-width="6"><line x1="22" y1="-64" x2="18" y2="-41"/></g>
+
+    <!-- ===== 手前側の翼（上） ===== -->
+    <path d="M52,-86 C68,-86 70,-64 52,-63 C10,-62 -40,-58 -84,-52 C-100,-50 -103,-70 -88,-72 C-46,-78 6,-84 52,-86 Z"
+          fill="${c.cream}" stroke="${I}" stroke-width="${W}"/>
+    <g clip-path="url(#${idp}-wU)">
+      <path d="M-62,-80 L-40,-82 L-34,-46 L-58,-44 Z" fill="${c.body}"/>
+      <path d="M50,-88 C6,-86 -44,-80 -90,-73 L-90,-79 C-44,-86 6,-91 50,-92 Z" fill="#ffffff" opacity=".5"/>
+      <path d="M54,-67 C12,-65 -40,-59 -96,-52 L-96,-42 L56,-57 Z" fill="#221510" opacity=".12"/>
+    </g>
+    <path d="M52,-86 C68,-86 70,-64 52,-63 C10,-62 -40,-58 -84,-52 C-100,-50 -103,-70 -88,-72 C-46,-78 6,-84 52,-86 Z"
+          fill="none" stroke="${I}" stroke-width="${W}"/>
+
+    <!-- ===== 手前側の翼（下） ===== -->
+    <path d="M44,26 C60,26 62,48 44,49 C4,52 -36,56 -74,60 C-90,62 -92,42 -77,40 C-40,34 4,29 44,26 Z"
+          fill="${c.cream}" stroke="${I}" stroke-width="${W}"/>
+    <g clip-path="url(#${idp}-wL)">
+      <path d="M-54,32 L-32,30 L-26,64 L-50,66 Z" fill="${c.body}"/>
+      <path d="M46,43 C6,47 -40,52 -86,57 L-86,68 L48,56 Z" fill="#221510" opacity=".13"/>
+    </g>
+    <path d="M44,26 C60,26 62,48 44,49 C4,52 -36,56 -74,60 C-90,62 -92,42 -77,40 C-40,34 4,29 44,26 Z"
+          fill="none" stroke="${I}" stroke-width="${W}"/>
+
+    <!-- ===== 主脚 ===== -->
+    <g stroke="${I}" stroke-width="6">
+      <line x1="12" y1="46" x2="20" y2="70"/><line x1="42" y1="42" x2="32" y2="70"/>
+    </g>
+    <circle cx="26" cy="75" r="17" fill="#241812" stroke="${I}" stroke-width="5.5"/>
+    <circle cx="26" cy="75" r="7" fill="${c.cream}" stroke="${I}" stroke-width="3.5"/>
+    <circle cx="26" cy="75" r="2.4" fill="${c.body}"/>
+    <path d="M-128,14 C-135,21 -139,27 -141,33" fill="none" stroke="${I}" stroke-width="5"/>
+    <circle cx="-143" cy="37" r="7" fill="#241812" stroke="${I}" stroke-width="4"/>
+
+    <!-- ===== プロペラ（回転ディスク + 速度線） ===== -->
+    <ellipse cx="168" cy="0" rx="14" ry="88" fill="#ffffff" opacity=".2" stroke="${I}" stroke-width="4.5"/>
+    <g class="propblur">
+      <path d="M168,-82 C179,-48 179,48 168,82" fill="none" stroke="#ffffff" opacity=".75" stroke-width="6"/>
+      <path d="M168,-82 C157,-48 157,48 168,82" fill="none" stroke="#ffffff" opacity=".4" stroke-width="4.5"/>
+      <path d="M168,-56 C175,-32 175,32 168,56" fill="none" stroke="${c.body}" opacity=".4" stroke-width="5"/>
+    </g>
+  </g>`;
+}
+const P1v2={ink:'#221510', body:'#c8342a', bodyDk:'#8f241c', bodySh:'#8e2a22',
+             cream:'#f4e7c6', creamDk:'#cdb488', creamSh:'#c3b28c'};
+const P2v2={ink:'#221510', body:'#2f6f74', bodyDk:'#1d474b', bodySh:'#204d51',
+             cream:'#f4e7c6', creamDk:'#cdb488', creamSh:'#c3b28c'};
+
+/* 気球 第二世代: ストライプの球皮 + 網 + 籐籠 */
+function balloonSVG2(){
+  const I='#221510';
+  return `
+  <g stroke-linejoin="round" stroke-linecap="round">
+    <defs><clipPath id="bal-env">
+      <path d="M0,-78 C50,-78 62,-26 40,10 C28,30 12,40 0,40 C-12,40 -28,30 -40,10 C-62,-26 -50,-78 0,-78 Z"/>
+    </clipPath></defs>
+    <path d="M0,-78 C50,-78 62,-26 40,10 C28,30 12,40 0,40 C-12,40 -28,30 -40,10 C-62,-26 -50,-78 0,-78 Z"
+          fill="#f4e7c6" stroke="${I}" stroke-width="6"/>
+    <g clip-path="url(#bal-env)">
+      <path d="M-14,-80 C-30,-46 -28,0 -12,42 L-34,42 C-52,0 -50,-52 -30,-80 Z" fill="#c8342a"/>
+      <path d="M14,-80 C30,-46 28,0 12,42 L34,42 C52,0 50,-52 30,-80 Z" fill="#c8342a"/>
+      <path d="M-4,-80 L4,-80 C10,-44 10,4 4,42 L-4,42 C-10,4 -10,-44 -4,-80 Z" fill="#d9a441"/>
+      <path d="M-50,6 C-20,20 20,20 50,6 L50,44 L-50,44 Z" fill="#221510" opacity=".16"/>
+      <ellipse cx="-16" cy="-56" rx="18" ry="10" fill="#ffffff" opacity=".5" transform="rotate(-18 -16 -56)"/>
+    </g>
+    <path d="M0,-78 C50,-78 62,-26 40,10 C28,30 12,40 0,40 C-12,40 -28,30 -40,10 C-62,-26 -50,-78 0,-78 Z"
+          fill="none" stroke="${I}" stroke-width="6"/>
+    <path d="M-40,10 C-14,22 14,22 40,10" fill="none" stroke="${I}" stroke-width="4"/>
+    <g stroke="${I}" stroke-width="4"><line x1="-14" y1="39" x2="-10" y2="62"/><line x1="14" y1="39" x2="10" y2="62"/></g>
+    <g>
+      <rect x="-17" y="62" width="34" height="24" rx="6" fill="#a67b46" stroke="${I}" stroke-width="5"/>
+      <g stroke="#7a5730" stroke-width="2.5" opacity=".9">
+        <line x1="-17" y1="70" x2="17" y2="70"/><line x1="-17" y1="78" x2="17" y2="78"/>
+        <line x1="-8" y1="62" x2="-8" y2="86"/><line x1="1" y1="62" x2="1" y2="86"/><line x1="10" y1="62" x2="10" y2="86"/>
+      </g>
+      <path d="M-22,74 a5 7 0 1 0 0 .1 Z" fill="#8a6a3e" stroke="${I}" stroke-width="3.5"/>
+      <path d="M22,74 a5 7 0 1 0 0 .1 Z" fill="#8a6a3e" stroke="${I}" stroke-width="3.5"/>
+    </g>
+  </g>`;
+}
+
+document.getElementById('hero-p1').innerHTML = planeSVG2(P1v2, 1, 'h1');
+document.getElementById('scene-p1').innerHTML = planeSVG2(P1v2, 1, 's1');
+document.getElementById('scene-p2').innerHTML = planeSVG2(P2v2, -1, 's2');
+document.getElementById('cu2-p2').innerHTML = planeSVG2(P2v2, -1, 'c1');
+document.getElementById('cu2-p2w').innerHTML = planeSVG2(P2v2, -1, 'c2');
+document.getElementById('cu2-p2b').innerHTML = planeSVG2(P2v2, -1, 'c3');
+document.getElementById('balloon2').innerHTML = balloonSVG2();
+</script>
