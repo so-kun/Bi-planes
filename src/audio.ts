@@ -8,6 +8,56 @@ import { note } from './diagnostics';
 
 type Ctx = AudioContext;
 
+/**
+ * 雑音の素は**一度だけ**作って使い回す。
+ *
+ * もとは音を鳴らすたびに `createBuffer` して `Math.random()` で埋めていた。
+ * 機銃は 0.09 秒ごとに鳴るので、2機ぶんで毎秒 42 万回の乱数と 1.7MB の確保 ――
+ * それが全部、描画の輪の中で起きていた。速いブラウザなら気づかない程度でも、
+ * 遅いところでは輪ごと詰まり、「音を鳴らすと操作が効かなくなる」ように見える。
+ *
+ * 同じ波形の使い回しで音が単調にならないよう、鳴らすたびに
+ * 読み出しはじめる場所を変える（`noiseFrom`）
+ */
+const NOISE_SEC = 3;
+const noiseBuffers = new WeakMap<Ctx, AudioBuffer>();
+
+function noiseBuffer(ac: Ctx): AudioBuffer {
+  const hit = noiseBuffers.get(ac);
+  if (hit) return hit;
+  const buf = ac.createBuffer(1, Math.floor(ac.sampleRate * NOISE_SEC), ac.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  noiseBuffers.set(ac, buf);
+  return buf;
+}
+
+/** 雑音を読み出しはじめる場所。dur 秒ぶん読み切れる範囲で毎回ずらす */
+function noiseFrom(dur: number): number {
+  return Math.random() * Math.max(0, NOISE_SEC - dur);
+}
+
+/**
+ * タイマーで回す音の処理を包む。
+ *
+ * タイマーはゲームの輪とは別に動くので、ここで例外が出ても画面は止まらない。
+ * ただし黙って壊れ続けるのは困るので、一度失敗したらそのタイマーだけを閉じ、
+ * 何が起きたかを画面に出す
+ */
+function onTimer(what: string, fn: () => void): () => void {
+  let broken = false;
+  return () => {
+    if (broken) return;
+    try {
+      fn();
+    } catch (err) {
+      broken = true;
+      note(`音の一部を止めました（${what}）。ゲームはそのまま続きます。\n  ${String(err)}`);
+      console.error(err);
+    }
+  };
+}
+
 export class Sfx {
   private ac: Ctx | null = null;
   private master!: GainNode;
@@ -78,14 +128,6 @@ export class Sfx {
     return this.muted;
   }
 
-  private noise(sec: number): AudioBuffer {
-    const ac = this.ac!;
-    const buf = ac.createBuffer(1, Math.max(1, Math.floor(ac.sampleRate * sec)), ac.sampleRate);
-    const d = buf.getChannelData(0);
-    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
-    return buf;
-  }
-
   private env(g: GainNode, t0: number, attack: number, peak: number, decay: number): void {
     g.gain.setValueAtTime(0.0001, t0);
     g.gain.linearRampToValueAtTime(peak, t0 + attack);
@@ -96,7 +138,7 @@ export class Sfx {
   private shot(t0: number, big: boolean): void {
     const ac = this.ac!;
     const n = ac.createBufferSource();
-    n.buffer = this.noise(0.4);
+    n.buffer = noiseBuffer(ac);
     const bp = ac.createBiquadFilter();
     bp.type = 'bandpass';
     bp.frequency.value = big ? 420 : 1500;
@@ -104,7 +146,7 @@ export class Sfx {
     const g = ac.createGain();
     this.env(g, t0, 0.004, big ? 1.0 : 0.45, big ? 0.5 : 0.09);
     n.connect(bp); bp.connect(g); g.connect(this.sfxBus);
-    n.start(t0); n.stop(t0 + 0.6);
+    n.start(t0, noiseFrom(0.6)); n.stop(t0 + 0.6);
 
     const o = ac.createOscillator();
     o.type = 'sine';
@@ -128,26 +170,26 @@ export class Sfx {
     // 装填音
     const ac = this.ac;
     const n = ac.createBufferSource();
-    n.buffer = this.noise(0.15);
+    n.buffer = noiseBuffer(ac);
     const hp = ac.createBiquadFilter();
     hp.type = 'highpass'; hp.frequency.value = 2500;
     const g = ac.createGain();
     this.env(g, t + 1.9, 0.004, 0.22, 0.06);
     n.connect(hp); hp.connect(g); g.connect(this.sfxBus);
-    n.start(t + 1.9); n.stop(t + 2.1);
+    n.start(t + 1.9, noiseFrom(0.2)); n.stop(t + 2.1);
   }
 
   hit(): void {
     if (!this.ac) return;
     const ac = this.ac, t = ac.currentTime;
     const n = ac.createBufferSource();
-    n.buffer = this.noise(0.2);
+    n.buffer = noiseBuffer(ac);
     const bp = ac.createBiquadFilter();
     bp.type = 'bandpass'; bp.frequency.value = 2600; bp.Q.value = 2;
     const g = ac.createGain();
     this.env(g, t, 0.003, 0.5, 0.1);
     n.connect(bp); bp.connect(g); g.connect(this.sfxBus);
-    n.start(t); n.stop(t + 0.25);
+    n.start(t, noiseFrom(0.25)); n.stop(t + 0.25);
     for (const f of [3150, 4230]) {
       const o = ac.createOscillator();
       o.type = 'triangle'; o.frequency.value = f;
@@ -162,7 +204,7 @@ export class Sfx {
     if (!this.ac) return;
     const ac = this.ac, t = ac.currentTime;
     const n = ac.createBufferSource();
-    n.buffer = this.noise(1.6);
+    n.buffer = noiseBuffer(ac);
     const lp = ac.createBiquadFilter();
     lp.type = 'lowpass';
     lp.frequency.setValueAtTime(2600, t);
@@ -170,7 +212,7 @@ export class Sfx {
     const g = ac.createGain();
     this.env(g, t, 0.01, 1.15, 1.3);
     n.connect(lp); lp.connect(g); g.connect(this.sfxBus);
-    n.start(t); n.stop(t + 1.6);
+    n.start(t, noiseFrom(1.6)); n.stop(t + 1.6);
 
     const o = ac.createOscillator();
     o.type = 'sine';
@@ -187,13 +229,13 @@ export class Sfx {
     if (!this.ac) return;
     const ac = this.ac, t = ac.currentTime;
     const n = ac.createBufferSource();
-    n.buffer = this.noise(0.1);
+    n.buffer = noiseBuffer(ac);
     const bp = ac.createBiquadFilter();
     bp.type = 'bandpass'; bp.frequency.value = 900; bp.Q.value = 0.7;
     const g = ac.createGain();
     this.env(g, t, 0.002, 0.9, 0.07);
     n.connect(bp); bp.connect(g); g.connect(this.sfxBus);
-    n.start(t); n.stop(t + 0.12);
+    n.start(t, noiseFrom(0.12)); n.stop(t + 0.12);
 
     const o = ac.createOscillator();
     o.type = 'sine';
@@ -226,7 +268,7 @@ export class Sfx {
       o.start(t + i * 0.22); o.stop(t + i * 0.22 + 0.2);
     }
     const n = ac.createBufferSource();
-    n.buffer = this.noise(1.4);
+    n.buffer = noiseBuffer(ac);
     const bp = ac.createBiquadFilter();
     bp.type = 'bandpass'; bp.Q.value = 3;
     bp.frequency.setValueAtTime(700, t);
@@ -236,7 +278,7 @@ export class Sfx {
     g.gain.linearRampToValueAtTime(0.22, t + 0.9);
     g.gain.exponentialRampToValueAtTime(0.0001, t + 1.4);
     n.connect(bp); bp.connect(g); g.connect(this.sfxBus);
-    n.start(t); n.stop(t + 1.45);
+    n.start(t, noiseFrom(1.45)); n.stop(t + 1.45);
   }
 
   /**
@@ -411,33 +453,58 @@ export class Sfx {
 }
 
 /**
- * 音のせいでゲームが止まらないようにする覆い。
+ * 音のせいでゲームが止まらないようにする覆い。やることは2つ。
  *
- * 音の呼び出しは**入力の処理の中から**起きる ―― 最初のキー、あるいは最初に
- * パッドを認識したときに、音を用意しに行く。Phaser は毎フレームの処理を
- * 済ませてから次のフレームを予約するので、ここで例外が出ると画面がその場で止まり、
- * **キーもパッドも一切効かなくなる**。原因が音でも、症状は「操作を受け付けない」になる。
+ * **1. 例外を外に出さない。** 音の呼び出しは入力や毎フレームの処理の中から起きる。
+ * Phaser は毎フレームの処理を済ませてから次のフレームを予約するので、ここで例外が出ると
+ * 画面がその場で止まり、**キーもパッドも一切効かなくなる**。
+ * 原因が音でも、症状は「操作を受け付けない」になる。
  *
- * そこで、外から呼ばれる口をすべて包む。一度でも失敗したら以後は音なしで進み、
- * 何が起きたかは画面に出す。個々のメソッドに try を書くと、あとで足したものを
- * 包み忘れるので、入口をまとめて覆っている。
+ * **2. フレームの処理そのものから外へ出す。** 例外を止めるだけでは足りない ――
+ * 音を組むのに時間がかかれば、そのぶんフレームが延びて、やはり操作が鈍る。
+ * 呼ばれた時点では予約だけして、実際の組み立ては**そのフレームの処理が終わってから**
+ * 走らせる。マイクロタスクなので同じ「仕事」の中に留まり、ブラウザの
+ * 「操作があるまで鳴らせない」判定（ユーザー操作の資格）も失わない。
+ *
+ * ただし `resume` だけは別で、その場で走らせる。AudioContext を作って動かすのは
+ * 操作の直後でなければ断られることがあるため。戻り値を使うもの（`toggle*`）も同じ。
  */
-function neverThrows<T extends object>(target: T): T {
+const SYNC = new Set(['resume', 'toggleMute', 'toggleBgm']);
+
+function guarded<T extends object>(target: T): T {
   let dead = false;
+  const fail = (key: string | symbol, err: unknown): void => {
+    dead = true;
+    note(`音を用意できませんでした（${String(key)}）。以後は音なしで続けます。\n  ${String(err)}`);
+    console.error(err);
+  };
   return new Proxy(target, {
     get(obj, key, recv) {
       const v = Reflect.get(obj, key, recv);
       if (typeof v !== 'function') return v;
-      return (...args: unknown[]): unknown => {
+      const fn = v as (...a: unknown[]) => unknown;
+      if (SYNC.has(key as string)) {
+        return (...args: unknown[]): unknown => {
+          if (dead) return undefined;
+          try {
+            return fn.apply(obj, args);
+          } catch (err) {
+            fail(key, err);
+            return undefined;
+          }
+        };
+      }
+      return (...args: unknown[]): undefined => {
         if (dead) return undefined;
-        try {
-          return (v as (...a: unknown[]) => unknown).apply(obj, args);
-        } catch (err) {
-          dead = true;
-          note(`音を用意できませんでした（${String(key)}）。以後は音なしで続けます。\n  ${String(err)}`);
-          console.error(err);
-          return undefined;
-        }
+        queueMicrotask(() => {
+          if (dead) return;
+          try {
+            fn.apply(obj, args);
+          } catch (err) {
+            fail(key, err);
+          }
+        });
+        return undefined;
       };
     },
   });
@@ -448,7 +515,7 @@ function neverThrows<T extends object>(target: T): T {
  * 画面ごとに作ると AudioContext が増え、BGM が二重に鳴ったり、
  * タイトルで鳴らしはじめた曲が対戦に移った瞬間に止まったりする
  */
-export const sfx = neverThrows(new Sfx());
+export const sfx = guarded(new Sfx());
 
 /** プロペラのチョップ感を AM で作るエンジン音 */
 class EngineVoice {
@@ -516,10 +583,10 @@ class EngineVoice {
 
     if (strained && this.knocker === null) {
       // 水温が振り切れる手前の、金属を叩くようなノッキング
-      this.knocker = window.setInterval(() => {
+      this.knocker = window.setInterval(onTimer('ノッキング', () => {
         if (Math.random() < 0.25) return;
         this.knock();
-      }, 130);
+      }), 130);
     } else if (!strained && this.knocker !== null) {
       clearInterval(this.knocker);
       this.knocker = null;
@@ -527,14 +594,14 @@ class EngineVoice {
 
     if (damaged && this.sputter === null) {
       // 被弾したエンジンは息継ぎする
-      this.sputter = window.setInterval(() => {
+      this.sputter = window.setInterval(onTimer('息継ぎ', () => {
         const now = this.ac.currentTime;
         this.base.gain.setValueAtTime(0.42, now);
         if (Math.random() < 0.6) {
           this.base.gain.setValueAtTime(0.05, now + 0.03);
           this.base.gain.setValueAtTime(0.42, now + 0.1 + Math.random() * 0.12);
         }
-      }, 300);
+      }), 300);
     } else if (!damaged && this.sputter !== null) {
       clearInterval(this.sputter);
       this.sputter = null;
@@ -614,13 +681,6 @@ abstract class Track {
     return 440 * Math.pow(2, (n - 69) / 12);
   }
 
-  protected noise(sec: number): AudioBuffer {
-    const buf = this.ac.createBuffer(1, Math.floor(this.ac.sampleRate * sec), this.ac.sampleRate);
-    const d = buf.getChannelData(0);
-    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
-    return buf;
-  }
-
   private stepTime(step: number): number {
     if (!this.swing) return step * this.stepDur;
     return Math.floor(step / 2) * 2 * this.stepDur + (step % 2 ? this.stepDur * 1.32 : 0);
@@ -640,12 +700,21 @@ abstract class Track {
       origin + Math.floor(step / this.steps) * loop + this.stepTime(step % this.steps);
     this.began();
 
+    // ここはタイマーの中なので、例外を出しても画面は止まらない。
+    // ただし次の予約に届かず曲がそこで途切れるので、受け止めて曲だけを閉じる
     const tick = (): void => {
       if (!this.playing) return;
-      const ahead = this.ac.currentTime + 0.3;
-      while (timeOf(this.step) < ahead) {
-        this.emit(this.step % this.steps, timeOf(this.step));
-        this.step++;
+      try {
+        const ahead = this.ac.currentTime + 0.3;
+        while (timeOf(this.step) < ahead) {
+          this.emit(this.step % this.steps, timeOf(this.step));
+          this.step++;
+        }
+      } catch (err) {
+        this.playing = false;
+        note(`曲を止めました。ゲームはそのまま続きます。\n  ${String(err)}`);
+        console.error(err);
+        return;
       }
       this.timer = window.setTimeout(tick, 80);
     };
@@ -724,7 +793,7 @@ class BattleBgm extends Track {
 
   private ride(t: number, accent: boolean): void {
     const n = this.ac.createBufferSource();
-    n.buffer = this.noise(0.12);
+    n.buffer = noiseBuffer(this.ac);
     const hp = this.ac.createBiquadFilter();
     hp.type = 'highpass'; hp.frequency.value = 6200;
     const g = this.ac.createGain();
@@ -750,23 +819,23 @@ class BattleBgm extends Track {
   /** レコードのノイズ */
   protected override began(): void {
     const n = this.ac.createBufferSource();
-    n.buffer = this.noise(2); n.loop = true;
+    n.buffer = noiseBuffer(this.ac); n.loop = true;
     const hp = this.ac.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 900;
     const lp = this.ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 3800;
     const g = this.ac.createGain(); g.gain.value = 0.016;
     n.connect(hp); hp.connect(lp); lp.connect(g); g.connect(this.out);
     n.start();
     this.crackleSrc = n;
-    this.crackleTimer = window.setInterval(() => {
+    this.crackleTimer = window.setInterval(onTimer('レコードの針音', () => {
       if (!this.playing) return;
       const t = this.ac.currentTime + Math.random() * 0.4;
       const p = this.ac.createBufferSource();
-      p.buffer = this.noise(0.012);
+      p.buffer = noiseBuffer(this.ac);
       const pg = this.ac.createGain();
       pg.gain.value = 0.1 + Math.random() * 0.12;
       p.connect(pg); pg.connect(this.out);
-      p.start(t);
-    }, 700);
+      p.start(t, noiseFrom(0.012)); p.stop(t + 0.012);
+    }), 700);
   }
 
   protected override ended(): void {
@@ -867,24 +936,24 @@ class MenuBgm extends Track {
 
   private snare(t: number, peak: number): void {
     const n = this.ac.createBufferSource();
-    n.buffer = this.noise(0.1);
+    n.buffer = noiseBuffer(this.ac);
     const hp = this.ac.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 1400;
     const g = this.ac.createGain();
     g.gain.setValueAtTime(peak, t);
     g.gain.exponentialRampToValueAtTime(0.0001, t + 0.07);
     n.connect(hp); hp.connect(g); g.connect(this.out);
-    n.start(t); n.stop(t + 0.09);
+    n.start(t, noiseFrom(0.09)); n.stop(t + 0.09);
   }
 
   private cymbal(t: number): void {
     const n = this.ac.createBufferSource();
-    n.buffer = this.noise(0.7);
+    n.buffer = noiseBuffer(this.ac);
     const hp = this.ac.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 4200;
     const g = this.ac.createGain();
     g.gain.setValueAtTime(0.13, t);
     g.gain.exponentialRampToValueAtTime(0.0001, t + 0.6);
     n.connect(hp); hp.connect(g); g.connect(this.out);
-    n.start(t); n.stop(t + 0.65);
+    n.start(t, noiseFrom(0.65)); n.stop(t + 0.65);
   }
 
   protected override emit(s: number, t: number): void {

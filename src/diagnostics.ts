@@ -60,25 +60,73 @@ function describe(err: unknown): string {
   return String(err);
 }
 
+const guarded = new WeakSet<object>();
+let loopFailures = 0;
+
 /**
  * Phaser の毎フレームの呼び出しを包んで、例外が出ても輪を止めないようにする。
- * 出た例外は画面に出す（同じものは一度だけ）
+ *
+ * **毎フレーム掛け直す**必要がある。Phaser は `raf.callback` に入れた関数を
+ * 差し替えることがあるため ―― 起動のときはもちろん（`ready` が出るのは
+ * 輪が始まる**前**なので、そこで包んでも直後に上書きされる）、
+ * 画面から目を離して戻ったとき（`TimeStep.wake`）にも入れ直される。
+ * 一度だけ包む書き方だと、包みが黙って外れたまま気づけない
  */
 function guardLoop(game: Phaser.Game): void {
   const raf = (game.loop as unknown as { raf?: { callback: (t: number) => void } }).raf;
-  if (!raf || typeof raf.callback !== 'function') return;
+  if (!raf || typeof raf.callback !== 'function' || guarded.has(raf.callback)) return;
   const step = raf.callback;
-  let failures = 0;
-  raf.callback = (time: number): void => {
+  const wrapped = (time: number): void => {
     try {
       step(time);
     } catch (err) {
-      failures++;
-      note(`描画中にエラーが出ました（${failures} 回目・${activeScenes(game)}）。続行します。`
+      loopFailures++;
+      note(`描画中にエラーが出ました（${loopFailures} 回目・${activeScenes(game)}）。続行します。`
         + `\n  ${describe(err)}`);
       console.error(err);
     }
   };
+  guarded.add(wrapped);
+  raf.callback = wrapped;
+}
+
+/**
+ * 画面ごとの update を包む。
+ *
+ * Phaser の1フレームは **画面の update → 描画前の処理 → 描画** の順で走り、
+ * **キーとパッドの読み取りは「描画前の処理」でまとめて行われる**
+ * （`InputManager.preRender` が `Game.step` の `PRE_RENDER` で呼ばれる）。
+ * つまり画面の update で例外が出ると、そこから先へ進めず、
+ * 絵が止まるだけでなく **キーもパッドも一切読まれなくなる**。
+ * 「一度何かすると以後まったく効かない」という症状はこれで起きる。
+ *
+ * 輪そのものを包む `guardLoop` だけでは足りない ―― 輪は回り続けても、
+ * 毎フレーム同じところで落ちれば入力はやはり読まれないまま。
+ * update の中で受け止めて、その先の処理へ進ませる必要がある。
+ *
+ * Phaser は `scene.update` を `sys.sceneUpdate` に写して持つので、そちらを差し替える。
+ * 画面は始まった時点で用意されるものもあるため、毎フレーム未処理のものを拾う
+ */
+function guardSceneUpdates(game: Phaser.Game): void {
+  for (const scene of game.scene.scenes) {
+    const sys = scene.sys as unknown as { sceneUpdate?: (t: number, d: number) => void };
+    const fn = sys.sceneUpdate;
+    if (typeof fn !== 'function' || guarded.has(fn)) continue;
+    let failures = 0;
+    const wrapped = function (this: Phaser.Scene, time: number, delta: number): void {
+      try {
+        fn.call(this, time, delta);
+      } catch (err) {
+        failures++;
+        note(`${scene.scene.key} の処理でエラーが出ました（${failures} 回目）。`
+          + '操作は生かしたまま続けます。'
+          + `\n  ${describe(err)}`);
+        console.error(err);
+      }
+    };
+    guarded.add(wrapped);
+    sys.sceneUpdate = wrapped;
+  }
 }
 
 /** 動いている画面の名前。どこで止まったかを知らせるのに使う */
@@ -118,8 +166,14 @@ export function installDiagnostics(game: Phaser.Game): void {
     note(`処理されなかったエラー: ${describe(e.reason)}`);
   });
 
-  game.events.once('ready', () => {
+  // 包みは毎フレーム掛け直す。Phaser 側で入れ替わることがあるうえ、
+  // 画面は始まった時点で用意されるものもあるため（下の各関数は掛け済みなら何もしない）
+  game.events.on('prestep', () => {
     guardLoop(game);
+    guardSceneUpdates(game);
+  });
+
+  game.events.once('ready', () => {
     watchHeartbeat(game);
     // フィルム効果は WebGL でしか出せない。Canvas に落ちていると
     // 「Safari では出るのに Chrome では出ない」といった食い違いになる
