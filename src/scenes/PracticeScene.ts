@@ -266,6 +266,8 @@ export class PracticeScene extends Phaser.Scene {
     this.keys.title.on('down', () => { sfx.stopEngines(); this.scene.start('Title'); });
     this.keys.mute.on('down', () => sfx.toggleMute());
     this.keys.bgm.on('down', () => sfx.toggleBgm());
+    // ステージ選択の曲を引きずらないよう、ここで対戦と同じ曲に入れ替える
+    sfx.playBgm('battle');
     for (let i = 0; i < 5; i++) this.keys[`f${i}`].on('down', () => this.film?.setLevel(i));
   }
 

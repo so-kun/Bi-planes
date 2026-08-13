@@ -64,7 +64,6 @@ export class PlayScene extends Phaser.Scene {
   private keyGuard!: StuckKeyGuard;
   /** パッドを認識したときに一度だけ音を起こす */
   private padWoke = false;
-  private bgmStarted = false;
   private bgmOn = false;
   /** フィルム処理が外れていないか見張る間隔 */
   private filmWatchdog = 1;
@@ -122,6 +121,9 @@ export class PlayScene extends Phaser.Scene {
       for (let n = 0; n < this.startAi[i]; n++) this.cycleAi(p);
     });
     this.aiText.setAlpha(0);
+    // ステージ選択の曲が鳴っていれば、ここで対戦の曲に入れ替わる。
+    // まだ音を鳴らせない場合（この画面から直に始めたとき）は wakeAudio で鳴りだす
+    this.startBgm();
     this.beginCountdown();
   }
 
@@ -291,12 +293,13 @@ export class PlayScene extends Phaser.Scene {
   private wakeAudio(): void {
     sfx.resume();
     sfx.startEngines(this.players.length);
-    // BGM は最初から鳴らす。ブラウザの決まりで音を出せるようになった時点が
-    // この呼び出しなので、ここで始める（B キーで止められる）
-    if (!this.bgmStarted) {
-      this.bgmStarted = true;
-      this.bgmOn = sfx.toggleBgm();
-    }
+    this.startBgm();
+  }
+
+  /** 対戦の曲へ。B キーで切ってあれば鳴らない（playBgm は同じ曲なら何もしない） */
+  private startBgm(): void {
+    sfx.playBgm('battle');
+    this.bgmOn = sfx.bgmPlaying;
   }
 
   // ---------------------------------------------------------------- 進行

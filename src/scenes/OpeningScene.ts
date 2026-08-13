@@ -33,6 +33,9 @@ export class OpeningScene extends Phaser.Scene {
     this.started = false;
     this.t = 0;
 
+    // ステージ選択から戻ってきたときは曲を止める。ここは絵だけの画面
+    sfx.stopBgm();
+
     const bg = this.add.image(0, 0, 'title-art').setOrigin(0);
     bg.setDisplaySize(VIEW.width, VIEW.height);
 
@@ -58,7 +61,7 @@ export class OpeningScene extends Phaser.Scene {
     if (this.started) return;
     this.started = true;
     sfx.resume();
-    sfx.beep(true);
+    sfx.menuDecide();
     this.scene.start('Title');
   }
 

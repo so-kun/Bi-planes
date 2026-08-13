@@ -70,6 +70,10 @@ export class TitleScene extends Phaser.Scene {
     // 濃くしすぎると絵が灰色になってしまうので、字に縁取りを付けたぶん薄めにする
     this.add.rectangle(0, 0, VIEW.width, VIEW.height, 0x10233a, 0.32).setOrigin(0);
 
+    // ステージ選択の曲。対戦の曲とは別の行進曲で、対戦に入ると自動で入れ替わる。
+    // 音を鳴らせるのはオープニングで何か押されたあとなので、ここでは通るだけのこともある
+    sfx.playBgm('menu');
+
     this.setupFilm();
     this.drawMarquee();
     this.drawMenu();
@@ -150,9 +154,8 @@ export class TitleScene extends Phaser.Scene {
       enter: KEY.ENTER, space: KEY.SPACE, back: KEY.ESC,
     }) as Record<string, Phaser.Input.Keyboard.Key>;
 
-    // ブラウザは操作があるまで音を鳴らせない。タイトルで触ってもらえれば
-    // 対戦に入る頃には BGM が鳴っている
-    const wake = (): void => { sfx.resume(); };
+    // ブラウザは操作があるまで音を鳴らせない。ここで起こして、曲も鳴らしはじめる
+    const wake = (): void => { sfx.resume(); sfx.playBgm('menu'); };
     kb.on('keydown', wake);
     this.input.on('pointerdown', wake);
 
@@ -161,18 +164,26 @@ export class TitleScene extends Phaser.Scene {
     for (const k of ['left', 'a']) keys[k].on('down', () => this.pick(-1));
     for (const k of ['right', 'd']) keys[k].on('down', () => this.pick(1));
     for (const k of ['enter', 'space']) keys[k].on('down', () => this.start());
-    keys.back.on('down', () => { if (!this.started) this.scene.start('Opening'); });
+    keys.back.on('down', () => {
+      if (this.started) return;
+      sfx.menuBack();
+      this.scene.start('Opening');
+    });
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => { kb.removeAllKeys(true); });
   }
 
   private move(d: number): void {
     this.mode = (this.mode + d + MODES.length) % MODES.length;
+    sfx.menuMove();
     this.refresh();
   }
 
   private pick(d: number): void {
-    this.level = Phaser.Math.Clamp(this.level + d, 1, AI_LEVELS.length);
+    const next = Phaser.Math.Clamp(this.level + d, 1, AI_LEVELS.length);
+    // 端で止まっているときは鳴らさない。変わっていないのに音がするとうるさい
+    if (next !== this.level) sfx.menuLevel(d < 0 ? -1 : 1);
+    this.level = next;
     this.refresh();
   }
 
@@ -200,7 +211,7 @@ export class TitleScene extends Phaser.Scene {
     if (this.started) return;
     this.started = true;
     sfx.resume();
-    sfx.beep(true);
+    sfx.menuDecide();
     const m = MODES[this.mode];
     if (m.scene === 'Practice') this.scene.start('Practice');
     else this.scene.start('Play', { p1Ai: m.p1Ai(this.level), p2Ai: m.p2Ai(this.level) });
