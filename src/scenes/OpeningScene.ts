@@ -14,6 +14,7 @@ import { VIEW } from '../config';
 import { sfx } from '../audio';
 import { attachFilm } from '../fx/attachFilm';
 import { PadInput } from '../input/PadInput';
+import { PadMenu } from '../input/PadMenu';
 
 /** 完成図では "PRESS START" がこの高さにあった。同じ所に出す */
 const PROMPT_Y = VIEW.height - 68;
@@ -21,6 +22,7 @@ const PROMPT_Y = VIEW.height - 68;
 export class OpeningScene extends Phaser.Scene {
   private prompt!: Phaser.GameObjects.Text;
   private pad = new PadInput(0);
+  private padMenu = new PadMenu();
   private started = false;
   private t = 0;
 
@@ -32,6 +34,9 @@ export class OpeningScene extends Phaser.Scene {
     // 画面を作り直しても構築子は呼ばれないので、ここで戻す
     this.started = false;
     this.t = 0;
+    // ステージ選択から ×／B で戻ってくる。そのボタンがまだ押されたままだと
+    // 戻った瞬間にまた先へ進んでしまうので、指を離すまで受け付けない
+    this.padMenu.disarm();
 
     // ステージ選択から戻ってきたときは曲を止める。ここは絵だけの画面
     sfx.stopBgm();
@@ -40,7 +45,7 @@ export class OpeningScene extends Phaser.Scene {
     bg.setDisplaySize(VIEW.width, VIEW.height);
 
     this.prompt = this.add.text(VIEW.width / 2, PROMPT_Y,
-      'PRESS A BUTTON OR ENTER KEY', {
+      'PRESS ENTER KEY  OR  ○ A BUTTON', {
         fontFamily: 'Georgia, "Times New Roman", serif', fontSize: '30px', color: '#f4e6c8',
         stroke: '#241a12', strokeThickness: 6,
       }).setOrigin(0.5).setDepth(10);
@@ -70,8 +75,10 @@ export class OpeningScene extends Phaser.Scene {
     // 「押してください」はゆっくり明滅させる。動きがないと止まって見える
     this.prompt.setAlpha(0.45 + 0.55 * (0.5 + 0.5 * Math.sin(this.t * 3.2)));
 
-    const s = this.pad.read();
-    if (s.connected && (s.mg || s.cannonEdge || s.throttle || s.rollEdge !== 0)) this.start();
+    // パッドは決定（○／A）と Start だけ。どのボタンでも進む作りにすると、
+    // ステージ選択から ×／B で戻った直後にまた進んでしまう
+    const m = this.padMenu.read(this.pad.read());
+    if (m.decide || m.start) this.start();
   }
 
 }

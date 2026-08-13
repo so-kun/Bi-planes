@@ -3,7 +3,7 @@
  *
  * 背景はオープニングと同じ絵から、ロゴと機体を外したもの。
  * 1人・2人・プラクティス・フリープレイの4つと、コンピュータの腕前を選ぶ。
- * 上下で遊び方、左右で腕前。決定は Enter か Space、パッドなら ○／A。
+ * 上下で遊び方、左右で腕前。決定は Enter（パッドは ○／A）、戻るは Esc（×／B）。
  */
 
 import Phaser from 'phaser';
@@ -12,6 +12,7 @@ import { AI_LEVELS } from '../ai/Pilot';
 import { sfx } from '../audio';
 import { attachFilm } from '../fx/attachFilm';
 import { PadInput } from '../input/PadInput';
+import { PadMenu } from '../input/PadMenu';
 import { StuckKeyGuard } from '../input/StuckKeyGuard';
 
 const KEY = Phaser.Input.Keyboard.KeyCodes;
@@ -53,6 +54,7 @@ export class TitleScene extends Phaser.Scene {
   private levelLabel!: Phaser.GameObjects.Text;
   private cursor!: Phaser.GameObjects.Text;
   private pad = new PadInput(0);
+  private padMenu = new PadMenu();
   private padUpHeld = false;
   private started = false;
   /**
@@ -72,6 +74,8 @@ export class TitleScene extends Phaser.Scene {
     // 遊び方と腕前はあえて残す ―― 前回選んだものがそのまま出るほうが早い
     this.started = false;
     this.padUpHeld = false;
+    // 前の画面で押したボタンが残っていても、指を離すまで反応しない
+    this.padMenu.disarm();
 
     const bg = this.add.image(0, 0, 'title-bg').setOrigin(0);
     bg.setDisplaySize(VIEW.width, VIEW.height);
@@ -143,12 +147,12 @@ export class TitleScene extends Phaser.Scene {
 
     // 下段は地面の絵に重なって読めなくなるので、どちらも敷き紙を挟む
     this.add.text(cx, VIEW.height - 96,
-      '↑ ↓ 遊び方　　← → 腕前　　Enter 決定　　Esc タイトルへ', {
+      '↑ ↓ 遊び方　　← → 腕前　　Enter 決定　　Esc 戻る', {
         fontFamily: 'Georgia, serif', fontSize: '20px', color: CREAM,
         backgroundColor: 'rgba(24,16,10,0.55)', padding: { x: 16, y: 7 },
       }).setOrigin(0.5);
     this.add.text(cx, VIEW.height - 46,
-      'パッドはスティック上下で選び、○／A で決定　　'
+      'パッドはスティック上下で選び、○／A で決定・×／B で戻る　　'
       + '機首は引くと上がる（S・↓ で上昇）　　1P W/S・A/D・E・F・G　　2P ↑↓・←→・Shift・, ・.', {
         fontFamily: 'Georgia, serif', fontSize: '15px', color: CREAM,
         backgroundColor: 'rgba(24,16,10,0.5)', padding: { x: 12, y: 5 },
@@ -176,11 +180,7 @@ export class TitleScene extends Phaser.Scene {
     for (const k of ['left', 'a']) keys[k].on('down', () => this.pick(-1));
     for (const k of ['right', 'd']) keys[k].on('down', () => this.pick(1));
     for (const k of ['enter', 'space']) keys[k].on('down', () => this.start());
-    keys.back.on('down', () => {
-      if (this.started) return;
-      sfx.menuBack();
-      this.scene.start('Opening');
-    });
+    keys.back.on('down', () => this.back());
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.keyGuard.detach();
@@ -222,6 +222,12 @@ export class TitleScene extends Phaser.Scene {
     });
   }
 
+  private back(): void {
+    if (this.started) return;
+    sfx.menuBack();
+    this.scene.start('Opening');
+  }
+
   private start(): void {
     if (this.started) return;
     this.started = true;
@@ -247,7 +253,10 @@ export class TitleScene extends Phaser.Scene {
       this.padUpHeld = false;
     }
     if (s.rollEdge !== 0) this.pick(s.rollEdge);
-    if (s.cannonEdge) this.start();
+
+    const m = this.padMenu.read(s);
+    if (m.decide || m.start) this.start();
+    if (m.cancel) this.back();
   }
 
 }

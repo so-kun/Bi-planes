@@ -26,16 +26,37 @@ export interface PadState {
   mg: boolean;
   /** 20mm。押した瞬間だけ true */
   cannonEdge: boolean;
+  /**
+   * 決定（○／A）。押した瞬間だけ true。
+   * 20mm と同じボタンなので、**飛行中の画面では読まないこと**
+   */
+  decideEdge: boolean;
+  /**
+   * 取り消し（×／B）。押した瞬間だけ true。
+   * 7.7mm と同じボタンなので、**飛行中の画面では読まないこと**
+   */
+  cancelEdge: boolean;
+  /** Start。飛行中の中断に使う。武器とは重ならない */
+  startEdge: boolean;
+  /** Select。プラクティスのやり直しに使う。武器とは重ならない */
+  selectEdge: boolean;
+  /** 何かボタンが押されているか。「押されるまで受け付けない」の判定に使う */
+  anyFace: boolean;
 }
 
-const IDLE: PadState = {
+/** パッドが無いときの状態。持ち物を組み立てる側の初期値にも使う */
+export const PAD_IDLE: PadState = {
   connected: false, id: '', unsupported: false,
   pitch: 0, rollEdge: 0, throttle: false, mg: false, cannonEdge: false,
+  decideEdge: false, cancelEdge: false, startEdge: false, selectEdge: false, anyFace: false,
 };
 
 export class PadInput {
   private prevRoll: -1 | 0 | 1 = 0;
   private prevCannon = false;
+  private prevMg = false;
+  private prevStart = false;
+  private prevSelect = false;
 
   /** @param index 標準配列のパッドの何台目を使うか。1P = 0、2P = 1 */
   constructor(private index = 0) {}
@@ -78,7 +99,7 @@ export class PadInput {
         PadInput.warned = true;
         note(`パッドを読めませんでした。パッド無しで続けます。\n  ${String(err)}`);
       }
-      return IDLE;
+      return PAD_IDLE;
     }
   }
 
@@ -89,8 +110,8 @@ export class PadInput {
     if (!pad) {
       // 抜かれたときに立ち上がりの記録が残っていると、挿し直した瞬間に暴発する
       this.prevRoll = 0;
-      this.prevCannon = false;
-      return other ? { ...IDLE, id: other.id, unsupported: true } : IDLE;
+      this.prevCannon = this.prevMg = this.prevStart = this.prevSelect = false;
+      return other ? { ...PAD_IDLE, id: other.id, unsupported: true } : PAD_IDLE;
     }
 
     const pressed = (i: number): boolean => pad.buttons[i]?.pressed ?? false;
@@ -118,6 +139,19 @@ export class PadInput {
     const cannonEdge = cannon && !this.prevCannon;
     this.prevCannon = cannon;
 
+    // 7.7mm は押しっぱなしで連射するので、押した瞬間は別に取る（取り消しに使う）
+    const mg = pressed(b.mg);
+    const mgEdge = mg && !this.prevMg;
+    this.prevMg = mg;
+
+    const start = pressed(b.start);
+    const startEdge = start && !this.prevStart;
+    this.prevStart = start;
+
+    const select = pressed(b.select);
+    const selectEdge = select && !this.prevSelect;
+    this.prevSelect = select;
+
     return {
       connected: true,
       id: pad.id,
@@ -125,8 +159,14 @@ export class PadInput {
       pitch: Math.max(-1, Math.min(1, pitch)),
       rollEdge,
       throttle,
-      mg: pressed(b.mg),
+      mg,
       cannonEdge,
+      // 決定と取り消しは武器と同じボタン。飛行中の画面では読まない約束になっている
+      decideEdge: cannonEdge,
+      cancelEdge: mgEdge,
+      startEdge,
+      selectEdge,
+      anyFace: mg || cannon || start || select,
     };
   }
 }
