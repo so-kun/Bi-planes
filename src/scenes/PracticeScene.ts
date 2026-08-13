@@ -1,0 +1,344 @@
+/**
+ * プラクティス。操縦の練習が目的なので、敵も武装も出さない。
+ *
+ * 番号の付いた輪が空に浮かび、その順に潜っていく。全部潜ればステージ終了。
+ * 10 ステージの合計タイムを競い、いちばん短いものをハイスコアとして残す。
+ */
+
+import Phaser from 'phaser';
+import { FILM_DEFAULT, VIEW } from '../config';
+import { sfx } from '../audio';
+import { FilmPipeline } from '../fx/FilmPipeline';
+import { Particles } from '../fx/Particles';
+import { Plane } from '../objects/Plane';
+import { Rings } from '../objects/Rings';
+import { StuckKeyGuard } from '../input/StuckKeyGuard';
+import { PadInput, type PadState } from '../input/PadInput';
+import { Countdown } from '../ui/Countdown';
+import { allStages, formatTime, PRACTICE_STAGES, type Stage } from '../practice/stages';
+
+const KEY = Phaser.Input.Keyboard.KeyCodes;
+const BEST_KEY = 'biplanes.practice.best';
+/** ステージを終えてから次が始まるまでの間 */
+const INTERVAL = 1.8;
+
+export class PracticeScene extends Phaser.Scene {
+  private plane!: Plane;
+  private particles!: Particles;
+  private rings!: Rings;
+  private film: FilmPipeline | null = null;
+  private countdown!: Countdown;
+
+  private keys!: Record<string, Phaser.Input.Keyboard.Key>;
+  private keyGuard!: StuckKeyGuard;
+  private pad = new PadInput(0);
+  private padState!: PadState;
+
+  private stages: Stage[] = [];
+  private stageIndex = 0;
+  /** 今のステージの経過時間 */
+  private stageTime = 0;
+  /** 終わったステージのタイム */
+  private times: number[] = [];
+  /** ステージ間の待ち。0 なら進行中 */
+  private interval = 0;
+  private finished = false;
+  private best: number | null = null;
+  private t = 0;
+  private woke = false;
+  /** フィルム処理が外れていないか見張る間隔 */
+  private filmWatchdog = 1;
+
+  private hud!: Phaser.GameObjects.Graphics;
+  private hudText!: Phaser.GameObjects.Text;
+  private centerText!: Phaser.GameObjects.Text;
+
+  constructor() {
+    super('Practice');
+  }
+
+  create(): void {
+    const bg = this.add.image(0, 0, 'bg-sunset').setOrigin(0);
+    bg.setDisplaySize(VIEW.width, VIEW.height);
+    bg.setDepth(0);
+
+    const below = this.add.container(0, 0).setDepth(10);
+    const above = this.add.container(0, 0).setDepth(40);
+    const fire = this.add.container(0, 0).setDepth(50);
+    this.particles = new Particles(this, below, above, fire);
+
+    this.rings = new Rings(this, 20);
+    this.plane = new Plane(this, {
+      side: 'plane-red', top: 'plane-red-top', under: 'plane-red-under',
+    }, 230, 380, 1);
+    this.plane.container.setDepth(30);
+
+    this.stages = allStages();
+    this.best = loadBest();
+    this.stageIndex = 0;
+    this.times = [];
+    this.finished = false;
+    this.interval = 0;
+
+    this.setupInput();
+    this.setupHud();
+    this.setupFilm();
+
+    this.countdown = new Countdown(this);
+    this.beginStage();
+  }
+
+  // ---------------------------------------------------------------- 進行
+
+  private beginStage(): void {
+    this.rings.load(this.stages[this.stageIndex].rings);
+    this.plane.reset(230, 380, 1);
+    this.stageTime = 0;
+    this.interval = 0;
+    this.countdown.begin();
+    this.centerText.setVisible(false);
+  }
+
+  private finishStage(): void {
+    this.times.push(this.stageTime);
+    sfx.beep(true);
+    this.interval = INTERVAL;
+    const isLast = this.stageIndex >= PRACTICE_STAGES - 1;
+    this.centerText.setText(
+      isLast ? '' : `ステージ ${this.stageIndex + 1} クリア\n${formatTime(this.stageTime)}`,
+    );
+    this.centerText.setVisible(!isLast);
+    if (isLast) this.finishAll();
+  }
+
+  private finishAll(): void {
+    this.finished = true;
+    const total = this.times.reduce((a, b) => a + b, 0);
+    const isBest = this.best === null || total < this.best;
+    if (isBest) {
+      this.best = total;
+      saveBest(total);
+    }
+    this.centerText.setText(
+      `全10ステージ クリア\n\n合計 ${formatTime(total)}\n`
+      + (isBest ? '★ ハイスコア更新 ★' : `ハイスコア ${formatTime(this.best!)}`)
+      + '\n\nEnter でもう一度　　Esc でタイトルへ',
+    );
+    this.centerText.setColor(isBest ? '#ffd76b' : '#f4e6c8');
+    this.centerText.setVisible(true);
+  }
+
+  private restart(): void {
+    this.stageIndex = 0;
+    this.times = [];
+    this.finished = false;
+    this.centerText.setColor('#f4e6c8');
+    this.beginStage();
+  }
+
+  override update(_time: number, delta: number): void {
+    const dt = Math.min(0.05, delta / 1000);
+    this.t += dt;
+    this.keyGuard.update();
+    this.padState = this.pad.read();
+    if (!this.woke && this.padState.connected) { this.woke = true; this.wakeAudio(); }
+    this.watchFilm(dt);
+
+    const live = this.countdown.tick(dt);
+
+    if (this.finished) {
+      // 終わったあとも機体は飛ばしておく。止まった画面より賑やかで、
+      // そのまま操作を試せる
+      this.flyPlane(dt, live);
+    } else if (this.interval > 0) {
+      this.interval -= dt;
+      this.flyPlane(dt, live);
+      if (this.interval <= 0) {
+        this.stageIndex++;
+        this.beginStage();
+      }
+    } else {
+      this.flyPlane(dt, live);
+      if (live) {
+        this.stageTime += dt;
+        if (this.rings.check(this.plane.x, this.plane.y)) {
+          sfx.pop();
+          this.particles.popBalloon(this.plane.x, this.plane.y);
+          if (this.rings.cleared) this.finishStage();
+        }
+      }
+    }
+
+    this.particles.update(dt);
+    this.rings.draw(this.t);
+    this.drawHud();
+  }
+
+  /** 機体を飛ばす。合図の間は出撃位置で待たせる（対戦と同じ） */
+  private flyPlane(dt: number, live: boolean): void {
+    if (!live) {
+      this.plane.state.x = 230;
+      this.plane.state.y = 380;
+      this.plane.state.vx = 260;
+      this.plane.state.vy = 0;
+      this.plane.container.setPosition(230, 380);
+      return;
+    }
+    if (!this.plane.alive) {
+      // 練習なので落ちてもすぐ戻す。タイムは止めない（落ちること自体が損）
+      this.plane.reset(230, 380, 1);
+      return;
+    }
+    // 練習では矢印キーも 1P の操作に使える。相手がいないので取り合いにならない
+    const k = this.keys;
+    const up = k.up.isDown || k.upAlt.isDown;
+    const down = k.down.isDown || k.downAlt.isDown;
+    const byKey = (up ? 1 : 0) - (down ? 1 : 0);
+    const pitch = Math.abs(this.padState.pitch) > Math.abs(byKey) ? this.padState.pitch : byKey;
+    this.plane.setThrottle(k.throttle.isDown || this.padState.throttle ? 1 : 0);
+    this.plane.update(pitch, dt);
+    if (this.padState.rollEdge !== 0) this.plane.roll(this.padState.rollEdge);
+    if (this.plane.y >= VIEW.groundY) {
+      this.particles.explode(this.plane.x, VIEW.groundY, true);
+      sfx.explosion();
+      this.plane.destroy();
+    }
+  }
+
+  // ---------------------------------------------------------------- 入力
+
+  private setupInput(): void {
+    const kb = this.input.keyboard!;
+    this.keys = kb.addKeys({
+      up: KEY.W, down: KEY.S, rollL: KEY.A, rollR: KEY.D,
+      throttle: KEY.E,
+      upAlt: KEY.UP, downAlt: KEY.DOWN, rollLAlt: KEY.LEFT, rollRAlt: KEY.RIGHT,
+      restart: KEY.ENTER, title: KEY.ESC, retry: KEY.R,
+      mute: KEY.M, bgm: KEY.B,
+      f0: KEY.ONE, f1: KEY.TWO, f2: KEY.THREE, f3: KEY.FOUR, f4: KEY.FIVE,
+    }) as Record<string, Phaser.Input.Keyboard.Key>;
+
+    const wake = (): void => this.wakeAudio();
+    kb.on('keydown', wake);
+    this.input.on('pointerdown', wake);
+
+    this.keyGuard = new StuckKeyGuard(this.keys);
+    this.keyGuard.attach();
+    const releaseAll = (): void => { kb.resetKeys(); };
+    const onVisibility = (): void => { if (document.hidden) releaseAll(); };
+    window.addEventListener('blur', releaseAll);
+    window.addEventListener('focus', releaseAll);
+    document.addEventListener('visibilitychange', onVisibility);
+    const core = Phaser.Core.Events;
+    for (const ev of [core.BLUR, core.FOCUS, core.PAUSE, core.RESUME, core.HIDDEN, core.VISIBLE]) {
+      this.game.events.on(ev, releaseAll);
+    }
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.keyGuard.detach();
+      sfx.stopEngines();
+      this.rings.destroy();
+      window.removeEventListener('blur', releaseAll);
+      window.removeEventListener('focus', releaseAll);
+      document.removeEventListener('visibilitychange', onVisibility);
+      for (const ev of [core.BLUR, core.FOCUS, core.PAUSE, core.RESUME, core.HIDDEN, core.VISIBLE]) {
+        this.game.events.off(ev, releaseAll);
+      }
+    });
+
+    for (const key of ['rollL', 'rollLAlt']) this.keys[key].on('down', () => this.plane.roll(-1));
+    for (const key of ['rollR', 'rollRAlt']) this.keys[key].on('down', () => this.plane.roll(1));
+    this.keys.restart.on('down', () => { if (this.finished) this.restart(); });
+    this.keys.retry.on('down', () => { if (!this.finished) this.beginStage(); });
+    this.keys.title.on('down', () => { sfx.stopEngines(); this.scene.start('Title'); });
+    this.keys.mute.on('down', () => sfx.toggleMute());
+    this.keys.bgm.on('down', () => sfx.toggleBgm());
+    for (let i = 0; i < 5; i++) this.keys[`f${i}`].on('down', () => this.film?.setLevel(i));
+  }
+
+  private wakeAudio(): void {
+    sfx.resume();
+    sfx.startEngines(1);
+    sfx.setEngine(0, 2, false);
+  }
+
+  // ---------------------------------------------------------------- 表示
+
+  private setupHud(): void {
+    this.hud = this.add.graphics().setDepth(70);
+    this.hudText = this.add.text(0, 0, '', {
+      fontFamily: 'Georgia, "Times New Roman", serif', fontSize: '20px', color: '#241a12',
+      align: 'center',
+    }).setOrigin(0.5, 0).setDepth(71);
+
+    this.centerText = this.add.text(VIEW.width / 2, VIEW.height / 2 - 40, '', {
+      fontFamily: 'Georgia, "Times New Roman", serif', fontSize: '38px', color: '#f4e6c8',
+      align: 'center', stroke: '#241a12', strokeThickness: 8,
+    }).setOrigin(0.5).setDepth(74).setVisible(false);
+
+    this.add.text(VIEW.width / 2, VIEW.height - 26,
+      '番号の順に輪をくぐる　　W/S・↑↓ 機首　　A/D・←→ ロール　　E 全開　　'
+      + 'R このステージをやり直し　　Esc タイトルへ', {
+        fontFamily: 'Georgia, serif', fontSize: '15px', color: '#f4e6c8',
+        backgroundColor: 'rgba(24,16,10,0.5)', padding: { x: 12, y: 5 },
+      }).setOrigin(0.5).setDepth(71).setAlpha(0.9);
+  }
+
+  private drawHud(): void {
+    const g = this.hud;
+    g.clear();
+    const w = 330;
+    const x = (VIEW.width - w) / 2;
+    g.fillStyle(0xf4e6c8, 1).lineStyle(5, 0x241a12, 1);
+    g.fillRoundedRect(x, 18, w, 62, 9);
+    g.strokeRoundedRect(x, 18, w, 62, 9);
+
+    const total = this.times.reduce((a, b) => a + b, 0) + (this.finished ? 0 : this.stageTime);
+    this.hudText.setPosition(VIEW.width / 2, 26);
+    this.hudText.setText(
+      `ステージ ${Math.min(this.stageIndex + 1, PRACTICE_STAGES)} / ${PRACTICE_STAGES}`
+      + `　　輪 のこり ${this.rings.remaining}\n`
+      + `合計 ${formatTime(total)}`
+      + (this.best !== null ? `　　ハイスコア ${formatTime(this.best)}` : ''),
+    );
+  }
+
+  private setupFilm(): void {
+    const renderer = this.game.renderer;
+    if (!(renderer instanceof Phaser.Renderer.WebGL.WebGLRenderer)) return;
+    if (!renderer.pipelines.has('Film')) renderer.pipelines.addPostPipeline('Film', FilmPipeline);
+    this.cameras.main.setPostPipeline(FilmPipeline);
+    this.film = this.cameras.main.getPostPipeline(FilmPipeline) as FilmPipeline;
+    this.film?.setLevel(FILM_DEFAULT);
+  }
+
+  private watchFilm(dt: number): void {
+    if (!(this.game.renderer instanceof Phaser.Renderer.WebGL.WebGLRenderer)) return;
+    this.filmWatchdog -= dt;
+    if (this.filmWatchdog > 0) return;
+    this.filmWatchdog = 1;
+    if (this.cameras.main.getPostPipeline(FilmPipeline)) return;
+    const level = this.film?.getLevel() ?? FILM_DEFAULT;
+    this.setupFilm();
+    this.film?.setLevel(level);
+  }
+
+}
+
+/** ハイスコアの読み書き。使えない環境（プライベートモード等）でも落ちないようにする */
+function loadBest(): number | null {
+  try {
+    const v = window.localStorage?.getItem(BEST_KEY);
+    const n = v === null || v === undefined ? NaN : Number(v);
+    return Number.isFinite(n) ? n : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveBest(total: number): void {
+  try {
+    window.localStorage?.setItem(BEST_KEY, String(total));
+  } catch {
+    // 保存できなくても遊べる。黙って続ける
+  }
+}
