@@ -11,6 +11,17 @@
  *
  * 「繰り返しの keydown を送らないブラウザ」で誤って解除しないよう、
  * 一度でも繰り返しを観測するまでは働かない。
+ *
+ * これとは別に、**押し直されたのに押しっぱなし扱いのままのキーはその場で解除する**。
+ * Phaser は押しっぱなしのキーには押した合図（Key の down）を出さない
+ * （`Key.onDown` は `isDown` が false のときだけ出す）。離した合図をひとつ取りこぼすと、
+ * そのキーは**二度と反応しなくなる** ―― メニューの上下も、ロールも、機関砲も。
+ * 「一度押したらそれきり効かない」という症状はこれで起きる。
+ *
+ * 取りこぼしは、押し直しの keydown（繰り返しでない keydown）が
+ * 押しっぱなしのキーに届いた時点で分かる。そこで解除しておけば、
+ * このあと Phaser が同じ出来事を処理するときには正しく「押された」と読める
+ * （こちらは捕捉フェーズで先に受け取るため）。
  */
 
 import type Phaser from 'phaser';
@@ -22,15 +33,40 @@ import type Phaser from 'phaser';
  */
 const STALE_MS = 1600;
 
+/**
+ * 前の keydown からこれだけ空いていれば、押しっぱなしの繰り返しではなく押し直し。
+ * OS のキーリピートは長くても 1 秒ほどで始まり、そのあとは数十 ms 間隔で届く
+ */
+const FRESH_MS = 900;
+
 export class StuckKeyGuard {
   private lastDownAt = new Map<number, number>();
   private sawRepeat = false;
   private released = 0;
 
   private readonly onKeyDown = (e: KeyboardEvent): void => {
+    const now = performance.now();
     if (e.repeat) this.sawRepeat = true;
-    this.lastDownAt.set(e.keyCode, performance.now());
+    else this.recover(e.keyCode, now);
+    this.lastDownAt.set(e.keyCode, now);
   };
+
+  /**
+   * 押し直しなのに押しっぱなし扱いのままなら、離した合図を取りこぼしている。解除する。
+   *
+   * 押しっぱなしの繰り返しを「押し直し」と読み違えると、押している間じゅう
+   * ロールや機関砲が出てしまう。繰り返しは数十 ms 間隔で届くので、
+   * 前の keydown から十分に間が空いているときだけ解除する
+   */
+  private recover(code: number, now: number): void {
+    const last = this.lastDownAt.get(code);
+    if (last !== undefined && now - last < FRESH_MS) return;
+    for (const key of Object.values(this.keys)) {
+      if (key.keyCode !== code || !key.isDown) continue;
+      key.reset();
+      this.released++;
+    }
+  }
 
   private readonly onKeyUp = (e: KeyboardEvent): void => {
     this.lastDownAt.delete(e.keyCode);

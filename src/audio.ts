@@ -4,6 +4,7 @@
  */
 
 import { AUDIO } from './config';
+import { note } from './diagnostics';
 
 type Ctx = AudioContext;
 
@@ -25,27 +26,53 @@ export class Sfx {
   /** B キーで切られていないか */
   private bgmEnabled = true;
   muted = false;
+  /** 音の用意に失敗したか。失敗しても、ゲームは音なしで続ける */
+  private failed = false;
 
-  /** 最初の入力で呼ぶ。ブラウザは操作前に音を鳴らせない */
+  /**
+   * 最初の入力で呼ぶ。ブラウザは操作前に音を鳴らせない。
+   *
+   * ここは**入力の処理の中から呼ばれる**ので、例外を外へ出してはいけない。
+   * Phaser は毎フレームの呼び出しが終わってから次のフレームを予約するので、
+   * 途中で例外が出ると輪がそこで止まり、以後どのキーも効かなくなる
+   */
   resume(): void {
+    try {
+      this.open();
+    } catch (err) {
+      if (!this.failed) {
+        this.failed = true;
+        note(`音を出せませんでした。音なしで続けます。\n  ${String(err)}`);
+      }
+    }
+  }
+
+  private open(): void {
+    if (this.failed) return;
     if (!this.ac) {
       const AC = window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      this.ac = new AC();
-      const comp = this.ac.createDynamicsCompressor();
+      // 途中で失敗しても中途半端な状態を残さないよう、組み上げてから this.ac に入れる
+      const ac = new AC();
+      const comp = ac.createDynamicsCompressor();
       comp.threshold.value = -14;
       comp.ratio.value = 5;
-      this.master = this.ac.createGain();
-      this.master.gain.value = AUDIO.master;
-      this.sfxBus = this.ac.createGain();
-      this.musicBus = this.ac.createGain();
-      this.musicBus.gain.value = AUDIO.music;
-      this.engineBus = this.ac.createGain();
-      this.engineBus.gain.value = AUDIO.engine;
-      this.sfxBus.connect(this.master);
-      this.musicBus.connect(this.master);
-      this.engineBus.connect(this.sfxBus);
-      this.master.connect(comp);
-      comp.connect(this.ac.destination);
+      const master = ac.createGain();
+      master.gain.value = AUDIO.master;
+      const sfxBus = ac.createGain();
+      const musicBus = ac.createGain();
+      musicBus.gain.value = AUDIO.music;
+      const engineBus = ac.createGain();
+      engineBus.gain.value = AUDIO.engine;
+      sfxBus.connect(master);
+      musicBus.connect(master);
+      engineBus.connect(sfxBus);
+      master.connect(comp);
+      comp.connect(ac.destination);
+      this.master = master;
+      this.sfxBus = sfxBus;
+      this.musicBus = musicBus;
+      this.engineBus = engineBus;
+      this.ac = ac;
     }
     if (this.ac.state === 'suspended') void this.ac.resume();
   }

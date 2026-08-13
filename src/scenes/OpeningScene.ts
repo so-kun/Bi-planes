@@ -10,9 +10,9 @@
  */
 
 import Phaser from 'phaser';
-import { VIEW, FILM_DEFAULT } from '../config';
+import { VIEW } from '../config';
 import { sfx } from '../audio';
-import { FilmPipeline } from '../fx/FilmPipeline';
+import { attachFilm } from '../fx/attachFilm';
 import { PadInput } from '../input/PadInput';
 
 /** 完成図では "PRESS START" がこの高さにあった。同じ所に出す */
@@ -46,7 +46,7 @@ export class OpeningScene extends Phaser.Scene {
       }).setOrigin(0.5).setDepth(10);
 
     this.setupInput();
-    this.setupFilm();
+    attachFilm(this);
   }
 
   private setupInput(): void {
@@ -74,11 +74,4 @@ export class OpeningScene extends Phaser.Scene {
     if (s.connected && (s.mg || s.cannonEdge || s.throttle || s.rollEdge !== 0)) this.start();
   }
 
-  private setupFilm(): void {
-    const renderer = this.game.renderer;
-    if (!(renderer instanceof Phaser.Renderer.WebGL.WebGLRenderer)) return;
-    if (!renderer.pipelines.has('Film')) renderer.pipelines.addPostPipeline('Film', FilmPipeline);
-    this.cameras.main.setPostPipeline(FilmPipeline);
-    (this.cameras.main.getPostPipeline(FilmPipeline) as FilmPipeline)?.setLevel(FILM_DEFAULT);
-  }
 }
