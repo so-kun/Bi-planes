@@ -13,6 +13,7 @@ import { attachFilm } from '../fx/attachFilm';
 import { Particles } from '../fx/Particles';
 import { Plane } from '../objects/Plane';
 import { Rings } from '../objects/Rings';
+import { PadMenu } from '../input/PadMenu';
 import { StuckKeyGuard } from '../input/StuckKeyGuard';
 import { PadInput, type PadState } from '../input/PadInput';
 import { Countdown } from '../ui/Countdown';
@@ -34,6 +35,8 @@ export class PracticeScene extends Phaser.Scene {
   private keyGuard!: StuckKeyGuard;
   private pad = new PadInput(0);
   private padState!: PadState;
+  /** パッドでの決定・取り消し・中断。武器と同じボタンなので受け付けを絞る */
+  private padMenu = new PadMenu();
 
   private stageIndex = 0;
   /** 前のフレームの機体位置。輪の面を横切ったかの判定に要る */
@@ -128,16 +131,45 @@ export class PracticeScene extends Phaser.Scene {
     this.centerText.setText(
       `全10ステージ クリア\n\n合計 ${formatTime(total)}\n`
       + (isBest ? '★ ハイスコア更新 ★' : `ハイスコア ${formatTime(this.best!)}`)
-      + '\n\nEnter でもう一度　　Esc でタイトルへ',
+      + '\n\nEnter / ○A でもう一度　　Esc / ×B でタイトルへ',
     );
+    // 飛びながら終わるので、指を離すまでパッドを受け付けない
+    this.padMenu.disarm();
     this.centerText.setColor(isBest ? '#ffd76b' : '#f4e6c8');
     this.centerText.setVisible(true);
+  }
+
+  private toTitle(): void {
+    sfx.stopEngines();
+    this.scene.start('Title');
+  }
+
+  /**
+   * パッドでの決定・取り消し・中断。
+   *
+   * 練習中は Start でタイトルへ、Select でやり直し。この2つは武器と重ならないので、
+   * 飛びながら押しても差し支えない。決定と取り消し（○A・×B）は
+   * **全10ステージを終えたあとだけ**読む ―― 対戦の画面と同じ扱いにそろえてある
+   *
+   * @returns 画面を切り替えたか
+   */
+  private readPadMenu(): boolean {
+    const m = this.padMenu.read(this.padState);
+    if (m.start) { this.toTitle(); return true; }
+    if (this.finished) {
+      if (m.decide) { this.restart(); return false; }
+      if (m.cancel) { this.toTitle(); return true; }
+    } else if (m.select) {
+      this.beginStage();
+    }
+    return false;
   }
 
   private restart(): void {
     this.stageIndex = 0;
     this.times = [];
     this.finished = false;
+    this.padMenu.disarm();
     this.centerText.setColor('#f4e6c8');
     this.beginStage();
   }
@@ -148,6 +180,7 @@ export class PracticeScene extends Phaser.Scene {
     this.keyGuard.update();
     this.padState = this.pad.read();
     if (!this.woke && this.padState.connected) { this.woke = true; this.wakeAudio(); }
+    if (this.readPadMenu()) return;
     this.watchFilm(dt);
 
     const live = this.countdown.tick();
@@ -264,7 +297,7 @@ export class PracticeScene extends Phaser.Scene {
     for (const key of ['rollR', 'rollRAlt']) this.keys[key].on('down', () => this.plane.roll(1));
     this.keys.restart.on('down', () => { if (this.finished) this.restart(); });
     this.keys.retry.on('down', () => { if (!this.finished) this.beginStage(); });
-    this.keys.title.on('down', () => { sfx.stopEngines(); this.scene.start('Title'); });
+    this.keys.title.on('down', () => this.toTitle());
     this.keys.mute.on('down', () => sfx.toggleMute());
     this.keys.bgm.on('down', () => sfx.toggleBgm());
     // ステージ選択の曲を引きずらないよう、ここで対戦と同じ曲に入れ替える
@@ -299,7 +332,7 @@ export class PracticeScene extends Phaser.Scene {
 
     this.add.text(VIEW.width / 2, VIEW.height - 26,
       '矢印の向きに輪をくぐる（順番どおりに）　　S/W・↓↑ 機首上げ下げ　　A/D・←→ ロール　　E 全開　　'
-      + 'R このステージをやり直し　　Esc タイトルへ', {
+      + 'R / パッド Select やり直し　　Esc / パッド Start タイトルへ', {
         fontFamily: 'Georgia, serif', fontSize: '15px', color: '#f4e6c8',
         backgroundColor: 'rgba(24,16,10,0.5)', padding: { x: 12, y: 5 },
       }).setOrigin(0.5).setDepth(71).setAlpha(0.9);

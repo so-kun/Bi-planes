@@ -20,8 +20,9 @@ import { Particles } from '../fx/Particles';
 import { Plane, type Facing } from '../objects/Plane';
 import { Balloons } from '../objects/Balloons';
 import { Bullets } from '../objects/Bullets';
+import { PadMenu } from '../input/PadMenu';
 import { StuckKeyGuard } from '../input/StuckKeyGuard';
-import { PadInput, type PadState } from '../input/PadInput';
+import { PadInput, PAD_IDLE, type PadState } from '../input/PadInput';
 import { Pilot, AI_LEVELS } from '../ai/Pilot';
 import { Countdown } from '../ui/Countdown';
 import { Panel, PANEL } from '../ui/Panel';
@@ -47,6 +48,8 @@ interface Player {
   keys: PlayerKeys;
   pad: PadInput;
   padState: PadState;
+  /** パッドでの決定・取り消し・中断。武器と同じボタンなので受け付けを絞る */
+  padMenu: PadMenu;
   score: number;
   respawnTimer: number;
   smokeTimer: { engine: number; handling: number };
@@ -244,7 +247,7 @@ export class PlayScene extends Phaser.Scene {
     }
 
     k.restart.on('down', () => { if (this.winner) this.restart(); });
-    k.title.on('down', () => { sfx.stopEngines(); this.scene.start('Title'); });
+    k.title.on('down', () => this.toTitle());
     k.ai1.on('down', () => this.cycleAi(this.players[0]));
     k.ai2.on('down', () => { if (this.players[1]) this.cycleAi(this.players[1]); });
     k.mute.on('down', () => sfx.toggleMute());
@@ -269,7 +272,8 @@ export class PlayScene extends Phaser.Scene {
     return {
       id, name, color, plane, keys,
       pad: new PadInput(id),
-      padState: { connected: false, id: '', unsupported: false, pitch: 0, rollEdge: 0, throttle: false, mg: false, cannonEdge: false },
+      padState: PAD_IDLE,
+      padMenu: new PadMenu(),
       score: 0,
       respawnTimer: 0,
       smokeTimer: { engine: 0, handling: 0 },
@@ -338,6 +342,7 @@ export class PlayScene extends Phaser.Scene {
       this.padWoke = true;
       this.wakeAudio();
     }
+    if (this.readPadMenu()) return;
 
     const live = this.tickCountdown();
     if (this.running && live) {
@@ -480,6 +485,9 @@ export class PlayScene extends Phaser.Scene {
 
   private finish(p: Player): void {
     this.winner = p;
+    // 撃ち合いの最中に決着が出る。引き金を引いたままの一発で
+    // 「もう一度」が始まらないよう、指を離すまで受け付けない
+    this.disarmPads();
     for (const q of this.players) {
       q.plane.setThrottle(0);
       this.downedTexts[q.id].setVisible(false);
@@ -487,14 +495,47 @@ export class PlayScene extends Phaser.Scene {
     for (const q of this.players) sfx.setEngine(q.id, 1, false);
     this.resultText.setText(
       `${p.name} の勝ち\n\n${this.players[0].score} 対 ${this.players[1].score}\n`
-      + 'Enter でもう一度　　Esc でタイトルへ');
+      + 'Enter / ○A でもう一度　　Esc / ×B でタイトルへ');
     this.resultText.setColor(p.id === 0 ? '#e8836a' : '#8fb6d8');
     this.resultText.setVisible(true);
+  }
+
+  private toTitle(): void {
+    sfx.stopEngines();
+    this.scene.start('Title');
+  }
+
+  /**
+   * パッドでの決定・取り消し・中断。
+   *
+   * **決着が付いてからでないと決定と取り消しは読まない** ―― 飛んでいる間、
+   * この2つは 20mm と 7.7mm だからで、読むと撃つたびに画面が変わってしまう。
+   * 飛行中の中断は Start に分けてある。武器と重ならないので、いつ押しても安全。
+   *
+   * どちらのパッドで押しても効く。1人で遊んでいて 2P 側のパッドしか
+   * つないでいない、といった場合に手が止まらないように
+   *
+   * @returns 画面を切り替えたか。切り替えたなら、このフレームの残りはやらない
+   */
+  private disarmPads(): void {
+    for (const p of this.players) p.padMenu.disarm();
+  }
+
+  private readPadMenu(): boolean {
+    for (const p of this.players) {
+      const m = p.padMenu.read(p.padState);
+      if (m.start) { this.toTitle(); return true; }
+      if (this.running) continue;
+      if (m.decide) { this.restart(); return true; }
+      if (m.cancel) { this.toTitle(); return true; }
+    }
+    return false;
   }
 
   private restart(): void {
     this.winner = null;
     this.resultText.setVisible(false);
+    this.disarmPads();
     for (const p of this.players) {
       p.score = 0;
       p.respawnTimer = 0;
@@ -663,7 +704,7 @@ export class PlayScene extends Phaser.Scene {
       '1P  S/W 機首上げ下げ  A/D ロール  E 全開  F 7.7mm  G 20mm　　'
       + (this.free ? '' : '2P  ↓/↑ 機首上げ下げ  ←/→ ロール  Shift 全開  , 7.7mm  . 20mm　　')
       + `V${this.free ? '' : '/C'} CPU 操縦${this.free ? '' : '（1P/2P）'}`
-      + '  Esc タイトル  1-5 フィルム  B BGM  M 消音  Tab 計器', {
+      + '  Esc / パッド Start タイトル  1-5 フィルム  B BGM  M 消音  Tab 計器', {
         fontFamily: 'Georgia, serif', fontSize: '14px', color: '#f4e6c8',
         backgroundColor: 'rgba(24,16,10,0.5)', padding: { x: 12, y: 5 },
       }).setOrigin(0.5).setDepth(71).setAlpha(0.9);

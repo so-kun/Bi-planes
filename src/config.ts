@@ -173,12 +173,23 @@ export const PAD = {
   deadzone: 0.22,
   /** アナログのトリガーをどこから「押した」とみなすか */
   triggerThreshold: 0.35,
+  /**
+   * ボタンの番号は標準配列のもの。
+   *
+   * **飛んでいる間は武器、メニューでは決定と取り消し**という二役を持たせてある
+   * （○／A = 20mm と決定、×／B = 7.7mm と取り消し）。同じボタンを使うのは、
+   * 家庭用ゲーム機の並びに合わせるため ―― 決定が A、取り消しが B。
+   * 二役が噛み合わないよう、**飛行中の画面では決定と取り消しを読まない**。
+   * 代わりに Start で中断、Select でやり直しができる
+   */
   buttons: {
     mg: 0,        // ×  / B     （Switch は物理配置が入れ替わるが番号は同じ）
     cannon: 1,    // ○  / A
     rollL: 4,     // L1 / L
     rollR: 5,     // R1 / R
     throttle: 7,  // R2 / ZR
+    select: 8,    // Select / Share / −
+    start: 9,     // Start  / Options / ＋
     up: 12, down: 13,   // 十字キー
   },
   axes: {
