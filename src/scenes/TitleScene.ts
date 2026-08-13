@@ -7,11 +7,12 @@
  */
 
 import Phaser from 'phaser';
-import { VIEW, FILM_DEFAULT } from '../config';
+import { VIEW } from '../config';
 import { AI_LEVELS } from '../ai/Pilot';
 import { sfx } from '../audio';
-import { FilmPipeline } from '../fx/FilmPipeline';
+import { attachFilm } from '../fx/attachFilm';
 import { PadInput } from '../input/PadInput';
+import { StuckKeyGuard } from '../input/StuckKeyGuard';
 
 const KEY = Phaser.Input.Keyboard.KeyCodes;
 
@@ -52,6 +53,12 @@ export class TitleScene extends Phaser.Scene {
   private pad = new PadInput(0);
   private padUpHeld = false;
   private started = false;
+  /**
+   * ここにも押しっぱなしの見張りを付ける。Phaser は押しっぱなしのキーには
+   * 押した合図を出さないので、離した合図をひとつ取りこぼすと、
+   * そのキーは二度と反応しなくなる ―― メニューが動かなくなる
+   */
+  private keyGuard!: StuckKeyGuard;
 
   constructor() {
     super('Title');
@@ -74,7 +81,7 @@ export class TitleScene extends Phaser.Scene {
     // 音を鳴らせるのはオープニングで何か押されたあとなので、ここでは通るだけのこともある
     sfx.playBgm('menu');
 
-    this.setupFilm();
+    attachFilm(this);
     this.drawMarquee();
     this.drawMenu();
     this.setupInput();
@@ -154,6 +161,9 @@ export class TitleScene extends Phaser.Scene {
       enter: KEY.ENTER, space: KEY.SPACE, back: KEY.ESC,
     }) as Record<string, Phaser.Input.Keyboard.Key>;
 
+    this.keyGuard = new StuckKeyGuard(keys);
+    this.keyGuard.attach();
+
     // ブラウザは操作があるまで音を鳴らせない。ここで起こして、曲も鳴らしはじめる
     const wake = (): void => { sfx.resume(); sfx.playBgm('menu'); };
     kb.on('keydown', wake);
@@ -170,7 +180,10 @@ export class TitleScene extends Phaser.Scene {
       this.scene.start('Opening');
     });
 
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => { kb.removeAllKeys(true); });
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.keyGuard.detach();
+      kb.removeAllKeys(true);
+    });
   }
 
   private move(d: number): void {
@@ -218,6 +231,7 @@ export class TitleScene extends Phaser.Scene {
   }
 
   override update(): void {
+    this.keyGuard.update();
     // パッドでも選べるようにする。スティックは倒しっぱなしで送り続けないよう、
     // 中立に戻るまで次を受け付けない
     const s = this.pad.read();
@@ -234,12 +248,4 @@ export class TitleScene extends Phaser.Scene {
     if (s.cannonEdge) this.start();
   }
 
-  private setupFilm(): void {
-    const renderer = this.game.renderer;
-    if (!(renderer instanceof Phaser.Renderer.WebGL.WebGLRenderer)) return;
-    if (!renderer.pipelines.has('Film')) renderer.pipelines.addPostPipeline('Film', FilmPipeline);
-    this.cameras.main.setPostPipeline(FilmPipeline);
-    const film = this.cameras.main.getPostPipeline(FilmPipeline) as FilmPipeline;
-    film?.setLevel(FILM_DEFAULT);
-  }
 }

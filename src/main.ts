@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { VIEW } from './config';
 import { sfx } from './audio';
+import { installDiagnostics } from './diagnostics';
 import { BootScene } from './scenes/BootScene';
 import { OpeningScene } from './scenes/OpeningScene';
 import { TitleScene } from './scenes/TitleScene';
@@ -24,6 +25,9 @@ const game = new Phaser.Game({
   },
   scene: [BootScene, OpeningScene, TitleScene, PlayScene, PracticeScene],
 });
+
+// 落ち方を見えるようにする。描画の輪も止まらないように包む
+installDiagnostics(game);
 
 // プレイテスト中に値を覗けるようにしておく。
 // sfx も出しておくと、ブラウザを立ち上げた自動確認から音の状態を測れる

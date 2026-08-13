@@ -11,6 +11,7 @@ import {
 } from '../config';
 import { sfx } from '../audio';
 import { FilmPipeline } from '../fx/FilmPipeline';
+import { attachFilm } from '../fx/attachFilm';
 import { Particles } from '../fx/Particles';
 import { Plane, type Facing } from '../objects/Plane';
 import { Balloons } from '../objects/Balloons';
@@ -19,6 +20,7 @@ import { StuckKeyGuard } from '../input/StuckKeyGuard';
 import { PadInput, type PadState } from '../input/PadInput';
 import { Pilot, AI_LEVELS } from '../ai/Pilot';
 import { Countdown } from '../ui/Countdown';
+import { rendererLine } from '../diagnostics';
 
 const KEY = Phaser.Input.Keyboard.KeyCodes;
 
@@ -580,11 +582,7 @@ export class PlayScene extends Phaser.Scene {
   // ---------------------------------------------------------------- 見た目
 
   private setupFilm(): void {
-    const renderer = this.game.renderer;
-    if (!(renderer instanceof Phaser.Renderer.WebGL.WebGLRenderer)) return;  // Canvas では効かない
-    renderer.pipelines.addPostPipeline('Film', FilmPipeline);
-    this.cameras.main.setPostPipeline(FilmPipeline);
-    this.film = this.cameras.main.getPostPipeline(FilmPipeline) as FilmPipeline;
+    this.film = attachFilm(this, this.film?.getLevel() ?? FILM_DEFAULT);
   }
 
   /**
@@ -600,9 +598,7 @@ export class PlayScene extends Phaser.Scene {
     if (this.filmWatchdog > 0) return;
     this.filmWatchdog = 1;
     if (this.cameras.main.getPostPipeline(FilmPipeline)) return;
-    const level = this.film?.getLevel() ?? FILM_DEFAULT;
-    this.setupFilm();
-    this.film?.setLevel(level);
+    this.setupFilm();          // 強さは掛け直しても引き継がれる
   }
 
   private setupHud(): void {
@@ -663,6 +659,7 @@ export class PlayScene extends Phaser.Scene {
         `  BGM ${this.bgmOn ? 'on' : 'off'}`,
       `キー ${this.keyGuard.heldNames().join(' ') || '(なし)'}` +
         `${this.keyGuard.releasedCount ? `  ／ 押しっぱなしを解除 ${this.keyGuard.releasedCount}回` : ''}`,
+      rendererLine(this.game),
     ].join('\n'));
   }
 

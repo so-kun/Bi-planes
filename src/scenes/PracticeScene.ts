@@ -9,6 +9,7 @@ import Phaser from 'phaser';
 import { FILM_DEFAULT, VIEW } from '../config';
 import { sfx } from '../audio';
 import { FilmPipeline } from '../fx/FilmPipeline';
+import { attachFilm } from '../fx/attachFilm';
 import { Particles } from '../fx/Particles';
 import { Plane } from '../objects/Plane';
 import { Rings } from '../objects/Rings';
@@ -324,12 +325,7 @@ export class PracticeScene extends Phaser.Scene {
   }
 
   private setupFilm(): void {
-    const renderer = this.game.renderer;
-    if (!(renderer instanceof Phaser.Renderer.WebGL.WebGLRenderer)) return;
-    if (!renderer.pipelines.has('Film')) renderer.pipelines.addPostPipeline('Film', FilmPipeline);
-    this.cameras.main.setPostPipeline(FilmPipeline);
-    this.film = this.cameras.main.getPostPipeline(FilmPipeline) as FilmPipeline;
-    this.film?.setLevel(FILM_DEFAULT);
+    this.film = attachFilm(this, this.film?.getLevel() ?? FILM_DEFAULT);
   }
 
   private watchFilm(dt: number): void {
@@ -338,9 +334,7 @@ export class PracticeScene extends Phaser.Scene {
     if (this.filmWatchdog > 0) return;
     this.filmWatchdog = 1;
     if (this.cameras.main.getPostPipeline(FilmPipeline)) return;
-    const level = this.film?.getLevel() ?? FILM_DEFAULT;
-    this.setupFilm();
-    this.film?.setLevel(level);
+    this.setupFilm();          // 強さは掛け直しても引き継がれる
   }
 
 }
