@@ -1,116 +1,161 @@
 /**
  * プラクティスのステージ。
  *
- * 輪の位置と順番は**毎回同じ**にする。乱数で毎回変えるとタイムを比べられず、
- * ハイスコアの意味がなくなるため。ステージ番号を種にした擬似乱数で組み立てて、
- * どの環境でも同じ配置になるようにしてある。
+ * 配置と順番は**全ステージ手で組んである**。乱数で作ると
+ * 「この配置ならこの機動」という狙いが作れないし、タイムも比べられない。
  *
- * 難しさは仕様どおり「輪の数」と「順番の厳しさ」の2つで上げる。
- * 輪の大きさは変えない。
+ * 輪には**くぐる向き**がある。輪の面を、決められた向きに横切ったときだけ通過になる。
+ * 上から乗っても、逆向きに抜けても通らない。この制約があるおかげで、
+ * 「次の輪へどの向きで入るか」を逆算して飛ぶ必要が生まれ、練習になる。
+ *
+ * 狙いは、進むにつれて次の機動が要るようにすること:
+ *   上昇と下降 → 折り返し → 宙返り → インメルマンターン → スプリットS → 組み合わせ
  */
 
 import { VIEW, PLANE } from '../config';
 
-export const PRACTICE_STAGES = 10;
+/** 輪の開口部の半径（長いほうの半径）。ここを機体が横切れば通過 */
+export const RING_RADIUS = PLANE.width * 0.80;
+/** 輪を横から見たときの潰れ具合。小さいほど「横向きの輪」に見える */
+export const RING_SQUASH = 0.30;
 
-/** 輪の内側の半径。ここを機体の中心が通れば潜ったことになる */
-export const RING_RADIUS = PLANE.width * 0.62;
-
-/** 輪を置いてよい範囲。地面と天井、それに計器の表示を避ける */
-const AREA = { x0: 165, x1: VIEW.width - 165, y0: 132, y1: VIEW.groundY - 108 };
+/** くぐる向き。画面座標なので下が正 */
+const R = 0;                 // 右へ抜ける
+const L = Math.PI;           // 左へ抜ける
+const U = -Math.PI / 2;      // 上へ抜ける
+const D = Math.PI / 2;       // 下へ抜ける
+const RU = -Math.PI / 4;     // 右上へ
+const RD = Math.PI / 4;      // 右下へ
+const LU = -Math.PI * 3 / 4; // 左上へ
+const LD = Math.PI * 3 / 4;  // 左下へ
 
 export interface Ring {
   x: number;
   y: number;
-  /** 輪の形を毎回同じに崩すための種。手描き風のゆがみに使う */
-  seed: number;
+  /** くぐる向き（ラジアン）。この向きに面を横切ったときだけ通過 */
+  dir: number;
 }
 
 export interface Stage {
-  index: number;
+  /** ステージの狙い。開始時に出す */
+  name: string;
   rings: Ring[];
 }
 
-/** 同じ種からは必ず同じ並びが出る擬似乱数（mulberry32） */
-function rng(seed: number): () => number {
-  let a = seed >>> 0;
-  return () => {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
+const ring = (x: number, y: number, dir: number): Ring => ({ x, y, dir });
 
 /**
- * ステージ番号（0 起点）から輪の並びを作る。
+ * 全10ステージ。機体は毎回 (230, 380) から右向きに出る。
  *
- * 数は 3 個から 1 つずつ増えて最後は 12 個。
- * 順番の厳しさは「次にどれを選ぶか」で決める ―― やさしいステージは近い輪から、
- * 難しいステージは遠い輪から辿らせる。遠い輪へ飛ぶほど、
- * 大きく向きを変えて速度を管理する必要が出る
+ * 画面は左右がつながっている（右端を出ると左端から出てくる）ので、
+ * 折り返しは「宙返りで戻る」か「画面を一周する」かを選べる。
+ * 近い折り返しは宙返りのほうが速い ―― そこが練習になる。
  */
-export function makeStage(index: number): Stage {
-  const rand = rng(0x51ce + index * 7919);
-  const count = 3 + index;
-  // 遠い輪を選ぶ割合。後半ほど順番が飛ぶ
-  const farBias = index / (PRACTICE_STAGES - 1);
+export const STAGES: Stage[] = [
+  // 1. まっすぐ飛んで、上げて下げるだけ
+  {
+    name: '上昇と下降',
+    rings: [ring(620, 300, R), ring(1010, 470, R)],
+  },
 
-  // 置き場所は升目から選び、升の中で少しずらす。
-  // 適当に撒いて重なりを弾く方式だと、輪が増えたときに置ききれず数が足りなくなる
-  // 縦は入るぶんだけ。詰めすぎると輪どうしが重なって、どれが次か読めなくなる
-  const minSpacing = RING_RADIUS * 2.3;
-  const rows = Math.max(1, Math.min(3, Math.floor((AREA.y1 - AREA.y0) / minSpacing)));
-  const cols = Math.max(2, Math.ceil(count / rows));
-  const cellW = (AREA.x1 - AREA.x0) / cols;
-  const cellH = (AREA.y1 - AREA.y0) / rows;
+  // 2. 振れ幅を大きく。速度を落とさずに登る／降りるを覚える
+  {
+    name: '高度を変える',
+    rings: [ring(560, 470, R), ring(850, 210, R), ring(1130, 430, R)],
+  },
 
-  const cells = Array.from({ length: cols * rows }, (_, i) => i);
-  // 同じ種からは同じ並びになる混ぜ方（Fisher-Yates）
-  for (let i = cells.length - 1; i > 0; i--) {
-    const j = Math.floor(rand() * (i + 1));
-    [cells[i], cells[j]] = [cells[j], cells[i]];
-  }
+  // 3. 最後だけ左向き。初めての折り返し
+  {
+    name: '折り返す',
+    rings: [ring(640, 360, R), ring(1000, 330, R), ring(660, 170, L)],
+  },
 
-  // 升の中で動かせる幅。輪どうしが重ならないよう、半径ぶんは余らせる
-  const jitterX = Math.max(0, cellW / 2 - RING_RADIUS * 1.08);
-  const jitterY = Math.max(0, cellH / 2 - RING_RADIUS * 1.08);
-  // 列ごとに上下へずらす。升目のままだと整列して見え、空に並べた感じが出ない
-  const stagger = Math.min(cellH * 0.22, Math.max(0, (AREA.y1 - AREA.y0 - rows * RING_RADIUS * 2.1) / 2));
+  // 4. 3つ目が2つ目の「後ろ」にあって同じ右向き。
+  //    一周して戻るしかない ＝ 宙返り。画面を回っても行けるが宙返りのほうが速い
+  {
+    name: '宙返り',
+    rings: [ring(560, 430, R), ring(980, 430, R), ring(700, 430, R)],
+  },
 
-  const spots: Ring[] = cells.slice(0, count).map((cell) => {
-    const col = cell % cols;
-    const cx = AREA.x0 + (col + 0.5) * cellW;
-    const cy = AREA.y0 + (Math.floor(cell / cols) + 0.5) * cellH + (col % 2 ? stagger : -stagger);
-    return {
-      x: cx + (rand() * 2 - 1) * jitterX,
-      y: cy + (rand() * 2 - 1) * jitterY,
-      seed: Math.floor(rand() * 1e6),
-    };
+  // 5. 高いところを右へ抜けたあと、低いところを左へ。
+  //    背面に返して降りながら回る ＝ スプリットS
+  {
+    name: 'スプリットS',
+    rings: [ring(560, 200, R), ring(920, 190, R), ring(700, 460, L)],
+  },
+
+  // 6. 低いところを右へ抜けたあと、高いところを左へ。
+  //    登りながら回って背面を戻す ＝ インメルマンターン
+  {
+    name: 'インメルマンターン',
+    rings: [ring(520, 490, R), ring(900, 490, R), ring(660, 200, L)],
+  },
+
+  // 7. 折り返しを2回。左右に振られる
+  {
+    name: '八の字',
+    rings: [
+      ring(540, 430, R), ring(940, 390, R),
+      ring(700, 190, L), ring(330, 220, L),
+      ring(600, 440, R),
+    ],
+  },
+
+  // 8. ひと回りする輪郭。機体が実際に描ける輪の大きさに合わせて置いてある
+  //    （宙返りは 206x321px なので、上下の差を 320px、折り返しの幅を 200px 前後にする）。
+  //    輪の向きが道順そのものになっているので、辿れば一周できる
+  {
+    name: 'ひと回り',
+    rings: [
+      ring(520, 490, R), ring(860, 490, R),
+      ring(1080, 330, U), ring(860, 170, L),
+      ring(520, 170, L), ring(300, 330, D),
+    ],
+  },
+
+  // 9. ひと回りしたあと、下の直線へ入り直して登って抜ける
+  {
+    name: '連続旋回',
+    rings: [
+      ring(520, 490, R), ring(860, 490, R),
+      ring(1080, 330, U), ring(860, 170, L),
+      ring(520, 170, L), ring(300, 330, D),
+      ring(620, 490, R), ring(1000, 440, RU),
+    ],
+  },
+
+  // 10. 総仕上げ。下の直線で宙返り（4番目と同じ形）を挟んでから一周する。
+  //     輪はどれも重ならない位置に置いてある ―― 同じ場所を二度くぐる形にすると、
+  //     番号が重なってどちらを狙うのか読めなくなる
+  {
+    name: '総仕上げ',
+    rings: [
+      ring(420, 500, R), ring(760, 500, R), ring(1060, 500, R),
+      ring(860, 500, R),
+      ring(1120, 330, U), ring(880, 170, L), ring(560, 170, L),
+      ring(280, 330, D),
+      ring(520, 500, R), ring(900, 330, RU),
+    ],
+  },
+];
+
+export const PRACTICE_STAGES = STAGES.length;
+
+/** 出撃位置。全ステージ共通 */
+export const START = { x: 230, y: 380, facing: 1 as const };
+
+/** 輪が画面からはみ出していないかの確認用（テストと開発時に使う） */
+export function outOfBounds(): string[] {
+  const bad: string[] = [];
+  STAGES.forEach((s, i) => {
+    s.rings.forEach((r, j) => {
+      if (r.x < RING_RADIUS || r.x > VIEW.width - RING_RADIUS
+        || r.y < RING_RADIUS + 40 || r.y > VIEW.groundY - RING_RADIUS) {
+        bad.push(`ステージ${i + 1} の ${j + 1}番目 (${r.x}, ${r.y})`);
+      }
+    });
   });
-
-  // 潜る順に並べ替える。1つ目は左端（1P の出撃側）にいちばん近いものから
-  const rings: Ring[] = [];
-  const rest = [...spots];
-  let cur = { x: 230, y: 380 };
-  while (rest.length) {
-    const sorted = [...rest].sort(
-      (a, b) => Math.hypot(a.x - cur.x, a.y - cur.y) - Math.hypot(b.x - cur.x, b.y - cur.y),
-    );
-    // 近い順の並びから、後半のステージほど後ろ（遠いほう）を選ぶ
-    const pick = Math.min(sorted.length - 1, Math.floor(farBias * (sorted.length - 1) * rand() * 1.6));
-    const chosen = sorted[pick];
-    rest.splice(rest.indexOf(chosen), 1);
-    rings.push(chosen);
-    cur = chosen;
-  }
-
-  return { index, rings };
-}
-
-/** 10 ステージぶんをまとめて作る */
-export function allStages(): Stage[] {
-  return Array.from({ length: PRACTICE_STAGES }, (_, i) => makeStage(i));
+  return bad;
 }
 
 /** タイムの表示。1/100 秒まで */
@@ -119,3 +164,5 @@ export function formatTime(sec: number): string {
   const s = sec - m * 60;
   return m > 0 ? `${m}:${s.toFixed(2).padStart(5, '0')}` : s.toFixed(2);
 }
+
+export { R, L, U, D, RU, RD, LU, LD };
