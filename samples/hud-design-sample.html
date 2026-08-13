@@ -1,0 +1,509 @@
+<meta charset="utf-8">
+<title>Bi-Planes 計器まわりの作り直し（案）</title>
+<style>
+  :root{
+    --paper:#ecdcb8; --paper-deep:#e2cd9e; --ink:#33241a; --ink-soft:#5c4634;
+    --red:#b53a28; --teal:#2e6e73; --mustard:#d9a441; --cream:#f6ecd4;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--paper); color:var(--ink);
+    font-family:Georgia,'Times New Roman','Hiragino Mincho ProN','Yu Mincho',serif;
+    line-height:1.8;
+    background-image:radial-gradient(ellipse at 20% 10%, rgba(255,255,255,.35), transparent 50%),
+                     radial-gradient(ellipse at 80% 90%, rgba(120,90,40,.12), transparent 55%);
+  }
+  .sheet{max-width:1080px;margin:0 auto;padding:34px 24px 90px}
+  header{text-align:center;padding:22px 12px 6px}
+  .marq{
+    display:inline-block;border:4px double var(--ink);padding:14px 40px 18px;
+    background:var(--cream);box-shadow:0 4px 0 rgba(51,36,26,.25);position:relative;
+  }
+  .marq::before,.marq::after{content:"★";position:absolute;top:50%;transform:translateY(-50%);color:var(--red);font-size:18px}
+  .marq::before{left:14px} .marq::after{right:14px}
+  h1{margin:0;font-size:28px;letter-spacing:.04em}
+  .sub{margin:6px 0 0;font-size:15px;color:var(--ink-soft)}
+  h2{margin:44px 0 6px;font-size:22px;border-bottom:2px solid var(--ink);padding-bottom:6px}
+  h3{margin:26px 0 4px;font-size:19px}
+  .lead{margin:8px 0 18px;font-size:15px;color:var(--ink-soft)}
+  ul{margin:6px 0 14px;padding-left:1.3em;font-size:14.5px;color:var(--ink-soft)}
+  li{margin:3px 0}
+  .card{
+    background:var(--cream);border:2px solid var(--ink);border-radius:4px;
+    padding:16px 20px;margin:0 0 18px;box-shadow:0 3px 0 rgba(51,36,26,.2);
+  }
+  button{
+    font-family:inherit;font-size:15px;background:var(--paper-deep);color:var(--ink);
+    border:2px solid var(--ink);border-radius:3px;padding:6px 20px;cursor:pointer;
+    box-shadow:0 2px 0 rgba(51,36,26,.35);margin:0 8px 8px 0;
+  }
+  button:hover{background:var(--mustard)}
+  button.on{background:var(--teal);color:var(--cream)}
+  button:active{transform:translateY(2px);box-shadow:none}
+  .stage{
+    position:relative;width:100%;aspect-ratio:16/9;border:3px solid var(--ink);
+    background:#7a8ea0;overflow:hidden;box-shadow:0 4px 0 rgba(51,36,26,.3);
+  }
+  .stage img.bg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+  .stage svg{position:absolute;inset:0;width:100%;height:100%}
+  .zoom{border:3px solid var(--ink);background:#8ba0b2;overflow:hidden;box-shadow:0 3px 0 rgba(51,36,26,.3)}
+  .zoom svg{display:block;width:100%}
+  .note{font-size:13.5px;color:var(--ink-soft);margin-top:10px}
+  .hint{background:var(--cream);border-left:5px solid var(--red);padding:10px 16px;font-size:14px;margin:18px 0}
+  table{border-collapse:collapse;width:100%;font-size:14.5px;background:var(--cream)}
+  th,td{border:1px solid var(--ink);padding:7px 10px;text-align:left;vertical-align:top}
+  th{background:var(--paper-deep)}
+</style>
+
+<div class="sheet">
+<header>
+  <div class="marq">
+    <h1>計器まわりの作り直し</h1>
+    <p class="sub">得点と体力ゲージの案 ―― 採用したものを教えてください</p>
+  </div>
+</header>
+
+<div class="hint">
+  下の切り替えで、実際の画面の上に重ねて見比べられます。背景と機体はゲームで使っている絵そのものです。<br>
+  数値はどれも同じ状態で描いています（1P = 7点・体力 62%・20mm 残り3発、2P = 12点・体力 28%・残り1発）。
+</div>
+
+<h2>今のもの、どこが合っていないか</h2>
+<ul>
+  <li><b>線と面が機械的。</b> 背景も機体もペン画に水彩で、線には震えと濃淡があります。
+      いまの計器は太さの一定な角丸の枠で、別の絵から持ってきたように浮きます</li>
+  <li><b>余白の置き方がちぐはぐ。</b> 枠の右半分が空いている一方、
+      残弾のマスと体力バーは隙間なく詰まっています</li>
+  <li><b>スロットル計が枠の角に潜っていて読めない。</b> 2P 側では左端に来るので、なおさら見づらい</li>
+  <li><b>体力バーの色が持ち主の色。</b> 「誰か」と「どれだけ傷んだか」が同じ色で表され、
+      減っていることが一目で分かりません。危険域の目印もありません</li>
+  <li><b>残弾のマスが、残りなのか撃ったぶんなのか読めない。</b> 先頭だけ金色なのも紛らわしい</li>
+</ul>
+
+<h2>3つの案</h2>
+<p class="lead">
+  どれも Phaser の描画（角丸・円弧・線・文字）でそのまま作れる範囲にしてあります。
+  絵を足す必要はありません。
+</p>
+
+<div class="card">
+  <div>
+    <button data-view="now" class="on">今のもの</button>
+    <button data-view="a">案A 真鍮の計器盤</button>
+    <button data-view="b">案B 機体の撃墜マーク</button>
+    <button data-view="c">案C 紙の記録票</button>
+  </div>
+  <div class="stage" id="stage">
+    <img class="bg" src="/art/bg/stage-sunset.png" alt="対戦画面の背景">
+    <svg id="overlay" viewBox="0 0 1280 720" preserveAspectRatio="none"></svg>
+  </div>
+  <p class="note" id="caption"></p>
+</div>
+
+<h3>拡大して見る（1P 側）</h3>
+<div class="zoom"><svg id="zoom" viewBox="0 0 760 330"></svg></div>
+
+<h2>それぞれの狙い</h2>
+
+<div class="card">
+  <h3>案A　真鍮の計器盤</h3>
+  <p class="lead">操縦席の計器をそのまま画面の隅に置く。世界の中にある物として見せる案。</p>
+  <ul>
+    <li><b>体力は丸い計器の針。</b> 下側に赤い危険域があり、針がそこへ入ると一目で分かります</li>
+    <li><b>スロットルも同じ丸計器</b>にして、いまの隅に潜った半円を作り直します</li>
+    <li><b>得点は数字の窓。</b> 走行距離計のように、暗い窓にクリーム色の数字が並びます</li>
+    <li><b>20mm は真鍮の弾を5発</b>並べ、撃つと沈んで暗くなります</li>
+    <li>革張りの板に真鍮の縁と鋲。機体の金具と同じ質感でそろえます</li>
+  </ul>
+  <p class="note">いちばん世界に馴染みますが、針は数字より読み取りに一拍かかります。場所も少し広く取ります。</p>
+</div>
+
+<div class="card">
+  <h3>案B　機体の撃墜マーク</h3>
+  <p class="lead">枠を無くし、機体の胴に描く撃墜マークのように、空の上へ直に記す案。</p>
+  <ul>
+    <li><b>得点は「正」の字のような五本線</b>（1本＝1点、5本目は斜めに引く）。
+        インクで書き足していく手つきがそのまま得点表になります</li>
+    <li><b>体力は手で引いた目盛りの帯。</b> 水彩のにじみで満ち、減ると引いていきます。
+        最後の2目盛りは赤い斜線の危険域</li>
+    <li>名前はステンシル文字とラウンデル（国籍標）。20mm は薬莢を5つ</li>
+    <li>枠が無いぶん画面が広く見え、絵と地続きになります</li>
+  </ul>
+  <p class="note">いちばん大胆で、この絵柄にしかできない見せ方です。ただし 20 点に近づくと線が長くなります（5本ずつ束ねて畳みます）。</p>
+</div>
+
+<div class="card">
+  <h3>案C　紙の記録票</h3>
+  <p class="lead">飛行記録の紙片を画鋲で留めた体。いまの形にいちばん近く、置き換えの影響が小さい案。</p>
+  <ul>
+    <li><b>紙をわずかに傾け、下端を破って</b>、手で貼った感じを出します。線は手描きの震え付き</li>
+    <li><b>得点は大きな手書き数字</b>。「/ 20」は小さく添えるだけにして、見るべき数字を1つに絞ります</li>
+    <li><b>体力は10目盛りの帯。</b> 水彩で満たし、最後の2目盛りは赤い斜線</li>
+    <li><b>20mm は丸を5つ</b>。撃ったぶんに×を重ねます（残りと撃ったぶんが同時に読める）</li>
+    <li>スロットルは丸計器をやめて、溝を滑るレバーにします</li>
+  </ul>
+  <p class="note">手堅い案です。作り直しの手間もいちばん小さく済みます。</p>
+</div>
+
+<h2>3案に共通して直すこと</h2>
+<table>
+  <tr><th>今</th><th>直すこと</th></tr>
+  <tr><td>太さの一定な角丸の枠</td><td><b>手描きの震えを付けた線</b>。折れ点を少しずつずらして引き、絵の線と揃える</td></tr>
+  <tr><td>体力バーが持ち主の色だけ</td><td><b>危険域を作る</b>（残り2割は赤い斜線）。減ったことが色と柄で分かる</td></tr>
+  <tr><td>残弾のマスが読めない</td><td><b>残りと撃ったぶんを別の形で示す</b>（沈む／×を重ねる）</td></tr>
+  <tr><td>スロットル計が角に潜る</td><td>読める大きさにして、1P・2P で同じ位置に置く</td></tr>
+  <tr><td>得点が <code>7 / 20</code></td><td>見るべき数字を大きく1つに。上限は小さく添える</td></tr>
+</table>
+
+</div>
+
+<script>
+// ============================================================================
+// 下ごしらえ。手描きの震えを持つ線を引くための道具
+// ============================================================================
+const SVG = 'http://www.w3.org/2000/svg';
+
+/** 種を決めた擬似乱数。描くたびに形が変わらないようにする */
+function rng(seed) {
+  let s = seed;
+  return () => { s = (s * 1103515245 + 12345) % 2147483648; return s / 2147483648; };
+}
+
+/**
+ * 手描きの震えを持つ角丸の枠。
+ * 折れ点を少しずつずらして直線でつなぐ。Phaser でも同じやり方で引ける
+ */
+function wobbleRect(x, y, w, h, r, amp = 1.4, seed = 7) {
+  const rand = rng(seed);
+  const j = () => (rand() - 0.5) * 2 * amp;
+  const pts = [];
+  const corner = (cx, cy, from, to) => {
+    for (let i = 0; i <= 4; i++) {
+      const a = from + (to - from) * (i / 4);
+      pts.push([cx + Math.cos(a) * r + j(), cy + Math.sin(a) * r + j()]);
+    }
+  };
+  const edge = (x1, y1, x2, y2) => {
+    const n = Math.max(2, Math.round(Math.hypot(x2 - x1, y2 - y1) / 26));
+    for (let i = 1; i <= n; i++) {
+      pts.push([x1 + (x2 - x1) * (i / n) + j(), y1 + (y2 - y1) * (i / n) + j()]);
+    }
+  };
+  corner(x + r, y + r, Math.PI, Math.PI * 1.5);
+  edge(x + r, y, x + w - r, y);
+  corner(x + w - r, y + r, Math.PI * 1.5, Math.PI * 2);
+  edge(x + w, y + r, x + w, y + h - r);
+  corner(x + w - r, y + h - r, 0, Math.PI * 0.5);
+  edge(x + w - r, y + h, x + r, y + h);
+  corner(x + r, y + h - r, Math.PI * 0.5, Math.PI);
+  edge(x, y + h - r, x, y + r);
+  return 'M' + pts.map((p) => `${p[0].toFixed(1)},${p[1].toFixed(1)}`).join('L') + 'Z';
+}
+
+/** 震えのある直線 */
+function wobbleLine(x1, y1, x2, y2, amp = 1.0, seed = 3) {
+  const rand = rng(seed);
+  const n = Math.max(2, Math.round(Math.hypot(x2 - x1, y2 - y1) / 22));
+  const pts = [[x1, y1]];
+  for (let i = 1; i <= n; i++) {
+    const t = i / n;
+    pts.push([x1 + (x2 - x1) * t + (rand() - 0.5) * 2 * amp,
+              y1 + (y2 - y1) * t + (rand() - 0.5) * 2 * amp]);
+  }
+  return 'M' + pts.map((p) => `${p[0].toFixed(1)},${p[1].toFixed(1)}`).join('L');
+}
+
+function el(tag, attrs, parent) {
+  const n = document.createElementNS(SVG, tag);
+  for (const k in attrs) n.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(n);
+  return n;
+}
+
+function text(parent, x, y, s, size, fill, opts = {}) {
+  const t = el('text', {
+    x, y, 'font-size': size, fill,
+    'font-family': opts.mono ? 'ui-monospace, Menlo, monospace' : 'Georgia, "Times New Roman", serif',
+    'text-anchor': opts.anchor || 'start',
+    'letter-spacing': opts.track || 0,
+    'font-weight': opts.weight || 'normal',
+  }, parent);
+  t.textContent = s;
+  return t;
+}
+
+/** 円弧のパス */
+function arc(cx, cy, r, a0, a1) {
+  const p0 = [cx + Math.cos(a0) * r, cy + Math.sin(a0) * r];
+  const p1 = [cx + Math.cos(a1) * r, cy + Math.sin(a1) * r];
+  const large = Math.abs(a1 - a0) > Math.PI ? 1 : 0;
+  return `M${p0[0].toFixed(1)},${p0[1].toFixed(1)}A${r},${r} 0 ${large} 1 ${p1[0].toFixed(1)},${p1[1].toFixed(1)}`;
+}
+
+const INK = '#2b1e14';
+const CREAM = '#f2e6c6';
+const BRASS = '#b8862c';
+const RED = '#a8402c';
+const BLUE = '#3c5a78';
+
+/** 描くときの状態。1P と 2P で同じものを左右に置く */
+const P1 = { name: '1P', color: RED, score: 7, hp: 0.62, ammo: 3, throttle: 1, side: -1 };
+const P2 = { name: '2P', color: BLUE, score: 12, hp: 0.28, ammo: 1, throttle: 0, side: 1 };
+const WIN = 20;
+
+// ============================================================================
+// 今のもの（比較用に、いまの描き方をそのまま写した）
+// ============================================================================
+function drawNow(g, p) {
+  const w = 262, h = 84, y = 20;
+  const x = p.side < 0 ? 22 : 1280 - 22 - w;
+  const tabW = 68;
+  const tabX = p.side < 0 ? x : x + w - tabW;
+  const barX = p.side < 0 ? x + 84 : x + 6;
+
+  el('rect', { x, y, width: w, height: h, rx: 9, fill: CREAM, stroke: INK, 'stroke-width': 5 }, g);
+  el('rect', { x: tabX, y, width: tabW, height: h, rx: 9, fill: p.color, stroke: INK, 'stroke-width': 5 }, g);
+  el('rect', { x: barX, y: y + 44, width: 150, height: 13, rx: 6.5, fill: '#d3bd93', stroke: INK, 'stroke-width': 3 }, g);
+  el('rect', { x: barX + 3, y: y + 47, width: 144 * p.hp, height: 7, rx: 3.5, fill: p.color }, g);
+  for (let i = 0; i < 5; i++) {
+    el('rect', { x: barX + i * 14, y: y + 62, width: 9, height: 14, rx: 3,
+      fill: i < p.ammo ? '#d59a34' : '#c4b087', stroke: INK, 'stroke-width': 3 }, g);
+  }
+  const gx = p.side < 0 ? x + 232 : x + 30;
+  el('path', { d: arc(gx, y + 74, 16, Math.PI, 0), fill: 'none', stroke: INK, 'stroke-width': 3 }, g);
+  const a = Math.PI + (p.throttle + 0.5) / 2 * Math.PI;
+  el('line', { x1: gx, y1: y + 74, x2: gx + Math.cos(a) * 14, y2: y + 74 + Math.sin(a) * 14,
+    stroke: p.color, 'stroke-width': 4 }, g);
+  text(g, tabX + tabW / 2, y + 34, p.name, 20, CREAM, { anchor: 'middle' });
+  text(g, tabX + tabW / 2, y + 58, `${p.score} / ${WIN}`, 20, CREAM, { anchor: 'middle' });
+}
+
+// ============================================================================
+// 案A 真鍮の計器盤
+// ============================================================================
+function drawA(g, p) {
+  const w = 318, h = 100, y = 16;
+  const x = p.side < 0 ? 20 : 1280 - 20 - w;
+
+  // 革の板と真鍮の縁
+  el('path', { d: wobbleRect(x, y, w, h, 10, 1.1, 11), fill: '#2e2318', stroke: BRASS, 'stroke-width': 4 }, g);
+  el('path', { d: wobbleRect(x + 6, y + 6, w - 12, h - 12, 7, 0.9, 23), fill: 'none',
+    stroke: '#6a4f1e', 'stroke-width': 1.5 }, g);
+  for (const [rx, ry] of [[x + 13, y + 13], [x + w - 13, y + 13], [x + 13, y + h - 13], [x + w - 13, y + h - 13]]) {
+    el('circle', { cx: rx, cy: ry, r: 3.4, fill: BRASS, stroke: '#3a2b12', 'stroke-width': 1 }, g);
+  }
+
+  // 体力の丸計器
+  const cx = x + 60, cy = y + h / 2;
+  el('circle', { cx, cy, r: 35, fill: BRASS }, g);
+  el('circle', { cx, cy, r: 31, fill: CREAM, stroke: '#6a4f1e', 'stroke-width': 1.5 }, g);
+  const A0 = Math.PI * 0.75, A1 = Math.PI * 2.25;          // 左下から右下へ、上を回る
+  el('path', { d: arc(cx, cy, 25, A0, A0 + (A1 - A0) * 0.2), fill: 'none', stroke: RED, 'stroke-width': 5, opacity: .8 }, g);
+  for (let i = 0; i <= 10; i++) {
+    const a = A0 + (A1 - A0) * (i / 10);
+    const r0 = i % 5 === 0 ? 18 : 21;
+    el('line', { x1: cx + Math.cos(a) * 25, y1: cy + Math.sin(a) * 25,
+      x2: cx + Math.cos(a) * r0, y2: cy + Math.sin(a) * r0,
+      stroke: INK, 'stroke-width': i % 5 === 0 ? 2 : 1 }, g);
+  }
+  const na = A0 + (A1 - A0) * p.hp;
+  el('line', { x1: cx - Math.cos(na) * 6, y1: cy - Math.sin(na) * 6,
+    x2: cx + Math.cos(na) * 24, y2: cy + Math.sin(na) * 24,
+    stroke: p.color, 'stroke-width': 3.5, 'stroke-linecap': 'round' }, g);
+  el('circle', { cx, cy, r: 4, fill: INK }, g);
+  text(g, cx, cy + 20, 'FUEL', 8, '#8a765a', { anchor: 'middle', track: 2, mono: true });
+
+  // スロットルの丸計器
+  const tx = x + 126, ty = y + h / 2 + 6;
+  el('circle', { cx: tx, cy: ty, r: 24, fill: BRASS }, g);
+  el('circle', { cx: tx, cy: ty, r: 20.5, fill: CREAM, stroke: '#6a4f1e', 'stroke-width': 1.2 }, g);
+  el('path', { d: arc(tx, ty, 15, Math.PI * 0.8, Math.PI * 2.2), fill: 'none', stroke: '#c9b48a', 'stroke-width': 3 }, g);
+  const ta = Math.PI * 0.8 + Math.PI * 1.4 * (p.throttle ? 1 : 0.35);
+  el('line', { x1: tx, y1: ty, x2: tx + Math.cos(ta) * 15, y2: ty + Math.sin(ta) * 15,
+    stroke: INK, 'stroke-width': 2.5, 'stroke-linecap': 'round' }, g);
+  el('circle', { cx: tx, cy: ty, r: 3, fill: INK }, g);
+  text(g, tx, ty - 26, p.throttle ? '全開' : '巡航', 11, CREAM, { anchor: 'middle' });
+
+  // 得点の窓
+  const wx = x + 160, wy = y + 20;
+  el('rect', { x: wx, y: wy, width: 136, height: 40, rx: 4, fill: '#17110b', stroke: BRASS, 'stroke-width': 2 }, g);
+  text(g, wx + 10, wy + 31, String(p.score).padStart(2, '0'), 30, '#f0dfae', { mono: true, track: 3 });
+  text(g, wx + 74, wy + 31, `/ ${WIN}`, 17, '#8d7a52', { mono: true });
+  text(g, wx + 2, wy - 5, `${p.name}　撃墜点`, 11, '#d8c48e', {});
+
+  // 20mm の弾
+  for (let i = 0; i < 5; i++) {
+    const bx = x + 164 + i * 26, by = y + 70;
+    const live = i < p.ammo;
+    el('rect', { x: bx, y: by + (live ? 0 : 4), width: 12, height: live ? 20 : 16, rx: 2,
+      fill: live ? BRASS : '#4a3c26', stroke: '#20180f', 'stroke-width': 1.4 }, g);
+    if (live) el('path', { d: `M${bx},${by + 5}L${bx + 6},${by - 4}L${bx + 12},${by + 5}Z`, fill: '#d8b160' }, g);
+  }
+  text(g, x + 296, y + 88, '20mm', 10, '#8a765a', { anchor: 'end', mono: true });
+}
+
+// ============================================================================
+// 案B 機体の撃墜マーク
+// ============================================================================
+function drawB(g, p) {
+  const x = p.side < 0 ? 34 : 1280 - 34 - 300;
+  const y = 26;
+  const shadow = { filter: 'url(#soft)' };
+  const wrap = el('g', shadow, g);
+
+  // 名前とラウンデル
+  el('circle', { cx: x + 16, cy: y + 14, r: 15, fill: 'none', stroke: CREAM, 'stroke-width': 3 }, wrap);
+  el('circle', { cx: x + 16, cy: y + 14, r: 9, fill: 'none', stroke: p.color, 'stroke-width': 5 }, wrap);
+  el('circle', { cx: x + 16, cy: y + 14, r: 3, fill: CREAM }, wrap);
+  text(wrap, x + 40, y + 22, p.name, 25, CREAM, { track: 3, weight: 'bold' });
+
+  // 20mm は薬莢。名前と同じ段の右に置く
+  for (let i = 0; i < 5; i++) {
+    const sx = x + 176 + i * 18, sy = y + 6;
+    el('rect', { x: sx, y: sy, width: 9, height: 17, rx: 1.8,
+      fill: i < p.ammo ? '#e0be6e' : 'rgba(240,230,200,.20)', stroke: CREAM, 'stroke-width': 1.6 }, wrap);
+  }
+  text(wrap, x + 268, y + 20, '20mm', 11, CREAM, { anchor: 'start', mono: true });
+
+  // 体力の帯（手で引いた目盛り）。危険域は下地に描いて、満ちていれば隠れる
+  const bx = x + 40, by = y + 34, bw = 200, bh = 17;
+  el('rect', { x: bx, y: by, width: bw, height: bh, fill: 'rgba(20,14,9,.34)' }, wrap);
+  for (let i = 0; i < 7; i++) {
+    const sx = bx + bw * 0.8 + i * 6;
+    el('line', { x1: sx, y1: by + bh - 1, x2: sx + 8, y2: by + 1, stroke: '#c4442c', 'stroke-width': 1.8, opacity: .9 }, wrap);
+  }
+  el('rect', { x: bx + 2, y: by + 2, width: (bw - 4) * p.hp, height: bh - 4, fill: p.color, opacity: .9 }, wrap);
+  for (let i = 1; i < 10; i++) {
+    el('line', { x1: bx + bw * i / 10, y1: by, x2: bx + bw * i / 10, y2: by + (i % 5 === 0 ? bh : 5),
+      stroke: CREAM, 'stroke-width': 1.4, opacity: .85 }, wrap);
+  }
+  el('path', { d: wobbleRect(bx, by, bw, bh, 3, 1.0, 31), fill: 'none', stroke: CREAM, 'stroke-width': 2.5 }, wrap);
+  text(wrap, bx + bw + 10, by + 13, p.throttle ? '全開' : '巡航', 14, CREAM, {});
+
+  // 得点＝五本線。4本引いて5本目を斜めに重ねる
+  const gy = y + 72;
+  let gx = x + 40;
+  for (let i = 0; i < p.score; i++) {
+    const inGroup = i % 5;
+    if (inGroup === 4) {
+      el('path', { d: wobbleLine(gx - 34, gy + 22, gx - 2, gy - 2, 0.9, 40 + i), fill: 'none',
+        stroke: CREAM, 'stroke-width': 3.2, 'stroke-linecap': 'round' }, wrap);
+      gx += 14;
+    } else {
+      el('path', { d: wobbleLine(gx, gy - 2, gx + 2, gy + 22, 0.9, 60 + i), fill: 'none',
+        stroke: CREAM, 'stroke-width': 3.2, 'stroke-linecap': 'round' }, wrap);
+      gx += 9;
+    }
+  }
+  text(wrap, x + 40, gy + 42, `${p.score} / ${WIN} 点`, 15, CREAM, { track: 1 });
+}
+
+// ============================================================================
+// 案C 紙の記録票
+// ============================================================================
+function drawC(g, p) {
+  const w = 300, h = 104, y = 18;
+  const x = p.side < 0 ? 24 : 1280 - 24 - w;
+  const tilt = p.side < 0 ? -1.4 : 1.4;
+  const card = el('g', { transform: `rotate(${tilt} ${x + w / 2} ${y + h / 2})` }, g);
+
+  // 紙。下端は破れ
+  const rand = rng(5);
+  let torn = `M${x},${y + 8}L${x + 8},${y}L${x + w},${y}L${x + w},${y + h - 10}`;
+  for (let i = 10; i >= 0; i--) {
+    torn += `L${(x + w * i / 10).toFixed(1)},${(y + h - 10 + rand() * 9).toFixed(1)}`;
+  }
+  torn += 'Z';
+  el('path', { d: torn, fill: '#f3e7c8' }, card);
+  el('path', { d: torn, fill: 'none', stroke: '#bda677', 'stroke-width': 1.4 }, card);
+  el('path', { d: wobbleRect(x + 7, y + 7, w - 14, h - 24, 2, 1.1, 17), fill: 'none', stroke: INK, 'stroke-width': 2 }, card);
+
+  // 画鋲
+  el('circle', { cx: x + 20, cy: y + 16, r: 6.5, fill: BRASS, stroke: '#5e4718', 'stroke-width': 1.4 }, card);
+  el('circle', { cx: x + 18, cy: y + 14, r: 2, fill: '#f0dca8' }, card);
+
+  // 名前と得点
+  text(card, x + 36, y + 23, p.name, 17, p.color, { track: 2, weight: 'bold' });
+  text(card, x + 36, y + 62, String(p.score), 40, INK, {});
+  text(card, x + 36 + (p.score > 9 ? 46 : 26), y + 62, `/ ${WIN}`, 15, '#7a6446', {});
+
+  // 体力の帯
+  const bx = x + 118, by = y + 30, bw = 166, bh = 18;
+  el('rect', { x: bx, y: by, width: bw, height: bh, fill: '#ded0a8' }, card);
+  for (let i = 0; i < 6; i++) {
+    const sx = bx + bw * 0.8 + i * 6;
+    el('line', { x1: sx, y1: by + bh - 1, x2: sx + 7, y2: by + 1, stroke: '#c4442c', 'stroke-width': 1.6 }, card);
+  }
+  el('rect', { x: bx + 2, y: by + 2, width: (bw - 4) * p.hp, height: bh - 4, fill: p.color, opacity: .85 }, card);
+  for (let i = 1; i < 10; i++) {
+    el('line', { x1: bx + bw * i / 10, y1: by, x2: bx + bw * i / 10, y2: by + (i % 5 === 0 ? bh : 5),
+      stroke: INK, 'stroke-width': 1.2, opacity: .55 }, card);
+  }
+  el('path', { d: wobbleRect(bx, by, bw, bh, 2, 0.9, 29), fill: 'none', stroke: INK, 'stroke-width': 2 }, card);
+  text(card, bx, by - 5, '機体', 11, '#7a6446', {});
+
+  // 20mm ―― 丸を5つ。撃ったぶんは×
+  for (let i = 0; i < 5; i++) {
+    const cx = bx + 9 + i * 22, cy = by + 34;
+    el('circle', { cx, cy, r: 7.5, fill: i < p.ammo ? BRASS : 'none', stroke: INK, 'stroke-width': 2 }, card);
+    if (i >= p.ammo) {
+      el('path', { d: wobbleLine(cx - 7, cy - 7, cx + 7, cy + 7, 0.7, 70 + i), stroke: INK, 'stroke-width': 2 }, card);
+      el('path', { d: wobbleLine(cx + 7, cy - 7, cx - 7, cy + 7, 0.7, 90 + i), stroke: INK, 'stroke-width': 2 }, card);
+    }
+  }
+  text(card, bx + 116, by + 39, '20mm', 11, '#7a6446', {});
+
+  // スロットルのレバー
+  const lx = x + 36, ly = y + 76;
+  el('path', { d: wobbleLine(lx, ly, lx + 56, ly, 0.6, 13), stroke: INK, 'stroke-width': 3, 'stroke-linecap': 'round' }, card);
+  el('circle', { cx: lx + (p.throttle ? 52 : 16), cy: ly, r: 6, fill: p.color, stroke: INK, 'stroke-width': 2 }, card);
+  text(card, lx + 66, ly + 5, p.throttle ? '全開' : '巡航', 12, '#7a6446', {});
+}
+
+// ============================================================================
+// 切り替え
+// ============================================================================
+const DRAW = { now: drawNow, a: drawA, b: drawB, c: drawC };
+const CAPTION = {
+  now: '今のもの。線が機械的で、枠の右半分が空き、スロットル計が角に潜っている。',
+  a: '案A 真鍮の計器盤。操縦席の計器をそのまま隅に置く。体力は針、得点は数字の窓。',
+  b: '案B 機体の撃墜マーク。枠を無くし、空の上に直に記す。得点は五本線で書き足していく。',
+  c: '案C 紙の記録票。飛行記録の紙片を画鋲で留めた体。手描きの震えと破れた下端。',
+};
+
+function defs(svg) {
+  const d = el('defs', {}, svg);
+  const f = el('filter', { id: 'soft', x: '-30%', y: '-30%', width: '160%', height: '160%' }, d);
+  el('feDropShadow', { dx: 0, dy: 1.5, stdDeviation: 2.2, 'flood-color': '#1a1109', 'flood-opacity': .75 }, f);
+}
+
+function render(view) {
+  const svg = document.getElementById('overlay');
+  svg.innerHTML = '';
+  defs(svg);
+  // 機体も置いて、絵柄との馴染みを見る
+  el('image', { href: '/art/planes/plane-red.png', x: 300, y: 330, width: 102, height: 68 }, svg);
+  el('image', { href: '/art/planes/plane-blue.png', x: 850, y: 300, width: 102, height: 68,
+    transform: 'scale(-1,1)', style: 'transform-origin:901px 0px' }, svg);
+  DRAW[view](svg, P1);
+  DRAW[view](svg, P2);
+  document.getElementById('caption').textContent = CAPTION[view];
+
+  // 拡大（1P 側だけ）
+  const z = document.getElementById('zoom');
+  z.innerHTML = '';
+  defs(z);
+  el('rect', { x: 0, y: 0, width: 760, height: 330, fill: '#9db2c4' }, z);
+  const inner = el('g', { transform: 'scale(2) translate(-14,-8)' }, z);
+  DRAW[view](inner, P1);
+}
+
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-view]');
+  if (!b) return;
+  document.querySelectorAll('button[data-view]').forEach((q) => q.classList.toggle('on', q === b));
+  render(b.dataset.view);
+});
+render('now');
+</script>
