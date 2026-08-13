@@ -25,6 +25,7 @@ SRC = os.path.join(ROOT, "assets/art/original")
 OUT_PLANES = os.path.join(ROOT, "assets/art/planes")
 OUT_BG = os.path.join(ROOT, "assets/art/bg")
 OUT_PROPS = os.path.join(ROOT, "assets/art/props")
+OUT_TITLE = os.path.join(ROOT, "assets/art/title")
 
 # 機体（側面・上面・下面）。
 # 上面図・下面図は煙なしの差し替え版（末尾 2）を使う。煙ありの初版は参考として残す
@@ -34,7 +35,16 @@ PLANES = (
     "plane-red-top2", "plane-red-under2",
 )
 # その他の絵（気球など）
-PROPS = ("baloon",)
+PROPS = ("baloon", "gold-baloon")
+
+# オープニングの完成図に焼き込まれている "PRESS START" を消す範囲と、
+# 埋めるのに使う海を持ってくる距離（左へ何 px か）。
+# 海は横縞なので、同じ行から横にずらして持ってくると継ぎ目が出ない
+PRESS_BOX = (664, 850, 968, 900)
+PRESS_SHIFT = 330
+
+# 画面の論理解像度。背景に使う絵はここに合わせて書き出す
+VIEW_SIZE = (1280, 720)
 
 # 紙とみなす色距離の上限。これを超える画素は「絵」として不透明で残す
 BG_TOLERANCE = 42.0
@@ -108,10 +118,29 @@ def cut_paper(path: str):
     return Image.fromarray(out, "RGBA")
 
 
+def opening_title() -> Image.Image:
+    """オープニングの完成図から、焼き込まれた "PRESS START" を消したものを作る。
+
+    ゲームでは「押してください」の文字を自分で明滅させたいので、
+    絵に描かれているほうは消しておく。文字が乗っているのは一面の海なので、
+    同じ行の海を横からずらして持ってきて埋める。海は横縞なので、
+    横にずらすぶんには縞がそのままつながり、継ぎ目が見えない
+    """
+    rgb = np.asarray(Image.open(os.path.join(SRC, "opening-title.png")).convert("RGB")).astype(np.float64)
+    x0, y0, x1, y1 = PRESS_BOX
+    patch = rgb[y0:y1, x0 - PRESS_SHIFT:x1 - PRESS_SHIFT].copy()
+    # 左右の端だけぼかして混ぜる（上下は同じ行から持ってきているので段差が出ない）
+    w = x1 - x0
+    fade = np.clip(np.minimum(np.arange(w), w - 1 - np.arange(w)) / 14.0, 0.0, 1.0)[None, :, None]
+    rgb[y0:y1, x0:x1] = patch * fade + rgb[y0:y1, x0:x1] * (1 - fade)
+    return Image.fromarray(rgb.astype(np.uint8), "RGB")
+
+
 def main():
     os.makedirs(OUT_PLANES, exist_ok=True)
     os.makedirs(OUT_BG, exist_ok=True)
     os.makedirs(OUT_PROPS, exist_ok=True)
+    os.makedirs(OUT_TITLE, exist_ok=True)
 
     for out_dir, names in ((OUT_PLANES, PLANES), (OUT_PROPS, PROPS)):
         for name in names:
@@ -126,6 +155,16 @@ def main():
             dst = os.path.join(out_dir, f"{name}.png")
             img.save(dst, optimize=True)
             print(f"{name}: {img.size} -> {os.path.relpath(dst, ROOT)}")
+
+    # タイトル周りは切り抜かず、いただいた絵をそのまま画面の大きさに合わせる。
+    # opening-title は完成図（オープニング）、opening-background は
+    # ロゴと機体を除いた空だけの絵（ステージ選択の背景）
+    for name, img in (("opening-title", opening_title()),
+                      ("opening-background", Image.open(os.path.join(SRC, "opening-background.png")))):
+        img = img.convert("RGB").resize((VIEW_SIZE), Image.LANCZOS)
+        dst = os.path.join(OUT_TITLE, f"{name}.png")
+        img.save(dst)
+        print(f"{name}: {img.size} -> {os.path.relpath(dst, ROOT)}")
 
     bg_src = os.path.join(SRC, "stage-sunset.png")
     if os.path.exists(bg_src):

@@ -25,6 +25,11 @@ export class BootScene extends Phaser.Scene {
     this.load.image('plane-blue-top', 'art/planes/plane-blue-top2.png');
     this.load.image('plane-blue-under', 'art/planes/plane-blue-under2.png');
     this.load.image('balloon', 'art/props/baloon.png');
+    this.load.image('balloon-gold', 'art/props/gold-baloon.png');
+    // タイトル画面の絵。title-art はオープニングの完成図そのまま、
+    // title-bg はそこからロゴと機体を除いた空だけの絵（ステージ選択用）
+    this.load.image('title-art', 'art/title/opening-title.png');
+    this.load.image('title-bg', 'art/title/opening-background.png');
     for (const k of DARK_PUFFS) this.load.image(k, `art/smoke/${k}.png`);
     for (const k of LIGHT_PUFFS) this.load.image(k, `art/smoke/${k}.png`);
   }
@@ -40,6 +45,6 @@ export class BootScene extends Phaser.Scene {
       makeTintedTexture(this, `${k}-dust`, k, { color: '#a9854f', amount: 0.85, lift: 0.12, round: true, ink: 0.3 });
       makeTintedTexture(this, `${k}-bsmoke`, k, { color: '#3a332b', amount: 0.35, round: true });
     }
-    this.scene.start('Title');
+    this.scene.start('Opening');
   }
 }

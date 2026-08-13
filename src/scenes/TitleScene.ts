@@ -1,7 +1,8 @@
 /**
- * タイトル画面。遊び方を選んでから対戦に入る。
+ * ステージ選択。オープニングのあとに出て、遊び方を選んでから始める。
  *
- * 1人・2人・デモの3つと、コンピュータの腕前を選ぶ。
+ * 背景はオープニングと同じ絵から、ロゴと機体を外したもの。
+ * 1人・2人・プラクティス・デモの4つと、コンピュータの腕前を選ぶ。
  * 上下で遊び方、左右で腕前。決定は Enter か Space、パッドなら ○／A。
  */
 
@@ -63,10 +64,11 @@ export class TitleScene extends Phaser.Scene {
     this.started = false;
     this.padUpHeld = false;
 
-    const bg = this.add.image(0, 0, 'bg-sunset').setOrigin(0);
+    const bg = this.add.image(0, 0, 'title-bg').setOrigin(0);
     bg.setDisplaySize(VIEW.width, VIEW.height);
-    // 文字を読ませたいので、背景は一枚かぶせて落ち着かせる
-    this.add.rectangle(0, 0, VIEW.width, VIEW.height, 0x1a1109, 0.42).setOrigin(0);
+    // 文字を読ませたいので、背景は一枚かぶせて落ち着かせる。
+    // 濃くしすぎると絵が灰色になってしまうので、字に縁取りを付けたぶん薄めにする
+    this.add.rectangle(0, 0, VIEW.width, VIEW.height, 0x10233a, 0.32).setOrigin(0);
 
     this.setupFilm();
     this.drawMarquee();
@@ -82,10 +84,10 @@ export class TitleScene extends Phaser.Scene {
     g.fillRoundedRect(cx - 300, 52, 600, 132, 12);
     g.strokeRoundedRect(cx - 300, 52, 600, 132, 12);
 
-    this.add.text(cx, 78, 'BI-PLANES', {
-      fontFamily: 'Georgia, "Times New Roman", serif', fontSize: '62px', color: INK,
+    this.add.text(cx, 82, 'BATTLE PLANES', {
+      fontFamily: 'Georgia, "Times New Roman", serif', fontSize: '50px', color: INK,
     }).setOrigin(0.5, 0);
-    this.add.text(cx, 146, '複葉機ドッグファイト', {
+    this.add.text(cx, 146, '遊び方を選んでください', {
       fontFamily: 'Georgia, "Times New Roman", serif', fontSize: '20px', color: '#5b4632',
     }).setOrigin(0.5, 0);
     for (const dx of [-268, 268]) {
@@ -128,7 +130,7 @@ export class TitleScene extends Phaser.Scene {
 
     // 下段は地面の絵に重なって読めなくなるので、どちらも敷き紙を挟む
     this.add.text(cx, VIEW.height - 96,
-      '↑ ↓ 遊び方　　← → 腕前　　Enter 決定', {
+      '↑ ↓ 遊び方　　← → 腕前　　Enter 決定　　Esc タイトルへ', {
         fontFamily: 'Georgia, serif', fontSize: '20px', color: CREAM,
         backgroundColor: 'rgba(24,16,10,0.55)', padding: { x: 16, y: 7 },
       }).setOrigin(0.5);
@@ -145,7 +147,7 @@ export class TitleScene extends Phaser.Scene {
     const keys = kb.addKeys({
       up: KEY.UP, down: KEY.DOWN, left: KEY.LEFT, right: KEY.RIGHT,
       w: KEY.W, s: KEY.S, a: KEY.A, d: KEY.D,
-      enter: KEY.ENTER, space: KEY.SPACE,
+      enter: KEY.ENTER, space: KEY.SPACE, back: KEY.ESC,
     }) as Record<string, Phaser.Input.Keyboard.Key>;
 
     // ブラウザは操作があるまで音を鳴らせない。タイトルで触ってもらえれば
@@ -159,6 +161,7 @@ export class TitleScene extends Phaser.Scene {
     for (const k of ['left', 'a']) keys[k].on('down', () => this.pick(-1));
     for (const k of ['right', 'd']) keys[k].on('down', () => this.pick(1));
     for (const k of ['enter', 'space']) keys[k].on('down', () => this.start());
+    keys.back.on('down', () => { if (!this.started) this.scene.start('Opening'); });
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => { kb.removeAllKeys(true); });
   }
