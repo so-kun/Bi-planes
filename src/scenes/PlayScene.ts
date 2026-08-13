@@ -11,7 +11,7 @@
 
 import Phaser from 'phaser';
 import {
-  BALLOON, FILM_DEFAULT, FLIGHT, PLANE, SCORE, SMOKE, THROTTLE_NAMES, VIEW, WEAPON,
+  BALLOON, FILM_DEFAULT, FLIGHT, PLANE, SCORE, SMOKE, VIEW,
 } from '../config';
 import { sfx } from '../audio';
 import { FilmPipeline } from '../fx/FilmPipeline';
@@ -24,6 +24,7 @@ import { StuckKeyGuard } from '../input/StuckKeyGuard';
 import { PadInput, type PadState } from '../input/PadInput';
 import { Pilot, AI_LEVELS } from '../ai/Pilot';
 import { Countdown } from '../ui/Countdown';
+import { Panel, PANEL } from '../ui/Panel';
 import { rendererLine } from '../diagnostics';
 
 const KEY = Phaser.Input.Keyboard.KeyCodes;
@@ -85,8 +86,8 @@ export class PlayScene extends Phaser.Scene {
   /** 開始の合図。この間は操作を受け付けず、機体は出撃位置で待つ */
   private countdown!: Countdown;
 
-  private hud!: Phaser.GameObjects.Graphics;
-  private hudTexts: Phaser.GameObjects.Text[] = [];
+  /** 計器盤。1人につき1枚（src/ui/Panel.ts） */
+  private panels: Panel[] = [];
   private debugText!: Phaser.GameObjects.Text;
   /** 操縦がどちらかを切り替えたときだけ出す表示 */
   private aiText!: Phaser.GameObjects.Text;
@@ -348,7 +349,7 @@ export class PlayScene extends Phaser.Scene {
     this.particles.update(dt);
     this.checkHits();
     this.bullets.draw();
-    this.drawHud();
+    this.drawHud(dt);
     if (this.aiText.alpha > 0) this.aiText.setAlpha(Math.max(0, this.aiText.alpha - dt * 0.5));
   }
 
@@ -617,14 +618,16 @@ export class PlayScene extends Phaser.Scene {
   }
 
   private setupHud(): void {
-    this.hud = this.add.graphics().setDepth(70);
+    const margin = 18;
     for (const p of this.players) {
-      this.hudTexts[p.id] = this.add.text(0, 0, '', {
-        fontFamily: 'Georgia, "Times New Roman", serif', fontSize: '22px', color: '#f4e6c8',
-      }).setDepth(71);
+      // 1P は左端、2P は右端。中身の並びは左右で同じにする ――
+      // 鏡にすると銘板の文字まで裏返って読みにくい
+      this.panels[p.id] = new Panel(
+        this, p.id === 0 ? margin : VIEW.width - margin - PANEL.w, 14, p.color, p.name,
+      );
       // 誰が操縦しているかは試合中ずっと分かっている必要があるので、計器の下に出しておく
       this.aiBadges[p.id] = this.add.text(
-        p.id === 0 ? 26 : VIEW.width - 26, 110, '', {
+        p.id === 0 ? margin + 4 : VIEW.width - margin - 4, 14 + PANEL.h + 6, '', {
           fontFamily: 'Georgia, serif', fontSize: '15px', color: '#f4e6c8',
           backgroundColor: 'rgba(24,16,10,0.5)', padding: { x: 7, y: 3 },
         }).setOrigin(p.id === 0 ? 0 : 1, 0).setDepth(71).setVisible(false);
@@ -662,13 +665,20 @@ export class PlayScene extends Phaser.Scene {
     }).setDepth(71).setVisible(this.showDebug);
   }
 
-  private drawHud(): void {
-    const g = this.hud;
-    g.clear();
-    for (const p of this.players) this.drawPanel(p);
+  private drawHud(dt: number): void {
+    for (const p of this.players) {
+      this.panels[p.id].update({
+        score: p.score,
+        // フリープレイは勝ち負けが無いので、上限を出さない
+        target: this.free ? null : SCORE.winning,
+        hp: p.plane.hp,
+        cannonAmmo: p.plane.cannonAmmo,
+        throttle: p.plane.state.throttle,
+      }, dt);
+    }
     if (!this.showDebug) return;
     this.debugText.setText([
-      ...this.players.map((p) => this.debugLines(p)),
+      ...this.players.map((q) => this.debugLines(q)),
       `気球 ${this.balloons.list.length}/${BALLOON.maxAlive}（金 ${this.balloons.list.filter((b) => b.gold).length}）` +
         `  弾 ${this.bullets.list.length}` +
         `  フィルム ${['切', '弱', '既定', '標準', '強'][this.film?.getLevel() ?? 2]}${this.film ? '' : '（WebGL 無効）'}` +
@@ -677,58 +687,6 @@ export class PlayScene extends Phaser.Scene {
         `${this.keyGuard.releasedCount ? `  ／ 押しっぱなしを解除 ${this.keyGuard.releasedCount}回` : ''}`,
       rendererLine(this.game),
     ].join('\n'));
-  }
-
-  /** 1人分の計器。1P は左端、2P は右端に置いて左右対称に並べる */
-  private drawPanel(p: Player): void {
-    const g = this.hud;
-    const w = 262;
-    const x = p.id === 0 ? 22 : VIEW.width - 22 - w;
-    const y = 20;
-    const tabW = 68;
-    // 名札は外側（画面の端側）に寄せる。視線が自陣側にまとまる
-    const tabX = p.id === 0 ? x : x + w - tabW;
-    const barX = p.id === 0 ? x + 84 : x + 6;
-
-    g.fillStyle(0xf4e6c8, 1).lineStyle(5, 0x241a12, 1);
-    g.fillRoundedRect(x, y, w, 84, 9);
-    g.strokeRoundedRect(x, y, w, 84, 9);
-    g.fillStyle(p.color, 1);
-    g.fillRoundedRect(tabX, y, tabW, 84, 9);
-    g.strokeRoundedRect(tabX, y, tabW, 84, 9);
-
-    // HP
-    g.fillStyle(0xd3bd93, 1).lineStyle(3, 0x241a12, 1);
-    g.fillRoundedRect(barX, y + 44, 150, 13, 6.5);
-    g.strokeRoundedRect(barX, y + 44, 150, 13, 6.5);
-    g.fillStyle(p.color, 1);
-    g.fillRoundedRect(barX + 3, y + 47, 144 * (p.plane.hp / PLANE.maxHp), 7, 3.5);
-
-    // 20mm 残弾
-    for (let i = 0; i < WEAPON.cannon.ammo; i++) {
-      g.fillStyle(i < p.plane.cannonAmmo ? 0xd59a34 : 0xc4b087, 1);
-      g.lineStyle(3, 0x241a12, 1);
-      g.fillRoundedRect(barX + i * 14, y + 62, 9, 14, 3);
-      g.strokeRoundedRect(barX + i * 14, y + 62, 9, 14, 3);
-    }
-
-    // スロットル計
-    const gx = p.id === 0 ? x + 232 : x + 30;
-    g.lineStyle(3, 0x241a12, 1);
-    g.beginPath();
-    g.arc(gx, y + 74, 16, Math.PI, 0);
-    g.strokePath();
-    const a = Math.PI + (p.plane.state.throttle + 0.5) / THROTTLE_NAMES.length * Math.PI;
-    g.lineStyle(4, p.color, 1);
-    g.lineBetween(gx, y + 74, gx + Math.cos(a) * 14, y + 74 + Math.sin(a) * 14);
-
-    // 名札と得点
-    const t = this.hudTexts[p.id];
-    // フリープレイは勝ち負けが無いので、割らずに撃った数だけ出す
-    t.setText(this.free ? `${p.name}\n気球 ${p.score}` : `${p.name}\n${p.score} / ${SCORE.winning}`);
-    t.setAlign('center');
-    t.setOrigin(0.5, 0);
-    t.setPosition(tabX + tabW / 2, y + 16);
   }
 
   private debugLines(p: Player): string {
