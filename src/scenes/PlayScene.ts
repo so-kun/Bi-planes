@@ -156,8 +156,8 @@ export class PlayScene extends Phaser.Scene {
   }
 
   /** @returns 合図が終わって試合が動いているか */
-  private tickCountdown(dt: number): boolean {
-    const live = this.countdown.tick(dt);
+  private tickCountdown(): boolean {
+    const live = this.countdown.tick();
     if (live) return true;
     // 機体は出撃位置に据え置く。合図の間に動きださないように
     for (const p of this.players) {
@@ -338,7 +338,7 @@ export class PlayScene extends Phaser.Scene {
       this.wakeAudio();
     }
 
-    const live = this.tickCountdown(dt);
+    const live = this.tickCountdown();
     if (this.running && live) {
       for (const p of this.players) this.updatePlayer(p, dt);
     }

@@ -10,6 +10,7 @@
  */
 
 import { PAD } from '../config';
+import { note } from '../diagnostics';
 
 export interface PadState {
   connected: boolean;
@@ -64,7 +65,26 @@ export class PadInput {
     return { pad: null, other: this.index === 0 ? other : null };
   }
 
+  /**
+   * 今の状態を読む。ここは毎フレーム、画面の処理の中から呼ばれる。
+   * 例外を外へ出すと画面が止まり、キーもパッドも効かなくなるので、
+   * 何かあってもパッド無しとして返す
+   */
   read(): PadState {
+    try {
+      return this.readPad();
+    } catch (err) {
+      if (!PadInput.warned) {
+        PadInput.warned = true;
+        note(`パッドを読めませんでした。パッド無しで続けます。\n  ${String(err)}`);
+      }
+      return IDLE;
+    }
+  }
+
+  private static warned = false;
+
+  private readPad(): PadState {
     const { pad, other } = this.pick();
     if (!pad) {
       // 抜かれたときに立ち上がりの記録が残っていると、挿し直した瞬間に暴発する

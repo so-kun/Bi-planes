@@ -29,25 +29,8 @@ export class Sfx {
   /** 音の用意に失敗したか。失敗しても、ゲームは音なしで続ける */
   private failed = false;
 
-  /**
-   * 最初の入力で呼ぶ。ブラウザは操作前に音を鳴らせない。
-   *
-   * ここは**入力の処理の中から呼ばれる**ので、例外を外へ出してはいけない。
-   * Phaser は毎フレームの呼び出しが終わってから次のフレームを予約するので、
-   * 途中で例外が出ると輪がそこで止まり、以後どのキーも効かなくなる
-   */
+  /** 最初の入力で呼ぶ。ブラウザは操作前に音を鳴らせない */
   resume(): void {
-    try {
-      this.open();
-    } catch (err) {
-      if (!this.failed) {
-        this.failed = true;
-        note(`音を出せませんでした。音なしで続けます。\n  ${String(err)}`);
-      }
-    }
-  }
-
-  private open(): void {
     if (this.failed) return;
     if (!this.ac) {
       const AC = window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
@@ -74,7 +57,13 @@ export class Sfx {
       this.engineBus = engineBus;
       this.ac = ac;
     }
-    if (this.ac.state === 'suspended') void this.ac.resume();
+    // resume() は約束を返す。断られても放っておくと未処理の失敗になるので受け止める
+    if (this.ac.state === 'suspended') {
+      this.ac.resume().catch((err: unknown) => {
+        this.failed = true;
+        note(`音を鳴らしはじめられませんでした。音なしで続けます。\n  ${String(err)}`);
+      });
+    }
   }
 
   get ready(): boolean {
@@ -418,11 +407,44 @@ export class Sfx {
 }
 
 /**
+ * 音のせいでゲームが止まらないようにする覆い。
+ *
+ * 音の呼び出しは**入力の処理の中から**起きる ―― 最初のキー、あるいは最初に
+ * パッドを認識したときに、音を用意しに行く。Phaser は毎フレームの処理を
+ * 済ませてから次のフレームを予約するので、ここで例外が出ると画面がその場で止まり、
+ * **キーもパッドも一切効かなくなる**。原因が音でも、症状は「操作を受け付けない」になる。
+ *
+ * そこで、外から呼ばれる口をすべて包む。一度でも失敗したら以後は音なしで進み、
+ * 何が起きたかは画面に出す。個々のメソッドに try を書くと、あとで足したものを
+ * 包み忘れるので、入口をまとめて覆っている。
+ */
+function neverThrows<T extends object>(target: T): T {
+  let dead = false;
+  return new Proxy(target, {
+    get(obj, key, recv) {
+      const v = Reflect.get(obj, key, recv);
+      if (typeof v !== 'function') return v;
+      return (...args: unknown[]): unknown => {
+        if (dead) return undefined;
+        try {
+          return (v as (...a: unknown[]) => unknown).apply(obj, args);
+        } catch (err) {
+          dead = true;
+          note(`音を用意できませんでした（${String(key)}）。以後は音なしで続けます。\n  ${String(err)}`);
+          console.error(err);
+          return undefined;
+        }
+      };
+    },
+  });
+}
+
+/**
  * 音は画面をまたいで1つだけ持つ。
  * 画面ごとに作ると AudioContext が増え、BGM が二重に鳴ったり、
  * タイトルで鳴らしはじめた曲が対戦に移った瞬間に止まったりする
  */
-export const sfx = new Sfx();
+export const sfx = neverThrows(new Sfx());
 
 /** プロペラのチョップ感を AM で作るエンジン音 */
 class EngineVoice {

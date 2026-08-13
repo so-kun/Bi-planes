@@ -23,6 +23,11 @@ const game = new Phaser.Game({
     antialias: true,
     roundPixels: false,
   },
+  // Phaser の音は使わない（音はすべて src/audio.ts で自前に合成している）。
+  // 切っておかないと Phaser が起動時に AudioContext をもう一つ作り、
+  // ブラウザ側の「操作があるまで鳴らせない」仕掛けと二重に噛み合う。
+  // Safari は同時に持てる AudioContext の数が少ないので、無駄には持たない
+  audio: { noAudio: true },
   scene: [BootScene, OpeningScene, TitleScene, PlayScene, PracticeScene],
 });
 
