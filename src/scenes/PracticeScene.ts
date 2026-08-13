@@ -15,7 +15,7 @@ import { Rings } from '../objects/Rings';
 import { StuckKeyGuard } from '../input/StuckKeyGuard';
 import { PadInput, type PadState } from '../input/PadInput';
 import { Countdown } from '../ui/Countdown';
-import { allStages, formatTime, PRACTICE_STAGES, type Stage } from '../practice/stages';
+import { STAGES, START, formatTime, PRACTICE_STAGES } from '../practice/stages';
 
 const KEY = Phaser.Input.Keyboard.KeyCodes;
 const BEST_KEY = 'biplanes.practice.best';
@@ -34,8 +34,9 @@ export class PracticeScene extends Phaser.Scene {
   private pad = new PadInput(0);
   private padState!: PadState;
 
-  private stages: Stage[] = [];
   private stageIndex = 0;
+  /** 前のフレームの機体位置。輪の面を横切ったかの判定に要る */
+  private prev = { x: START.x, y: START.y };
   /** 今のステージの経過時間 */
   private stageTime = 0;
   /** 終わったステージのタイム */
@@ -52,6 +53,7 @@ export class PracticeScene extends Phaser.Scene {
   private hud!: Phaser.GameObjects.Graphics;
   private hudText!: Phaser.GameObjects.Text;
   private centerText!: Phaser.GameObjects.Text;
+  private stageName!: Phaser.GameObjects.Text;
 
   constructor() {
     super('Practice');
@@ -70,10 +72,9 @@ export class PracticeScene extends Phaser.Scene {
     this.rings = new Rings(this, 20);
     this.plane = new Plane(this, {
       side: 'plane-red', top: 'plane-red-top', under: 'plane-red-under',
-    }, 230, 380, 1);
+    }, START.x, START.y, START.facing);
     this.plane.container.setDepth(30);
 
-    this.stages = allStages();
     this.best = loadBest();
     this.stageIndex = 0;
     this.times = [];
@@ -91,12 +92,16 @@ export class PracticeScene extends Phaser.Scene {
   // ---------------------------------------------------------------- 進行
 
   private beginStage(): void {
-    this.rings.load(this.stages[this.stageIndex].rings);
-    this.plane.reset(230, 380, 1);
+    const stage = STAGES[this.stageIndex];
+    this.rings.load(stage.rings);
+    this.plane.reset(START.x, START.y, START.facing);
+    this.prev = { x: START.x, y: START.y };
     this.stageTime = 0;
     this.interval = 0;
     this.countdown.begin();
     this.centerText.setVisible(false);
+    // 何の練習かを見出しに出す。ステージの狙いが分かっていたほうが身につく
+    this.stageName.setText(`ステージ ${this.stageIndex + 1}　${stage.name}`);
   }
 
   private finishStage(): void {
@@ -161,7 +166,7 @@ export class PracticeScene extends Phaser.Scene {
       this.flyPlane(dt, live);
       if (live) {
         this.stageTime += dt;
-        if (this.rings.check(this.plane.x, this.plane.y)) {
+        if (this.rings.check(this.prev.x, this.prev.y, this.plane.x, this.plane.y)) {
           sfx.pop();
           this.particles.popBalloon(this.plane.x, this.plane.y);
           if (this.rings.cleared) this.finishStage();
@@ -176,17 +181,19 @@ export class PracticeScene extends Phaser.Scene {
 
   /** 機体を飛ばす。合図の間は出撃位置で待たせる（対戦と同じ） */
   private flyPlane(dt: number, live: boolean): void {
+    this.prev = { x: this.plane.x, y: this.plane.y };
     if (!live) {
-      this.plane.state.x = 230;
-      this.plane.state.y = 380;
-      this.plane.state.vx = 260;
+      this.plane.state.x = START.x;
+      this.plane.state.y = START.y;
+      this.plane.state.vx = START.facing * 260;
       this.plane.state.vy = 0;
-      this.plane.container.setPosition(230, 380);
+      this.plane.container.setPosition(START.x, START.y);
       return;
     }
     if (!this.plane.alive) {
       // 練習なので落ちてもすぐ戻す。タイムは止めない（落ちること自体が損）
-      this.plane.reset(230, 380, 1);
+      this.plane.reset(START.x, START.y, START.facing);
+      this.prev = { x: START.x, y: START.y };
       return;
     }
     // 練習では矢印キーも 1P の操作に使える。相手がいないので取り合いにならない
@@ -197,6 +204,11 @@ export class PracticeScene extends Phaser.Scene {
     const pitch = Math.abs(this.padState.pitch) > Math.abs(byKey) ? this.padState.pitch : byKey;
     this.plane.setThrottle(k.throttle.isDown || this.padState.throttle ? 1 : 0);
     this.plane.update(pitch, dt);
+    // 画面端でつながって飛ぶと位置が大きく跳ぶ。そのまま線分で見ると
+    // 通っていない輪を横切ったことになるので、跳んだフレームは見送る
+    if (Math.abs(this.plane.x - this.prev.x) > VIEW.width / 2) {
+      this.prev = { x: this.plane.x, y: this.plane.y };
+    }
     if (this.padState.rollEdge !== 0) this.plane.roll(this.padState.rollEdge);
     if (this.plane.y >= VIEW.groundY) {
       this.particles.explode(this.plane.x, VIEW.groundY, true);
@@ -270,13 +282,18 @@ export class PracticeScene extends Phaser.Scene {
       align: 'center',
     }).setOrigin(0.5, 0).setDepth(71);
 
+    this.stageName = this.add.text(VIEW.width / 2, 92, '', {
+      fontFamily: 'Georgia, "Times New Roman", serif', fontSize: '22px', color: '#f4e6c8',
+      stroke: '#241a12', strokeThickness: 5,
+    }).setOrigin(0.5, 0).setDepth(71);
+
     this.centerText = this.add.text(VIEW.width / 2, VIEW.height / 2 - 40, '', {
       fontFamily: 'Georgia, "Times New Roman", serif', fontSize: '38px', color: '#f4e6c8',
       align: 'center', stroke: '#241a12', strokeThickness: 8,
     }).setOrigin(0.5).setDepth(74).setVisible(false);
 
     this.add.text(VIEW.width / 2, VIEW.height - 26,
-      '番号の順に輪をくぐる　　W/S・↑↓ 機首　　A/D・←→ ロール　　E 全開　　'
+      '矢印の向きに輪をくぐる（順番どおりに）　　W/S・↑↓ 機首　　A/D・←→ ロール　　E 全開　　'
       + 'R このステージをやり直し　　Esc タイトルへ', {
         fontFamily: 'Georgia, serif', fontSize: '15px', color: '#f4e6c8',
         backgroundColor: 'rgba(24,16,10,0.5)', padding: { x: 12, y: 5 },
