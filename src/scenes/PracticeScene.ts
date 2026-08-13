@@ -200,8 +200,10 @@ export class PracticeScene extends Phaser.Scene {
     const k = this.keys;
     const up = k.up.isDown || k.upAlt.isDown;
     const down = k.down.isDown || k.downAlt.isDown;
-    const byKey = (up ? 1 : 0) - (down ? 1 : 0);
-    const pitch = Math.abs(this.padState.pitch) > Math.abs(byKey) ? this.padState.pitch : byKey;
+    // 上下は操縦桿と同じ向き ―― 引く（下）と機首が上がる（2026-08-13 変更）
+    const byKey = (down ? 1 : 0) - (up ? 1 : 0);
+    const stick = -this.padState.pitch;
+    const pitch = Math.abs(stick) > Math.abs(byKey) ? stick : byKey;
     this.plane.setThrottle(k.throttle.isDown || this.padState.throttle ? 1 : 0);
     this.plane.update(pitch, dt);
     // 画面端でつながって飛ぶと位置が大きく跳ぶ。そのまま線分で見ると
@@ -293,7 +295,7 @@ export class PracticeScene extends Phaser.Scene {
     }).setOrigin(0.5).setDepth(74).setVisible(false);
 
     this.add.text(VIEW.width / 2, VIEW.height - 26,
-      '矢印の向きに輪をくぐる（順番どおりに）　　W/S・↑↓ 機首　　A/D・←→ ロール　　E 全開　　'
+      '矢印の向きに輪をくぐる（順番どおりに）　　S/W・↓↑ 機首上げ下げ　　A/D・←→ ロール　　E 全開　　'
       + 'R このステージをやり直し　　Esc タイトルへ', {
         fontFamily: 'Georgia, serif', fontSize: '15px', color: '#f4e6c8',
         backgroundColor: 'rgba(24,16,10,0.5)', padding: { x: 12, y: 5 },
