@@ -14,6 +14,8 @@ export const COUNT = { ready: 0.9, numbers: 0.55, go: 0.5 };
 export const COUNT_TOTAL = COUNT.ready + COUNT.numbers * 3 + COUNT.go;
 
 export class Countdown {
+  /** 合図が終わる実時刻（ミリ秒）。0 なら合図は出ていない */
+  private endsAt = 0;
   private left = 0;
   /** 直前に鳴らした数字。同じ数字で二度鳴らさないための記録 */
   private lastBeep = -1;
@@ -27,18 +29,27 @@ export class Countdown {
   }
 
   begin(): void {
+    this.endsAt = performance.now() + COUNT_TOTAL * 1000;
     this.left = COUNT_TOTAL;
     this.lastBeep = -1;
     this.text.setVisible(true);
   }
 
-  get running(): boolean { return this.left > 0; }
+  get running(): boolean { return this.endsAt !== 0; }
 
-  /** @returns 合図が終わって本編が動いているか */
-  tick(dt: number): boolean {
-    if (this.left <= 0) return true;
-    this.left -= dt;
+  /**
+   * @returns 合図が終わって本編が動いているか
+   *
+   * 残り時間は**実時刻で測る**。1コマぶんの刻みを足していく数え方だと、
+   * 遅い機械では刻みが頭打ちになるぶん実時間が延びる ―― 実測で 14 コマ/秒だと
+   * 3 秒の合図が 11 秒かかった。合図の間は操作を受け付けないので、
+   * そのぶん「押しても効かない」時間が延びてしまう
+   */
+  tick(): boolean {
+    if (this.endsAt === 0) return true;
+    this.left = (this.endsAt - performance.now()) / 1000;
     if (this.left <= 0) {
+      this.endsAt = 0;
       this.left = 0;
       this.text.setVisible(false);
       return true;

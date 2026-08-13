@@ -150,7 +150,7 @@ export class PracticeScene extends Phaser.Scene {
     if (!this.woke && this.padState.connected) { this.woke = true; this.wakeAudio(); }
     this.watchFilm(dt);
 
-    const live = this.countdown.tick(dt);
+    const live = this.countdown.tick();
 
     if (this.finished) {
       // 終わったあとも機体は飛ばしておく。止まった画面より賑やかで、
