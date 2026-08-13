@@ -569,14 +569,15 @@ export class PlayScene extends Phaser.Scene {
 
   // ---------------------------------------------------------------- 音と煙
 
-  /** スロットルや損傷が変わったときだけエンジン音を鳴らし直す */
+  /** スロットル・損傷・水温が変わったときだけエンジン音を鳴らし直す */
   private syncEngineSound(p: Player): void {
     const damaged = p.plane.hp < 70;
-    const key = `${p.plane.state.throttle}/${damaged}`;
+    const strained = p.plane.overRedline;
+    const key = `${p.plane.state.throttle}/${damaged}/${strained}`;
     if (key === p.lastEngineState) return;
     p.lastEngineState = key;
     // EngineVoice の段階は 1..3。巡航を 2、全開を 3 に対応させる
-    sfx.setEngine(p.id, p.plane.state.throttle + 2, damaged);
+    sfx.setEngine(p.id, p.plane.state.throttle + 2, damaged, strained);
   }
 
   /**

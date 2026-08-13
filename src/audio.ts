@@ -20,6 +20,8 @@ export class Sfx {
   /** 音を鳴らせるようになる前に要求された段階。鳴らしはじめるときに使う */
   private engineLevel: number[] = [];
   private engineDamaged: boolean[] = [];
+  /** 水温が赤帯に入っているか。入っていると音がざらつく */
+  private engineStrained: boolean[] = [];
   private bgm: Track | null = null;
   /** 今どの曲を鳴らしたいか。B キーで切っても、次の画面で戻せるように覚えておく */
   private bgmKind: BgmKind = 'battle';
@@ -251,15 +253,17 @@ export class Sfx {
       if (this.engines[i]) continue;
       this.engines[i] = new EngineVoice(
         this.ac, this.engineBus, this.engineLevel[i] ?? 2, this.engineDamaged[i] ?? false,
+        this.engineStrained[i] ?? false,
       );
     }
     this.balanceEngines();
   }
 
-  setEngine(index: number, level: number, damaged: boolean): void {
+  setEngine(index: number, level: number, damaged: boolean, strained = false): void {
     this.engineLevel[index] = level;
     this.engineDamaged[index] = damaged;
-    this.engines[index]?.set(level, damaged);
+    this.engineStrained[index] = strained;
+    this.engines[index]?.set(level, damaged, strained);
   }
 
   stopEngines(): void {
@@ -454,13 +458,18 @@ class EngineVoice {
   private lp: BiquadFilterNode;
   private g: GainNode;
   private base: GainNode;
+  /** 過熱したときだけ効かせる、うなり（音程の細かい揺れ） */
+  private wobble: OscillatorNode;
+  private wobbleG: GainNode;
   private sputter: number | null = null;
+  /** 過熱したときの金属的なノッキング */
+  private knocker: number | null = null;
 
   /** 段階ごとの基音と、爆発の刻みの速さ */
   private static readonly PITCH = [0, 46, 64, 88];
   private static readonly CHOP = [0, 17, 24, 34];
 
-  constructor(private ac: Ctx, out: AudioNode, level = 2, damaged = false) {
+  constructor(private ac: Ctx, private out: AudioNode, level = 2, damaged = false, strained = false) {
     this.o1 = ac.createOscillator(); this.o1.type = 'sawtooth';
     this.o2 = ac.createOscillator(); this.o2.type = 'square'; this.o2.detune.value = 9;
     this.lp = ac.createBiquadFilter(); this.lp.type = 'lowpass';
@@ -472,6 +481,13 @@ class EngineVoice {
     this.o1.connect(this.lp); this.o2.connect(this.lp);
     this.lp.connect(this.g); this.g.connect(this.base); this.base.connect(out);
 
+    // 回りが不揃いになる感じは、片方の発振器の音程をゆっくり揺らして作る。
+    // 平常時は揺れ幅 0 なので鳴りに影響しない
+    this.wobble = ac.createOscillator(); this.wobble.type = 'sine';
+    this.wobble.frequency.value = 6.4;
+    this.wobbleG = ac.createGain(); this.wobbleG.gain.value = 0;
+    this.wobble.connect(this.wobbleG); this.wobbleG.connect(this.o2.detune);
+
     // 発振器は何も指定しないと 440Hz（ラの音）で鳴る。
     // 刻みの発振器まで 440Hz で回るため、そのままだと機関の音ではなく甲高い音になる。
     // 作った時点で目的の段階に合わせておく。音量だけは 0 から始めて、set() で立ち上げる
@@ -481,19 +497,33 @@ class EngineVoice {
     this.chop.frequency.value = EngineVoice.CHOP[level] ?? 24;
     this.lp.frequency.value = 300 + level * 330;
 
-    this.o1.start(); this.o2.start(); this.chop.start();
-    this.set(level, damaged);
+    this.o1.start(); this.o2.start(); this.chop.start(); this.wobble.start();
+    this.set(level, damaged, strained);
   }
 
-  set(level: number, damaged: boolean): void {
+  set(level: number, damaged: boolean, strained = false): void {
     const t = this.ac.currentTime;
-    const f = EngineVoice.PITCH[level] ?? 64;
-    const c = EngineVoice.CHOP[level] ?? 24;
+    // 過熱すると回転が上ずり、音がざらつく
+    const up = strained ? 1.07 : 1;
+    const f = (EngineVoice.PITCH[level] ?? 64) * up;
+    const c = (EngineVoice.CHOP[level] ?? 24) * up;
     this.o1.frequency.setTargetAtTime(f, t, 0.15);
     this.o2.frequency.setTargetAtTime(f * 2.01, t, 0.15);
     this.chop.frequency.setTargetAtTime(c, t, 0.15);
-    this.lp.frequency.setTargetAtTime(300 + level * 330, t, 0.2);
+    this.lp.frequency.setTargetAtTime(300 + level * 330 + (strained ? 620 : 0), t, 0.2);
     this.g.gain.setTargetAtTime(0.14 + level * 0.09, t, 0.12);
+    this.wobbleG.gain.setTargetAtTime(strained ? 42 : 0, t, 0.25);
+
+    if (strained && this.knocker === null) {
+      // 水温が振り切れる手前の、金属を叩くようなノッキング
+      this.knocker = window.setInterval(() => {
+        if (Math.random() < 0.25) return;
+        this.knock();
+      }, 130);
+    } else if (!strained && this.knocker !== null) {
+      clearInterval(this.knocker);
+      this.knocker = null;
+    }
 
     if (damaged && this.sputter === null) {
       // 被弾したエンジンは息継ぎする
@@ -512,12 +542,35 @@ class EngineVoice {
     }
   }
 
+  /**
+   * ノッキングのひと打ち。高いところから短く落ちる音を、
+   * 狭い帯だけ通して金属らしく響かせる
+   */
+  private knock(): void {
+    const t = this.ac.currentTime;
+    const o = this.ac.createOscillator();
+    o.type = 'square';
+    o.frequency.setValueAtTime(300 + Math.random() * 120, t);
+    o.frequency.exponentialRampToValueAtTime(110, t + 0.05);
+    const bp = this.ac.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.value = 1050 + Math.random() * 450;
+    bp.Q.value = 3.2;
+    const g = this.ac.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.55 + Math.random() * 0.35, t + 0.004);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.075);
+    o.connect(bp); bp.connect(g); g.connect(this.out);
+    o.start(t); o.stop(t + 0.09);
+  }
+
   stop(): void {
     const t = this.ac.currentTime;
     this.g.gain.setTargetAtTime(0, t, 0.1);
     if (this.sputter !== null) clearInterval(this.sputter);
+    if (this.knocker !== null) clearInterval(this.knocker);
     window.setTimeout(() => {
-      this.o1.stop(); this.o2.stop(); this.chop.stop();
+      this.o1.stop(); this.o2.stop(); this.chop.stop(); this.wobble.stop();
     }, 600);
   }
 }
