@@ -11,7 +11,7 @@
 
 import Phaser from 'phaser';
 import {
-  BALLOON, FILM_DEFAULT, FLIGHT, PLANE, SCORE, SMOKE, VIEW,
+  BALLOON, ENGINE, FILM_DEFAULT, FLIGHT, PLANE, SCORE, SMOKE, VIEW,
 } from '../config';
 import { sfx } from '../audio';
 import { FilmPipeline } from '../fx/FilmPipeline';
@@ -398,6 +398,7 @@ export class PlayScene extends Phaser.Scene {
     // スロットルは押している間だけ全開。離せば巡航に戻る
     p.plane.setThrottle(throttle ? 1 : 0);
     p.plane.update(pitch, dt);
+    if (p.plane.overheated) this.overheat(p);
     this.syncEngineSound(p);
 
     if (rollEdge !== 0) p.plane.roll(rollEdge);
@@ -428,6 +429,24 @@ export class PlayScene extends Phaser.Scene {
     p.plane.noteCannonFired();
     this.particles.muzzleSmoke(m.x, m.y);
     sfx.cannon();
+  }
+
+  /**
+   * 水温が振り切れたまま吹かし続けた。エンジンが焼き付いて、
+   * 弾を受けたのと同じだけ傷む ―― 吹かしっぱなしの代償はここで払わせる。
+   * 撃たれたわけではないので、落ちても相手に点は入らない
+   */
+  private overheat(p: Player): void {
+    p.plane.takeDamage(ENGINE.overheatDamage, 'engine');
+    // 黒い煙をひと吹き。何が起きたかを音と絵の両方で分かるようにする
+    const e = p.plane.enginePos();
+    for (let i = 0; i < 3; i++) this.particles.damage(e.x, e.y, 'engine');
+    sfx.hit();
+    if (p.plane.hp <= 0) {
+      this.particles.explode(p.plane.x, p.plane.y, false);
+      sfx.explosion();
+      this.downPlane(p, null, 0);
+    }
   }
 
   /** 地面への激突。撃たれたわけではないので、相手には自滅ぶんの点が入る */
@@ -673,7 +692,7 @@ export class PlayScene extends Phaser.Scene {
         target: this.free ? null : SCORE.winning,
         hp: p.plane.hp,
         cannonAmmo: p.plane.cannonAmmo,
-        throttle: p.plane.state.throttle,
+        temp: p.plane.temp,
       }, dt);
     }
     if (!this.showDebug) return;

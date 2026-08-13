@@ -11,7 +11,7 @@
  */
 
 import Phaser from 'phaser';
-import { PLANE, VIEW, WEAPON } from '../config';
+import { ENGINE, PLANE, VIEW, WEAPON } from '../config';
 import { stepFlight, wrapPi, type FlightReadout, type FlightState } from '../flight';
 
 export type Facing = 1 | -1;
@@ -35,6 +35,19 @@ export class Plane {
   alive = true;
   /** 被弾による性能低下 */
   damage = { engine: 1, handling: 1 };
+  /**
+   * エンジンの水温（0〜1）。全開で上がり、巡航に戻すとゆっくり下がる。
+   * 冷えきっても ENGINE.tempFloor までしか下がらない
+   */
+  temp = ENGINE.tempFloor;
+  /** 振り切れたまま吹かし続けている時間 */
+  private overheatTimer = 0;
+  /**
+   * このフレームで水温超過の傷が付いたか。呼ぶ側が読んで、
+   * 損傷・煙・音に反映する（弾が当たったときと同じ扱いにするため、
+   * ここでは知らせるだけにして、後始末は画面側に任せる）
+   */
+  overheated = false;
 
   cannonAmmo = WEAPON.cannon.ammo;
   private mgCooldown = 0;
@@ -144,6 +157,30 @@ export class Plane {
     }
   }
 
+  /**
+   * 水温。全開で上がり、巡航で下がる。
+   * 振り切れたまま吹かし続けると、一定の間隔で `overheated` を立てる ――
+   * 吹かしっぱなしを縛るのはこの仕掛けで、スロットル自体は塞がない
+   */
+  private updateTemp(dt: number): void {
+    const wide = this.state.throttle > 0;
+    const next = this.temp + (wide ? ENGINE.tempRise : -ENGINE.tempFall) * dt;
+    this.temp = Math.min(1, Math.max(ENGINE.tempFloor, next));
+
+    if (!wide || this.temp < 1) {
+      this.overheatTimer = 0;
+      return;
+    }
+    this.overheatTimer += dt;
+    if (this.overheatTimer >= ENGINE.overheatInterval) {
+      this.overheatTimer -= ENGINE.overheatInterval;
+      this.overheated = true;
+    }
+  }
+
+  /** 水温が赤帯に入っているか。計器の針を赤くするのに使う */
+  get overRedline(): boolean { return this.temp >= ENGINE.redline; }
+
   /** 損傷の度合いを 0（無傷）〜1（下限まで落ちた）で返す。煙の量に使う */
   hurt(part: 'engine' | 'handling'): number {
     const floor = PLANE.damageFloor[part];
@@ -161,6 +198,9 @@ export class Plane {
     this.facing = facing;
     this.hp = PLANE.maxHp;
     this.damage = { engine: 1, handling: 1 };
+    this.temp = ENGINE.tempFloor;
+    this.overheatTimer = 0;
+    this.overheated = false;
     this.cannonAmmo = WEAPON.cannon.ammo;
     this.rollT = 1;
     this.alive = true;
@@ -170,8 +210,10 @@ export class Plane {
   }
 
   update(pitchInput: number, dt: number): void {
+    this.overheated = false;
     if (!this.alive) return;
 
+    this.updateTemp(dt);
     this.mgCooldown = Math.max(0, this.mgCooldown - dt);
     this.cannonCooldown = Math.max(0, this.cannonCooldown - dt);
 
