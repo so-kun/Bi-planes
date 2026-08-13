@@ -3,14 +3,15 @@
  *
  * 意匠はユーザー提供の参考図どおり ―― 濃紺の板に真鍮の縁と鋲、
  * クリーム色の銘板、走行距離計のような数字の窓、区切りのある体力の帯、
- * 右端に丸い計器。
+ * 右端に丸い計器。丸い計器は参考図と同じく**水温計**で、
+ * 全開にすると上がり、赤帯まで振り切れたまま吹かすとエンジンが傷む。
  *
  * 枠や銘板は動かないので**一度だけ描く**。毎フレーム描き直すのは
  * 数字・体力の目盛り・針・残弾だけにしてある。
  */
 
 import Phaser from 'phaser';
-import { PLANE, WEAPON } from '../config';
+import { ENGINE, PLANE, WEAPON } from '../config';
 
 /** 板の大きさ */
 export const PANEL = { w: 340, h: 104 };
@@ -39,8 +40,8 @@ export interface PanelState {
   target: number | null;
   hp: number;
   cannonAmmo: number;
-  /** 0 = 巡航、1 = 全開 */
-  throttle: number;
+  /** 水温（0〜1）。ENGINE.tempFloor より下がらない */
+  temp: number;
 }
 
 /** 種を決めた擬似乱数。塗りの剥げが毎回同じ場所に出るようにする */
@@ -58,7 +59,7 @@ export class Panel {
   /** 銘板に彫った文字。まとめて隠せるように持っておく */
   private labels: Phaser.GameObjects.Text[] = [];
   /** 針は目標へ滑らかに寄せる。跳ねると機械らしくない */
-  private needle = 0;
+  private needle = ENGINE.tempFloor;
 
   /** 板の中の置き場所。左上を原点にした座標 */
   private static readonly L = {
@@ -248,9 +249,14 @@ export class Panel {
     g.fillStyle(C.brassHi, 0.5); g.fillCircle(x, y, r - 5);
     g.fillStyle(C.cream, 1); g.fillCircle(x, y, r - 7);
 
-    // 帯（緑 → 黄 → 赤）。スロットルを開けるほど右へ振れる
+    // 帯（緑 → 黄 → 赤）。水温が上がるほど右へ振れる。
+    // 赤帯の始まりは ENGINE.redline と同じ位置にしてある
     const A0 = Math.PI * 0.78, A1 = Math.PI * 2.22;
-    const band: [number, number, number][] = [[0, 0.45, 0x6f8f6a], [0.45, 0.75, 0xd4a52c], [0.75, 1, 0xb8392a]];
+    const band: [number, number, number][] = [
+      [0, ENGINE.redline - 0.3, 0x6f8f6a],
+      [ENGINE.redline - 0.3, ENGINE.redline, 0xd4a52c],
+      [ENGINE.redline, 1, 0xb8392a],
+    ];
     for (const [f0, f1, col] of band) {
       g.lineStyle(5, col, 0.9);
       g.beginPath();
@@ -265,7 +271,7 @@ export class Panel {
       g.lineBetween(x + Math.cos(a) * (r - 14), y + Math.sin(a) * (r - 14),
         x + Math.cos(a) * (r - (long ? 21 : 18)), y + Math.sin(a) * (r - (long ? 21 : 18)));
     }
-    this.labels.push(this.scene.add.text(x, y + r - 18, 'THR', {
+    this.labels.push(this.scene.add.text(x, y + r - 18, 'TEMP', {
       fontFamily: 'Georgia, serif', fontSize: '9px', color: '#6b5b3e',
     }).setOrigin(0.5).setDepth(this.still.depth + 1).setLetterSpacing(1));
   }
@@ -318,14 +324,14 @@ export class Panel {
       }
     }
 
-    // 針。目標へ滑らかに寄せる
-    const want = s.throttle > 0 ? 1 : 0.32;
-    this.needle += (want - this.needle) * Math.min(1, dt * 9);
+    // 針。水温そのものはゆっくり動くが、跳ねないよう少しだけ均す
+    this.needle += (s.temp - this.needle) * Math.min(1, dt * 12);
     const { cx, cy, r } = L.gauge;
     const A0 = Math.PI * 0.78, A1 = Math.PI * 2.22;
     const na = A0 + (A1 - A0) * this.needle;
     const gx = x + cx, gy = y + cy;
-    g.lineStyle(2.6, C.ink, 1);
+    // 赤帯に入ったら針も赤くする。数字を読まなくても危ないと分かる
+    g.lineStyle(2.6, s.temp >= ENGINE.redline ? 0xc03a24 : C.ink, 1);
     g.lineBetween(gx - Math.cos(na) * 6, gy - Math.sin(na) * 6,
       gx + Math.cos(na) * (r - 13), gy + Math.sin(na) * (r - 13));
     g.fillStyle(C.ink, 1); g.fillCircle(gx, gy, 4);

@@ -16,7 +16,7 @@
  * 「引く」ほうが素直なので、押し続けることになる場面では背面に返して引きに変える。
  */
 
-import { FLIGHT, VIEW, WEAPON } from '../config';
+import { ENGINE, FLIGHT, VIEW, WEAPON } from '../config';
 import type { Plane } from '../objects/Plane';
 import type { Balloon } from '../objects/Balloons';
 import { wrapPi } from '../flight';
@@ -77,6 +77,12 @@ export class Pilot {
   /** 引き金を引くと決めてから実際に引くまでの間 */
   private fireDelay = 0;
   private wantFire = false;
+  /**
+   * 水温が上がりすぎて、いま冷ましている最中か。
+   * 計器を見て吹かすのをやめる ―― 人にできる判断しかさせない方針のとおり、
+   * 見えない情報は使わない（水温は計器盤に出ている）
+   */
+  private cooling = false;
 
   constructor(private level: Level) {}
 
@@ -88,6 +94,7 @@ export class Pilot {
     this.thinkTimer = 0;
     this.fireDelay = 0;
     this.wantFire = false;
+    this.cooling = false;
   }
 
   /**
@@ -100,6 +107,11 @@ export class Pilot {
       this.reset();
       return IDLE;
     }
+
+    // 水温の見張り。赤帯で緩め、余裕ができるまで戻さない（戻す位置を下げて、
+    // 赤帯のきわで入り切りを繰り返さないようにする）
+    if (me.temp >= ENGINE.redline) this.cooling = true;
+    else if (me.temp <= ENGINE.redline - 0.20) this.cooling = false;
 
     const lv = this.level;
     const s = me.state;
@@ -188,8 +200,9 @@ export class Pilot {
       pitch,
       rollEdge,
       // 遅いか遠いときは吹かす。近づいたら緩めて、行き過ぎないようにする。
-      // 逃げている最中は速度が要るので必ず吹かす
-      throttle: urgent || speed < 215 || dist > 340,
+      // 逃げている最中は速度が要るので必ず吹かす。
+      // ただし水温が赤帯に入ったら緩め、十分冷えるまで我慢する
+      throttle: (urgent || speed < 215 || dist > 340) && !this.cooling,
       mg: firing && !useCannon,
       cannonEdge: useCannon,
     };
