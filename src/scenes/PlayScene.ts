@@ -1,8 +1,12 @@
 /**
- * M2: 2人対戦版。
+ * 空戦の画面。対戦とフリープレイの両方をここで受け持つ。
  *
  * 二機が同じ空を飛び、撃ち落として得点を競う。規定点数に達した側が勝ち。
  * 気球は共通の的で、撃った側の得点になる。金色の気球を撃つと自機が直る。
+ *
+ * **フリープレイ**（`init` に `free: true`）では相手を出さず、一人で飛ぶだけ。
+ * 勝ち負けは付かず、気球を撃った数だけ数える。中の作りは同じで、
+ * 機体が1機になるだけ ―― ここは players を舐めて回る書き方でそろえてある
  */
 
 import Phaser from 'phaser';
@@ -73,6 +77,11 @@ export class PlayScene extends Phaser.Scene {
   private winner: Player | null = null;
   /** タイトルで選んだ操縦。0 = 人、1..3 = コンピュータの腕前 */
   private startAi: number[] = [0, 0];
+  /**
+   * フリープレイ。相手を出さず、一人で飛ぶだけ。
+   * 勝ち負けは付かず、気球を撃った数だけ数える
+   */
+  private free = false;
   /** 開始の合図。この間は操作を受け付けず、機体は出撃位置で待つ */
   private countdown!: Countdown;
 
@@ -90,8 +99,9 @@ export class PlayScene extends Phaser.Scene {
     super('Play');
   }
 
-  init(data: { p1Ai?: number; p2Ai?: number }): void {
+  init(data: { p1Ai?: number; p2Ai?: number; free?: boolean }): void {
     this.startAi = [data?.p1Ai ?? 0, data?.p2Ai ?? 0];
+    this.free = data?.free ?? false;
   }
 
   create(): void {
@@ -182,12 +192,16 @@ export class PlayScene extends Phaser.Scene {
         { up: k.p1Up, down: k.p1Down, rollL: k.p1RollL, rollR: k.p1RollR,
           throttle: k.p1Throttle, mg: k.p1Mg, cannon: k.p1Cannon },
         { x: 230, y: 380, facing: 1 }),
-      this.makePlayer(1, '2P', 0x3c5a78,
+    ];
+    // フリープレイでは相手を出さない。以下はどこも players を舐めて回るので、
+    // 1機でもそのまま動く
+    if (!this.free) {
+      this.players.push(this.makePlayer(1, '2P', 0x3c5a78,
         { side: 'plane-blue', top: 'plane-blue-top', under: 'plane-blue-under' },
         { up: k.p2Up, down: k.p2Down, rollL: k.p2RollL, rollR: k.p2RollR,
           throttle: k.p2Throttle, mg: k.p2Mg, cannon: k.p2Cannon },
-        { x: VIEW.width - 230, y: 380, facing: -1 }),
-    ];
+        { x: VIEW.width - 230, y: 380, facing: -1 }));
+    }
 
     // ブラウザは操作があるまで音を鳴らせない
     const wake = (): void => this.wakeAudio();
@@ -231,7 +245,7 @@ export class PlayScene extends Phaser.Scene {
     k.restart.on('down', () => { if (this.winner) this.restart(); });
     k.title.on('down', () => { sfx.stopEngines(); this.scene.start('Title'); });
     k.ai1.on('down', () => this.cycleAi(this.players[0]));
-    k.ai2.on('down', () => this.cycleAi(this.players[1]));
+    k.ai2.on('down', () => { if (this.players[1]) this.cycleAi(this.players[1]); });
     k.mute.on('down', () => sfx.toggleMute());
     k.bgm.on('down', () => { this.bgmOn = sfx.toggleBgm(); });
     k.debug.on('down', () => {
@@ -268,7 +282,7 @@ export class PlayScene extends Phaser.Scene {
 
   /**
    * コンピュータ操縦の切り替え。切 → 弱 → 普通 → 強 → 切 と回る。
-   * 2P を任せれば1人で遊べ、両方に任せればデモとして眺められる
+   * 2P を任せれば1人で遊べる。フリープレイで 1P を任せれば、一機が飛ぶ様子を眺められる
    */
   private cycleAi(p: Player): void {
     p.ai = (p.ai + 1) % (AI_LEVELS.length + 1);
@@ -363,7 +377,7 @@ export class PlayScene extends Phaser.Scene {
 
     if (p.ai > 0) {
       const foe = this.other(p);
-      const intent = p.pilot.think(p.plane, foe.plane.alive ? foe.plane : null, this.balloons.list, dt);
+      const intent = p.pilot.think(p.plane, foe?.plane.alive ? foe.plane : null, this.balloons.list, dt);
       ({ pitch, throttle, rollEdge, mg, cannonEdge } = intent);
     } else {
       // キーボードは倒し切りの3値、パッドは倒した量がそのまま出る。
@@ -432,14 +446,16 @@ export class PlayScene extends Phaser.Scene {
     if (credit) this.addScore(credit, points);
   }
 
-  private other(p: Player): Player {
-    return this.players[p.id === 0 ? 1 : 0];
+  /** 相手。フリープレイでは相手がいないので null を返す */
+  private other(p: Player): Player | null {
+    return this.players[p.id === 0 ? 1 : 0] ?? null;
   }
 
   private addScore(p: Player, points: number): void {
     if (!this.running) return;
     p.score += points;
-    if (p.score >= SCORE.winning) this.finish(p);
+    // フリープレイは数えるだけ。終わりはない
+    if (!this.free && p.score >= SCORE.winning) this.finish(p);
   }
 
   private finish(p: Player): void {
@@ -448,8 +464,7 @@ export class PlayScene extends Phaser.Scene {
       q.plane.setThrottle(0);
       this.downedTexts[q.id].setVisible(false);
     }
-    sfx.setEngine(0, 1, false);
-    sfx.setEngine(1, 1, false);
+    for (const q of this.players) sfx.setEngine(q.id, 1, false);
     this.resultText.setText(
       `${p.name} の勝ち\n\n${this.players[0].score} 対 ${this.players[1].score}\n`
       + 'Enter でもう一度　　Esc でタイトルへ');
@@ -622,9 +637,10 @@ export class PlayScene extends Phaser.Scene {
 
     // 操作の説明は地面の絵の上に出るので、そのままでは読めない。敷き紙を1枚挟む
     this.add.text(VIEW.width / 2, VIEW.height - 21,
-      '1P  S/W 機首上げ下げ  A/D ロール  E 全開  F 7.7mm  G 20mm　　' +
-      '2P  ↓/↑ 機首上げ下げ  ←/→ ロール  Shift 全開  , 7.7mm  . 20mm　　' +
-      'V/C CPU 操縦（1P/2P）  Esc タイトル  1-5 フィルム  B BGM  M 消音  Tab 計器', {
+      '1P  S/W 機首上げ下げ  A/D ロール  E 全開  F 7.7mm  G 20mm　　'
+      + (this.free ? '' : '2P  ↓/↑ 機首上げ下げ  ←/→ ロール  Shift 全開  , 7.7mm  . 20mm　　')
+      + `V${this.free ? '' : '/C'} CPU 操縦${this.free ? '' : '（1P/2P）'}`
+      + '  Esc タイトル  1-5 フィルム  B BGM  M 消音  Tab 計器', {
         fontFamily: 'Georgia, serif', fontSize: '14px', color: '#f4e6c8',
         backgroundColor: 'rgba(24,16,10,0.5)', padding: { x: 12, y: 5 },
       }).setOrigin(0.5).setDepth(71).setAlpha(0.9);
@@ -708,7 +724,8 @@ export class PlayScene extends Phaser.Scene {
 
     // 名札と得点
     const t = this.hudTexts[p.id];
-    t.setText(`${p.name}\n${p.score} / ${SCORE.winning}`);
+    // フリープレイは勝ち負けが無いので、割らずに撃った数だけ出す
+    t.setText(this.free ? `${p.name}\n気球 ${p.score}` : `${p.name}\n${p.score} / ${SCORE.winning}`);
     t.setAlign('center');
     t.setOrigin(0.5, 0);
     t.setPosition(tabX + tabW / 2, y + 16);

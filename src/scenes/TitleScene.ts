@@ -2,7 +2,7 @@
  * ステージ選択。オープニングのあとに出て、遊び方を選んでから始める。
  *
  * 背景はオープニングと同じ絵から、ロゴと機体を外したもの。
- * 1人・2人・プラクティス・デモの4つと、コンピュータの腕前を選ぶ。
+ * 1人・2人・プラクティス・フリープレイの4つと、コンピュータの腕前を選ぶ。
  * 上下で遊び方、左右で腕前。決定は Enter か Space、パッドなら ○／A。
  */
 
@@ -22,6 +22,8 @@ interface Mode {
   note: string;
   /** 移る画面。プラクティスだけ別の画面へ行く */
   scene: 'Play' | 'Practice';
+  /** 相手を出さず、一人で飛ぶだけにするか */
+  free?: boolean;
   /** 腕前の選択が効くか。効かないものは薄く表示する */
   usesAi: boolean;
   p1Ai: (level: number) => number;
@@ -35,8 +37,8 @@ const MODES: Mode[] = [
     p1Ai: () => 0, p2Ai: () => 0 },
   { name: 'プラクティス', note: '輪をくぐって操縦を練習・全10ステージ', scene: 'Practice', usesAi: false,
     p1Ai: () => 0, p2Ai: () => 0 },
-  { name: 'デモを見る', note: 'コンピュータどうしの空戦', scene: 'Play', usesAi: true,
-    p1Ai: (lv) => lv, p2Ai: (lv) => lv },
+  { name: 'フリープレイ', note: '相手なし。一人で飛ぶだけ', scene: 'Play', usesAi: false, free: true,
+    p1Ai: () => 0, p2Ai: () => 0 },
 ];
 
 const CREAM = '#f4e6c8';
@@ -227,7 +229,7 @@ export class TitleScene extends Phaser.Scene {
     sfx.menuDecide();
     const m = MODES[this.mode];
     if (m.scene === 'Practice') this.scene.start('Practice');
-    else this.scene.start('Play', { p1Ai: m.p1Ai(this.level), p2Ai: m.p2Ai(this.level) });
+    else this.scene.start('Play', { p1Ai: m.p1Ai(this.level), p2Ai: m.p2Ai(this.level), free: m.free });
   }
 
   override update(): void {
