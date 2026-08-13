@@ -18,14 +18,23 @@ const KEY = Phaser.Input.Keyboard.KeyCodes;
 interface Mode {
   name: string;
   note: string;
+  /** 移る画面。プラクティスだけ別の画面へ行く */
+  scene: 'Play' | 'Practice';
+  /** 腕前の選択が効くか。効かないものは薄く表示する */
+  usesAi: boolean;
   p1Ai: (level: number) => number;
   p2Ai: (level: number) => number;
 }
 
 const MODES: Mode[] = [
-  { name: '1人で遊ぶ', note: '2P はコンピュータ', p1Ai: () => 0, p2Ai: (lv) => lv },
-  { name: '2人で対戦', note: '1台のキーボード、またはパッド2台', p1Ai: () => 0, p2Ai: () => 0 },
-  { name: 'デモを見る', note: 'コンピュータどうしの空戦', p1Ai: (lv) => lv, p2Ai: (lv) => lv },
+  { name: '1人で遊ぶ', note: '2P はコンピュータ', scene: 'Play', usesAi: true,
+    p1Ai: () => 0, p2Ai: (lv) => lv },
+  { name: '2人で対戦', note: '1台のキーボード、またはパッド2台', scene: 'Play', usesAi: false,
+    p1Ai: () => 0, p2Ai: () => 0 },
+  { name: 'プラクティス', note: '輪をくぐって操縦を練習・全10ステージ', scene: 'Practice', usesAi: false,
+    p1Ai: () => 0, p2Ai: () => 0 },
+  { name: 'デモを見る', note: 'コンピュータどうしの空戦', scene: 'Play', usesAi: true,
+    p1Ai: (lv) => lv, p2Ai: (lv) => lv },
 ];
 
 const CREAM = '#f4e6c8';
@@ -88,9 +97,9 @@ export class TitleScene extends Phaser.Scene {
 
   private drawMenu(): void {
     const cx = VIEW.width / 2;
-    const top = 250;
+    const top = 238;
     MODES.forEach((m, i) => {
-      const y = top + i * 62;
+      const y = top + i * 58;
       this.modeTexts[i] = this.add.text(cx - 150, y, m.name, {
         fontFamily: 'Georgia, "Times New Roman", serif', fontSize: '32px', color: CREAM,
         stroke: INK, strokeThickness: 5,
@@ -106,7 +115,7 @@ export class TitleScene extends Phaser.Scene {
     }).setOrigin(0.5);
 
     // 腕前
-    const ly = top + MODES.length * 62 + 22;
+    const ly = top + MODES.length * 58 + 16;
     this.levelLabel = this.add.text(cx - 150, ly, 'コンピュータの腕前', {
       fontFamily: 'Georgia, serif', fontSize: '18px', color: CREAM, stroke: INK, strokeThickness: 4,
     }).setOrigin(0, 0.5);
@@ -174,8 +183,8 @@ export class TitleScene extends Phaser.Scene {
     const t = this.modeTexts[this.mode];
     this.cursor.setPosition(t.x - 34, t.y);
 
-    // 2人で対戦のときは腕前を使わないので、薄くして「効かない」ことを示す
-    const usesAi = this.mode !== 1;
+    // 腕前を使わない遊び方では薄くして「効かない」ことを示す
+    const usesAi = MODES[this.mode].usesAi;
     this.levelLabel.setAlpha(usesAi ? 0.9 : 0.3);
     AI_LEVELS.forEach((_, i) => {
       const on = usesAi && i === this.level - 1;
@@ -190,7 +199,8 @@ export class TitleScene extends Phaser.Scene {
     sfx.resume();
     sfx.beep(true);
     const m = MODES[this.mode];
-    this.scene.start('Play', { p1Ai: m.p1Ai(this.level), p2Ai: m.p2Ai(this.level) });
+    if (m.scene === 'Practice') this.scene.start('Practice');
+    else this.scene.start('Play', { p1Ai: m.p1Ai(this.level), p2Ai: m.p2Ai(this.level) });
   }
 
   override update(): void {

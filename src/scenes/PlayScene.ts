@@ -18,14 +18,9 @@ import { Bullets } from '../objects/Bullets';
 import { StuckKeyGuard } from '../input/StuckKeyGuard';
 import { PadInput, type PadState } from '../input/PadInput';
 import { Pilot, AI_LEVELS } from '../ai/Pilot';
+import { Countdown } from '../ui/Countdown';
 
 const KEY = Phaser.Input.Keyboard.KeyCodes;
-
-/**
- * 開始の合図の長さ（秒）。READY? → 3 → 2 → 1 → GO! の順に出す。
- * numbers は数字1つぶん、go は GO! を出している時間
- */
-const COUNT = { ready: 0.9, numbers: 0.55, go: 0.5, total: 0.9 + 0.55 * 3 + 0.5 };
 
 type Key = Phaser.Input.Keyboard.Key;
 
@@ -77,13 +72,8 @@ export class PlayScene extends Phaser.Scene {
   private winner: Player | null = null;
   /** タイトルで選んだ操縦。0 = 人、1..3 = コンピュータの腕前 */
   private startAi: number[] = [0, 0];
-  /**
-   * 開始の合図の残り時間。0 になったら試合開始。
-   * この間は操作を受け付けず、機体は出撃位置で待つ
-   */
-  private countdown = 0;
-  /** 直前に鳴らした数字。同じ数字で二度鳴らさないための記録 */
-  private lastBeep = -1;
+  /** 開始の合図。この間は操作を受け付けず、機体は出撃位置で待つ */
+  private countdown!: Countdown;
 
   private hud!: Phaser.GameObjects.Graphics;
   private hudTexts: Phaser.GameObjects.Text[] = [];
@@ -93,7 +83,6 @@ export class PlayScene extends Phaser.Scene {
   private downedTexts: Phaser.GameObjects.Text[] = [];
   private aiBadges: Phaser.GameObjects.Text[] = [];
   private resultText!: Phaser.GameObjects.Text;
-  private countText!: Phaser.GameObjects.Text;
   private showDebug = false;
 
   constructor() {
@@ -126,6 +115,8 @@ export class PlayScene extends Phaser.Scene {
     // 最初は的が空にあったほうが試しやすい
     this.balloons.spawn(760, false);
 
+    this.countdown = new Countdown(this);
+
     // タイトルで選んだ操縦を反映してから、開始の合図に入る
     this.players.forEach((p, i) => {
       for (let n = 0; n < this.startAi[i]; n++) this.cycleAi(p);
@@ -142,21 +133,18 @@ export class PlayScene extends Phaser.Scene {
    * 飛ばしたまま待たせると、合図の前に落ちたり流されたりしてしまう
    */
   private beginCountdown(): void {
-    this.countdown = COUNT.total;
-    this.lastBeep = -1;
+    this.countdown.begin();
     for (const p of this.players) {
       p.plane.reset(p.home.x, p.home.y, p.home.facing);
       p.lastEngineState = '';
       this.downedTexts[p.id].setVisible(false);
     }
-    this.countText.setVisible(true);
   }
 
   /** @returns 合図が終わって試合が動いているか */
   private tickCountdown(dt: number): boolean {
-    if (this.countdown <= 0) return true;
-    this.countdown -= dt;
-
+    const live = this.countdown.tick(dt);
+    if (live) return true;
     // 機体は出撃位置に据え置く。合図の間に動きださないように
     for (const p of this.players) {
       p.plane.state.x = p.home.x;
@@ -165,37 +153,6 @@ export class PlayScene extends Phaser.Scene {
       p.plane.state.vy = 0;
       p.plane.container.setPosition(p.home.x, p.home.y);
     }
-
-    if (this.countdown <= 0) {
-      this.countdown = 0;
-      this.countText.setVisible(false);
-      return true;
-    }
-
-    // 残り時間から「今どの表示か」を出す。READY? のあとに 3・2・1、最後に GO!
-    const left = this.countdown - COUNT.go;
-    let label: string;
-    let beepAt: number;
-    if (left <= 0) {
-      label = 'GO!';
-      beepAt = 0;
-    } else if (left <= COUNT.numbers * 3) {
-      const n = Math.ceil(left / COUNT.numbers);
-      label = String(n);
-      beepAt = n;
-    } else {
-      label = 'READY?';
-      beepAt = -1;
-    }
-
-    if (beepAt !== this.lastBeep) {
-      this.lastBeep = beepAt;
-      if (beepAt >= 0) sfx.beep(beepAt === 0);
-    }
-
-    this.countText.setText(label);
-    this.countText.setColor(label === 'GO!' ? '#ffd76b' : '#f4e6c8');
-    this.countText.setFontSize(label === 'READY?' ? 54 : 78);
     return false;
   }
 
@@ -668,11 +625,6 @@ export class PlayScene extends Phaser.Scene {
         fontFamily: 'Georgia, serif', fontSize: '14px', color: '#f4e6c8',
         backgroundColor: 'rgba(24,16,10,0.5)', padding: { x: 12, y: 5 },
       }).setOrigin(0.5).setDepth(71).setAlpha(0.9);
-
-    this.countText = this.add.text(VIEW.width / 2, VIEW.height / 2 - 60, '', {
-      fontFamily: 'Georgia, "Times New Roman", serif', fontSize: '78px', color: '#f4e6c8',
-      align: 'center', stroke: '#241a12', strokeThickness: 9,
-    }).setOrigin(0.5).setDepth(73).setVisible(false);
 
     this.resultText = this.add.text(VIEW.width / 2, VIEW.height / 2 - 40, '', {
       fontFamily: 'Georgia, "Times New Roman", serif', fontSize: '44px', color: '#f4e6c8',
