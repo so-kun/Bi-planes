@@ -362,9 +362,13 @@ export class PlayScene extends Phaser.Scene {
       ({ pitch, throttle, rollEdge, mg, cannonEdge } = intent);
     } else {
       // キーボードは倒し切りの3値、パッドは倒した量がそのまま出る。
-      // 両方触っている場合は、深く入れているほうを採る
-      const byKey = (p.keys.up.isDown ? 1 : 0) - (p.keys.down.isDown ? 1 : 0);
-      pitch = Math.abs(p.padState.pitch) > Math.abs(byKey) ? p.padState.pitch : byKey;
+      // 両方触っている場合は、深く入れているほうを採る。
+      //
+      // 上下は操縦桿と同じ向き ―― **引く（下）と機首が上がる**（2026-08-13 変更）。
+      // ここで反転させるのは人の操作だけ。AI が出す pitch は機体基準のままなので触らない
+      const byKey = (p.keys.down.isDown ? 1 : 0) - (p.keys.up.isDown ? 1 : 0);
+      const stick = -p.padState.pitch;
+      pitch = Math.abs(stick) > Math.abs(byKey) ? stick : byKey;
       throttle = p.keys.throttle.isDown || p.padState.throttle;
       rollEdge = p.padState.rollEdge;
       mg = p.keys.mg.isDown || p.padState.mg;
@@ -619,8 +623,8 @@ export class PlayScene extends Phaser.Scene {
 
     // 操作の説明は地面の絵の上に出るので、そのままでは読めない。敷き紙を1枚挟む
     this.add.text(VIEW.width / 2, VIEW.height - 21,
-      '1P  W/S 機首  A/D ロール  E 全開  F 7.7mm  G 20mm　　' +
-      '2P  ↑/↓ 機首  ←/→ ロール  Shift 全開  , 7.7mm  . 20mm　　' +
+      '1P  S/W 機首上げ下げ  A/D ロール  E 全開  F 7.7mm  G 20mm　　' +
+      '2P  ↓/↑ 機首上げ下げ  ←/→ ロール  Shift 全開  , 7.7mm  . 20mm　　' +
       'V/C CPU 操縦（1P/2P）  Esc タイトル  1-5 フィルム  B BGM  M 消音  Tab 計器', {
         fontFamily: 'Georgia, serif', fontSize: '14px', color: '#f4e6c8',
         backgroundColor: 'rgba(24,16,10,0.5)', padding: { x: 12, y: 5 },

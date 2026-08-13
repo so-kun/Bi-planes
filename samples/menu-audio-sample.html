@@ -1,0 +1,597 @@
+<meta charset="utf-8">
+<title>Bi-Planes ステージ選択の BGM と効果音（案）</title>
+<style>
+  :root{
+    --paper:#ecdcb8; --paper-deep:#e2cd9e; --ink:#33241a; --ink-soft:#5c4634;
+    --red:#b53a28; --teal:#2e6e73; --mustard:#d9a441; --cream:#f6ecd4;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--paper); color:var(--ink);
+    font-family:Georgia,'Times New Roman','Hiragino Mincho ProN','Yu Mincho',serif;
+    line-height:1.8;
+    background-image:radial-gradient(ellipse at 20% 10%, rgba(255,255,255,.35), transparent 50%),
+                     radial-gradient(ellipse at 80% 90%, rgba(120,90,40,.12), transparent 55%);
+  }
+  .sheet{max-width:900px;margin:0 auto;padding:36px 24px 90px}
+  header{text-align:center;padding:26px 12px 6px}
+  .marq{
+    display:inline-block;border:4px double var(--ink);padding:16px 44px 20px;
+    background:var(--cream);box-shadow:0 4px 0 rgba(51,36,26,.25);position:relative;
+  }
+  .marq::before,.marq::after{content:"★";position:absolute;top:50%;transform:translateY(-50%);color:var(--red);font-size:18px}
+  .marq::before{left:14px} .marq::after{right:14px}
+  h1{margin:0;font-size:30px;letter-spacing:.04em}
+  .sub{margin:6px 0 0;font-size:15px;color:var(--ink-soft)}
+  h2{
+    margin:44px 0 6px;font-size:22px;border-bottom:2px solid var(--ink);
+    padding-bottom:6px;letter-spacing:.03em;
+  }
+  .lead{margin:8px 0 22px;font-size:15px;color:var(--ink-soft)}
+  .card{
+    background:var(--cream);border:2px solid var(--ink);border-radius:4px;
+    padding:16px 20px;margin:0 0 16px;box-shadow:0 3px 0 rgba(51,36,26,.2);
+  }
+  .card h3{margin:0 0 2px;font-size:19px}
+  .card .tag{font-size:13px;color:var(--red);letter-spacing:.08em}
+  .card p{margin:6px 0 12px;font-size:14.5px;color:var(--ink-soft)}
+  button{
+    font-family:inherit;font-size:15px;background:var(--paper-deep);color:var(--ink);
+    border:2px solid var(--ink);border-radius:3px;padding:6px 18px;cursor:pointer;
+    box-shadow:0 2px 0 rgba(51,36,26,.35);margin:0 8px 8px 0;
+  }
+  button:hover{background:var(--mustard)}
+  button:active{transform:translateY(2px);box-shadow:none}
+  button.on{background:var(--teal);color:var(--cream)}
+  .row{display:flex;flex-wrap:wrap;gap:0}
+  .note{font-size:13.5px;color:var(--ink-soft);margin-top:10px}
+  .hint{
+    background:var(--cream);border-left:5px solid var(--red);padding:10px 16px;
+    font-size:14px;margin:18px 0;
+  }
+  table{border-collapse:collapse;width:100%;font-size:14.5px;background:var(--cream)}
+  th,td{border:1px solid var(--ink);padding:7px 10px;text-align:left}
+  th{background:var(--paper-deep)}
+</style>
+
+<div class="sheet">
+<header>
+  <div class="marq">
+    <h1>ステージ選択の BGM と効果音</h1>
+    <p class="sub">案の聴き比べ ―― 採用したものを教えてください</p>
+  </div>
+</header>
+
+<div class="hint">
+  音はすべてその場で合成しています（音源ファイルは使いません）。ゲーム本体と同じやり方です。<br>
+  ブラウザの決まりで、最初にどれか一度クリックするまで音は鳴りません。
+</div>
+
+<h2>BGM の案（3つ）</h2>
+<p class="lead">
+  対戦中の曲（Dogfight Rag・148拍のスウィング）とは別の曲を、ステージ選択で鳴らします。
+  対戦へ入ると自動で対戦の曲に切り替わります。どれも同じ 1930 年代の世界で、レコードのノイズ入りです。
+</p>
+
+<div class="card">
+  <div class="tag">案 A</div>
+  <h3>ハンガー・ワルツ</h3>
+  <p>
+    3拍子・96拍のゆったりしたワルツ。クラリネットの旋律に、ギターの刻みと軽いブラシ。
+    <b>落ち着いて選ばせたい</b>ときの案です。対戦の曲との差がいちばん大きく、
+    始まった瞬間の切り替わりがはっきりします。
+  </p>
+  <div class="row">
+    <button data-bgm="waltz">▶ 再生</button>
+    <button data-stop>■ 停止</button>
+  </div>
+</div>
+
+<div class="card">
+  <div class="tag">案 B</div>
+  <h3>ニュース映画の行進曲</h3>
+  <p>
+    2拍子・116拍のマーチ。チューバのオムパ、小太鼓のロール、金管のファンファーレ。
+    昔のニュース映画の見出しのような、<b>これから始まる高揚感</b>を出す案です。
+    対戦の曲とは拍子で差が付き、勢いは保てます。
+  </p>
+  <div class="row">
+    <button data-bgm="march">▶ 再生</button>
+    <button data-stop>■ 停止</button>
+  </div>
+</div>
+
+<div class="card">
+  <div class="tag">案 C</div>
+  <h3>無線機のブルース</h3>
+  <p>
+    84拍の12小節ブルース。全体に帯域を絞ってあり、<b>格納庫のラジオから流れている</b>ように
+    聞こえます。ノイズも濃いめ。いちばん渋く、待たせても飽きにくい案です。
+  </p>
+  <div class="row">
+    <button data-bgm="blues">▶ 再生</button>
+    <button data-stop>■ 停止</button>
+  </div>
+</div>
+
+<h2>効果音の案</h2>
+<p class="lead">
+  ステージ選択で鳴らす音です。上下で遊び方を変えたとき、左右で腕前を変えたとき、
+  決定したとき、Esc で戻ったとき ―― の4か所を想定しています。
+</p>
+
+<div class="card">
+  <h3>カーソルを動かしたとき（上下）</h3>
+  <p>連打されるので、短く・控えめに。1つ選んでください。</p>
+  <div class="row">
+    <button data-sfx="moveWood">1. 木のノック</button>
+    <button data-sfx="moveChime">2. 小さなチャイム</button>
+    <button data-sfx="moveType">3. タイプライターの打鍵</button>
+  </div>
+</div>
+
+<div class="card">
+  <h3>腕前を変えたとき（左右）</h3>
+  <p>カーソル移動と区別が付くよう、同じ音を少し高くするのが素直です。参考までに単体で。</p>
+  <div class="row">
+    <button data-sfx="tickLow">低いほう（弱 ←）</button>
+    <button data-sfx="tickHigh">高いほう（強 →）</button>
+  </div>
+</div>
+
+<div class="card">
+  <h3>決定したとき</h3>
+  <p>ここは少し派手にできます。決定のあと対戦画面へ移り、READY? の合図が続きます。</p>
+  <div class="row">
+    <button data-sfx="okFanfare">1. 小さなファンファーレ</button>
+    <button data-sfx="okBell">2. 受付のベル</button>
+    <button data-sfx="okProp">3. プロペラの始動</button>
+  </div>
+</div>
+
+<div class="card">
+  <h3>戻ったとき（Esc）</h3>
+  <p>決定音を裏返した、下がる2音。</p>
+  <div class="row">
+    <button data-sfx="back">▶ 鳴らす</button>
+  </div>
+</div>
+
+<h2>組み合わせて確かめる</h2>
+<p class="lead">BGM を鳴らしながら効果音を鳴らすと、実際の聞こえ方が分かります。</p>
+<div class="card">
+  <div class="row">
+    <button data-demo="waltz">案A + 効果音1</button>
+    <button data-demo="march">案B + 効果音1</button>
+    <button data-demo="blues">案C + 効果音1</button>
+    <button data-stop>■ 停止</button>
+  </div>
+  <p class="note">押すと BGM が鳴りはじめ、1.5秒ごとにカーソル移動音、最後に決定音が鳴ります。</p>
+</div>
+
+<h2>採用したら入る仕組み</h2>
+<table>
+  <tr><th>場所</th><th>音</th></tr>
+  <tr><td>オープニング</td><td>無音のまま（絵を見せる画面）。何か押した時点で音が使えるようになる</td></tr>
+  <tr><td>ステージ選択</td><td>選んだ BGM。上下・左右・決定・戻るで効果音</td></tr>
+  <tr><td>対戦・プラクティス</td><td>これまでどおり Dogfight Rag。選択の曲は自動で止まる</td></tr>
+</table>
+<p class="note">
+  今の <code>src/audio.ts</code> は曲を1つしか持てないので、
+  <code>sfx.playBgm('menu' | 'battle')</code> のように曲を選べる形に直します。B キーでの入／切はそのまま使えます。
+</p>
+
+</div>
+
+<script>
+// ============================================================================
+// 音の合成。ゲーム本体（src/audio.ts）と同じ作り方で、ここだけで完結させる
+// ============================================================================
+const AC = new (window.AudioContext || window.webkitAudioContext)();
+const master = AC.createGain();
+master.gain.value = 0.9;
+master.connect(AC.destination);
+
+const midi = (n) => 440 * Math.pow(2, (n - 69) / 12);
+
+function noiseBuf(sec) {
+  const buf = AC.createBuffer(1, Math.floor(AC.sampleRate * sec), AC.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  return buf;
+}
+const NOISE2 = noiseBuf(2);
+
+/** 立ち上がり→保持→減衰の包絡。exponential は 0 に落とせないので 0.0001 まで */
+function env(g, t, attack, peak, hold, decay) {
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.linearRampToValueAtTime(peak, t + attack);
+  g.gain.setValueAtTime(peak, t + attack + hold);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + attack + hold + decay);
+}
+
+// ---------------------------------------------------------------- 楽器たち
+function clarinet(out, t, f, dur, peak = 0.17) {
+  const o = AC.createOscillator();
+  o.type = 'square';                       // 奇数倍音だけ＝クラリネットらしさ
+  o.frequency.value = f;
+  const vib = AC.createOscillator(); vib.frequency.value = 4.8;
+  const vg = AC.createGain(); vg.gain.value = f * 0.006;
+  vib.connect(vg); vg.connect(o.frequency);
+  const lp = AC.createBiquadFilter(); lp.type = 'lowpass';
+  lp.frequency.value = Math.min(2600, f * 6); lp.Q.value = 0.7;
+  const g = AC.createGain();
+  env(g, t, 0.035, peak, Math.max(0, dur - 0.14), 0.1);
+  o.connect(lp); lp.connect(g); g.connect(out);
+  o.start(t); o.stop(t + dur + 0.15);
+  vib.start(t); vib.stop(t + dur + 0.15);
+}
+
+function brass(out, t, f, dur, peak = 0.16) {
+  const o = AC.createOscillator();
+  o.type = 'sawtooth';
+  o.frequency.setValueAtTime(f * 0.975, t);
+  o.frequency.exponentialRampToValueAtTime(f, t + 0.04);
+  const bp = AC.createBiquadFilter(); bp.type = 'bandpass';
+  bp.frequency.value = f * 2.3; bp.Q.value = 1.2;
+  const lp = AC.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 2800;
+  const g = AC.createGain();
+  env(g, t, 0.028, peak, Math.max(0, dur - 0.1), 0.07);
+  o.connect(bp); bp.connect(lp); lp.connect(g); g.connect(out);
+  o.start(t); o.stop(t + dur + 0.12);
+}
+
+function tuba(out, t, f, dur = 0.26) {
+  const o = AC.createOscillator();
+  o.type = 'triangle'; o.frequency.value = f;
+  const lp = AC.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 420;
+  const g = AC.createGain();
+  env(g, t, 0.02, 0.5, dur * 0.4, dur * 0.6);
+  o.connect(lp); lp.connect(g); g.connect(out);
+  o.start(t); o.stop(t + dur + 0.1);
+}
+
+function bass(out, t, f, peak = 0.42) {
+  const o = AC.createOscillator();
+  o.type = 'triangle'; o.frequency.value = f;
+  const g = AC.createGain();
+  env(g, t, 0.015, peak, 0.02, 0.3);
+  o.connect(g); g.connect(out);
+  o.start(t); o.stop(t + 0.42);
+}
+
+/** 撥弦。ギターの刻み用に、少しだけばらして鳴らす */
+function pluck(out, t, notes, peak = 0.075) {
+  notes.forEach((n, i) => {
+    const o = AC.createOscillator();
+    o.type = 'triangle'; o.frequency.value = midi(n);
+    const g = AC.createGain();
+    env(g, t + i * 0.006, 0.006, peak, 0.01, 0.19);
+    const lp = AC.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 3000;
+    o.connect(lp); lp.connect(g); g.connect(out);
+    o.start(t); o.stop(t + 0.3);
+  });
+}
+
+/** ブラシ。柔らかい白色雑音のひと擦り */
+function brush(out, t, peak = 0.05, dur = 0.13) {
+  const n = AC.createBufferSource(); n.buffer = NOISE2;
+  const bp = AC.createBiquadFilter(); bp.type = 'bandpass';
+  bp.frequency.value = 3800; bp.Q.value = 0.6;
+  const g = AC.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.linearRampToValueAtTime(peak, t + dur * 0.35);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  n.connect(bp); bp.connect(g); g.connect(out);
+  n.start(t, Math.random() * 1.5); n.stop(t + dur + 0.02);
+}
+
+/** 小太鼓。マーチの刻み用 */
+function snare(out, t, peak = 0.11) {
+  const n = AC.createBufferSource(); n.buffer = NOISE2;
+  const hp = AC.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 1400;
+  const g = AC.createGain();
+  g.gain.setValueAtTime(peak, t);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.07);
+  n.connect(hp); hp.connect(g); g.connect(out);
+  n.start(t, Math.random() * 1.5); n.stop(t + 0.09);
+}
+
+function ride(out, t, accent) {
+  const n = AC.createBufferSource(); n.buffer = NOISE2;
+  const hp = AC.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 6200;
+  const g = AC.createGain();
+  g.gain.setValueAtTime(accent ? 0.075 : 0.042, t);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + (accent ? 0.11 : 0.05));
+  n.connect(hp); hp.connect(g); g.connect(out);
+  n.start(t, Math.random() * 1.5); n.stop(t + 0.13);
+}
+
+function cymbal(out, t) {
+  const n = AC.createBufferSource(); n.buffer = NOISE2;
+  const hp = AC.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 4200;
+  const g = AC.createGain();
+  g.gain.setValueAtTime(0.13, t);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.6);
+  n.connect(hp); hp.connect(g); g.connect(out);
+  n.start(t, Math.random() * 1.2); n.stop(t + 0.65);
+}
+
+// ============================================================================
+// BGM 3案。どれも「1手ぶんの音を並べる関数」と「何手で一周するか」で表す
+// ============================================================================
+
+// ---- 案A ハンガー・ワルツ（ヘ長調・3拍子・96拍）
+const WALTZ_CHORDS = {
+  F: [65, 69, 72], Dm: [62, 65, 69], Gm7: [67, 70, 74], C7: [64, 67, 70],
+  A7: [64, 69, 73], Dm7: [62, 65, 69, 72],
+};
+const WALTZ_BARS = ['F', 'Dm', 'Gm7', 'C7', 'F', 'A7', 'Dm7', 'C7'];
+const WALTZ_ROOTS = [41, 38, 43, 36, 41, 45, 38, 36];
+// [8分単位の位置, 音, 長さ(8分)]
+const WALTZ_MEL = [
+  [0, 69, 4], [4, 72, 2], [6, 74, 4], [10, 72, 2],
+  [12, 70, 4], [16, 69, 2], [18, 67, 6],
+  [24, 69, 4], [28, 65, 2], [30, 72, 4], [34, 69, 2],
+  [36, 73, 4], [40, 76, 2], [42, 74, 6],
+];
+
+// ---- 案B ニュース映画の行進曲（変ロ長調・2拍子・116拍）
+const MARCH_CHORDS = {
+  Bb: [58, 62, 65], F7: [57, 60, 63, 65], Eb: [58, 63, 67],
+};
+const MARCH_BARS = ['Bb', 'Bb', 'F7', 'F7', 'Bb', 'Eb', 'Bb', 'F7'];
+const MARCH_BASS = [[46, 41], [46, 41], [41, 48], [41, 48], [46, 41], [39, 46], [46, 41], [41, 48]];
+const MARCH_MEL = [
+  [0, 70, 1], [1, 70, 1], [2, 74, 2],
+  [4, 77, 2], [6, 74, 2],
+  [8, 72, 1], [9, 75, 1], [10, 72, 2],
+  [12, 69, 4],
+  [16, 70, 1], [17, 74, 1], [18, 77, 2],
+  [20, 79, 2], [22, 75, 2],
+  [24, 74, 1], [25, 72, 1], [26, 70, 2],
+  [28, 72, 2], [30, 69, 2],
+];
+
+// ---- 案C 無線機のブルース（ハ長調・12小節・84拍・跳ねる8分）
+const BLUES_BARS = ['C7', 'C7', 'C7', 'C7', 'F7', 'F7', 'C7', 'C7', 'G7', 'F7', 'C7', 'G7'];
+const BLUES_BOOGIE = { C7: [36, 40, 43, 45], F7: [41, 45, 48, 50], G7: [43, 47, 50, 52] };
+// 2小節ごとに繰り返す掛け合いの句（8分単位・16手）
+const BLUES_RIFF = [[0, 67, 2], [2, 70, 1], [3, 72, 3], [6, 70, 1], [7, 67, 4]];
+const BLUES_SHIFT = { C7: 0, F7: 5, G7: 7 };
+
+const TRACKS = {
+  waltz: {
+    stepsPerLoop: 48,                       // 8小節 × 3拍 × 2（8分）
+    stepDur: (60 / 96) / 2,
+    swing: false,
+    make(dest) { const g = AC.createGain(); g.gain.value = 0.43; g.connect(dest); return g; },
+    play(out, s, t) {
+      const bar = Math.floor(s / 6), beat = (s % 6) / 2;
+      if (s % 2) return;                    // 伴奏は4分刻み
+      if (beat === 0) { bass(out, t, midi(WALTZ_ROOTS[bar])); brush(out, t, 0.055, 0.16); }
+      else pluck(out, t, WALTZ_CHORDS[WALTZ_BARS[bar]]);
+    },
+    melody(out, s, t, stepDur) {
+      for (const [at, n, len] of WALTZ_MEL) {
+        if (at === s) clarinet(out, t, midi(n), len * stepDur * 0.9);
+      }
+    },
+  },
+
+  march: {
+    stepsPerLoop: 32,                       // 8小節 × 2拍 × 2（8分）
+    stepDur: (60 / 116) / 2,
+    swing: false,
+    make(dest) { const g = AC.createGain(); g.gain.value = 0.32; g.connect(dest); return g; },
+    play(out, s, t) {
+      const bar = Math.floor(s / 4), half = s % 4;
+      if (half % 2 === 0) tuba(out, t, midi(MARCH_BASS[bar][half / 2]));
+      if (half === 1 || half === 3) pluck(out, t, MARCH_CHORDS[MARCH_BARS[bar]], 0.06);
+      // 小太鼓は16分のロール。拍の頭を強く
+      for (let k = 0; k < 2; k++) snare(out, t + k * this.stepDur / 2, half % 2 === 0 && k === 0 ? 0.13 : 0.055);
+      if (s === 0) cymbal(out, t);
+    },
+    melody(out, s, t, stepDur) {
+      for (const [at, n, len] of MARCH_MEL) {
+        if (at === s) brass(out, t, midi(n), len * stepDur * 0.88);
+      }
+    },
+  },
+
+  blues: {
+    stepsPerLoop: 96,                       // 12小節 × 4拍 × 2（跳ねる8分）
+    stepDur: (60 / 84) / 2,
+    swing: true,
+    /** ラジオから鳴っているように、帯域を絞ってノイズを濃くする */
+    make(dest) {
+      const hp = AC.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 320;
+      const lp = AC.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 2900;
+      const g = AC.createGain(); g.gain.value = 0.36;
+      hp.connect(lp); lp.connect(g); g.connect(dest);
+      return hp;
+    },
+    play(out, s, t) {
+      const bar = Math.floor(s / 8), beat = (s % 8) / 2;
+      const chord = BLUES_BARS[bar];
+      if (s % 2 === 0) bass(out, t, midi(BLUES_BOOGIE[chord][beat]), 0.38);
+      ride(out, t, s % 4 === 0);
+      if (s % 8 === 4) pluck(out, t, [60, 64, 67, 70].map((n) => n + BLUES_SHIFT[chord]), 0.05);
+    },
+    melody(out, s, t, stepDur) {
+      const bar = Math.floor(s / 8);
+      if (bar % 2) return;                  // 句は2小節に一度、前半だけ
+      const local = s % 16;
+      for (const [at, n, len] of BLUES_RIFF) {
+        if (at === local) clarinet(out, t, midi(n + BLUES_SHIFT[BLUES_BARS[bar]]), len * stepDur * 0.9, 0.15);
+      }
+    },
+  },
+};
+
+/** 跳ねる8分（2:1）。跳ねない曲はそのまま等分 */
+function stepTime(track, s) {
+  const d = track.stepDur;
+  if (!track.swing) return s * d;
+  return Math.floor(s / 2) * 2 * d + (s % 2 ? d * 1.32 : 0);
+}
+
+// ---------------------------------------------------------------- 再生する側
+let player = null;
+
+function startBgm(key) {
+  stopAll();
+  const track = TRACKS[key];
+  const out = track.make(master);
+  const loopSec = stepTime(track, track.stepsPerLoop);
+  const origin = AC.currentTime + 0.12;
+  const state = { key, out, step: 0, timer: null, crackle: null, pops: null, stopped: false };
+
+  // レコードのノイズ
+  const n = AC.createBufferSource(); n.buffer = NOISE2; n.loop = true;
+  const hp = AC.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 900;
+  const lp = AC.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 3800;
+  const cg = AC.createGain(); cg.gain.value = key === 'blues' ? 0.03 : 0.016;
+  n.connect(hp); hp.connect(lp); lp.connect(cg); cg.connect(out);
+  n.start();
+  state.crackle = n;
+  state.pops = setInterval(() => {
+    if (state.stopped) return;
+    const p = AC.createBufferSource(); p.buffer = noiseBuf(0.012);
+    const pg = AC.createGain(); pg.gain.value = 0.08 + Math.random() * 0.1;
+    p.connect(pg); pg.connect(out);
+    p.start(AC.currentTime + Math.random() * 0.4);
+  }, key === 'blues' ? 480 : 700);
+
+  const timeOf = (step) =>
+    origin + Math.floor(step / track.stepsPerLoop) * loopSec + stepTime(track, step % track.stepsPerLoop);
+
+  const tick = () => {
+    if (state.stopped) return;
+    const ahead = AC.currentTime + 0.3;
+    while (timeOf(state.step) < ahead) {
+      const s = state.step % track.stepsPerLoop;
+      const t = timeOf(state.step);
+      track.play(out, s, t);
+      track.melody(out, s, t, track.stepDur);
+      state.step++;
+    }
+    state.timer = setTimeout(tick, 80);
+  };
+  tick();
+  player = state;
+}
+
+function stopAll() {
+  if (!player) return;
+  player.stopped = true;
+  clearTimeout(player.timer);
+  clearInterval(player.pops);
+  try { player.crackle.stop(); } catch (e) { /* 二重停止は無視 */ }
+  player.out.gain ? player.out.gain.setTargetAtTime(0, AC.currentTime, 0.05)
+                  : player.out.disconnect();
+  player = null;
+}
+
+// ============================================================================
+// 効果音の案
+// ============================================================================
+function tone(t, type, f, peak, dur, cutoff) {
+  const o = AC.createOscillator(); o.type = type; o.frequency.value = f;
+  const g = AC.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.linearRampToValueAtTime(peak, t + 0.008);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  let node = o;
+  if (cutoff) {
+    const lp = AC.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = cutoff;
+    o.connect(lp); node = lp;
+  }
+  node.connect(g); g.connect(master);
+  o.start(t); o.stop(t + dur + 0.05);
+}
+
+function click(t, freq, peak, dur) {
+  const n = AC.createBufferSource(); n.buffer = NOISE2;
+  const bp = AC.createBiquadFilter(); bp.type = 'bandpass';
+  bp.frequency.value = freq; bp.Q.value = 3;
+  const g = AC.createGain();
+  g.gain.setValueAtTime(peak, t);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  n.connect(bp); bp.connect(g); g.connect(master);
+  n.start(t, Math.random()); n.stop(t + dur + 0.02);
+}
+
+const SFX = {
+  /** 木のノック。乾いていて短く、連打しても濁らない */
+  moveWood(t) { click(t, 1500, 0.4, 0.035); tone(t, 'triangle', 620, 0.16, 0.05, 1800); },
+  /** 小さなチャイム。5度上に跳ねる */
+  moveChime(t) { tone(t, 'sine', 1046, 0.16, 0.11); tone(t + 0.03, 'sine', 1568, 0.1, 0.14); },
+  /** タイプライター。金属のはじきが混じる */
+  moveType(t) { click(t, 2600, 0.75, 0.03); tone(t + 0.006, 'square', 2100, 0.09, 0.045, 3500); },
+
+  tickLow(t) { click(t, 1200, 0.3, 0.03); tone(t, 'triangle', 494, 0.14, 0.05, 1600); },
+  tickHigh(t) { click(t, 1800, 0.3, 0.03); tone(t, 'triangle', 740, 0.14, 0.05, 2000); },
+
+  /** 小さなファンファーレ。ハ→ホ→ト をすばやく */
+  okFanfare(t) {
+    [[523, 0], [659, 0.055], [784, 0.11]].forEach(([f, d]) => brass(master, t + d, f, 0.16, 0.2));
+    brass(master, t + 0.17, 1046, 0.42, 0.22);
+  },
+  /** 受付のベル。倍音を2つ重ねて長く伸ばす */
+  okBell(t) {
+    [[1318, 0.24], [2637, 0.1], [3520, 0.05]].forEach(([f, p]) => {
+      const o = AC.createOscillator(); o.type = 'sine'; o.frequency.value = f;
+      const g = AC.createGain();
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.linearRampToValueAtTime(p, t + 0.004);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 1.3);
+      o.connect(g); g.connect(master);
+      o.start(t); o.stop(t + 1.35);
+    });
+  },
+  /** プロペラの始動。回転が上がってひと吹き */
+  okProp(t) {
+    const n = AC.createBufferSource(); n.buffer = NOISE2;
+    const bp = AC.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 2.2;
+    bp.frequency.setValueAtTime(260, t);
+    bp.frequency.exponentialRampToValueAtTime(1500, t + 0.45);
+    const chop = AC.createOscillator(); chop.type = 'sawtooth';
+    chop.frequency.setValueAtTime(11, t);
+    chop.frequency.exponentialRampToValueAtTime(46, t + 0.45);
+    const cg = AC.createGain(); cg.gain.value = 0.5;
+    const g = AC.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(0.34, t + 0.3);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.62);
+    chop.connect(cg); cg.connect(g.gain);
+    n.connect(bp); bp.connect(g); g.connect(master);
+    n.start(t, Math.random()); n.stop(t + 0.65);
+    chop.start(t); chop.stop(t + 0.65);
+  },
+
+  /** 戻る。下がる2音 */
+  back(t) { tone(t, 'triangle', 587, 0.2, 0.1, 1800); tone(t + 0.07, 'triangle', 392, 0.22, 0.22, 1400); },
+};
+
+// ---------------------------------------------------------------- ボタン配線
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  if (AC.state === 'suspended') AC.resume();
+
+  if (b.dataset.stop !== undefined) { stopAll(); return; }
+  if (b.dataset.bgm) { startBgm(b.dataset.bgm); return; }
+  if (b.dataset.sfx) { SFX[b.dataset.sfx](AC.currentTime + 0.02); return; }
+  if (b.dataset.demo) {
+    startBgm(b.dataset.demo);
+    [0.8, 2.3, 3.8, 5.3].forEach((d, i) => setTimeout(() => SFX.moveWood(AC.currentTime + 0.02), d * 1000 - 800 + i * 0));
+    setTimeout(() => SFX.okFanfare(AC.currentTime + 0.02), 6200);
+  }
+});
+
+// 検証用。ヘッドレスから曲を書き出して、音が入っているかを測れるようにしておく
+window.__tracks = TRACKS;
+window.__sfx = SFX;
+</script>
