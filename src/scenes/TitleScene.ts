@@ -14,6 +14,7 @@ import { attachFilm } from '../fx/attachFilm';
 import { PadInput } from '../input/PadInput';
 import { PadMenu } from '../input/PadMenu';
 import { StuckKeyGuard } from '../input/StuckKeyGuard';
+import { settings } from '../settings';
 
 const KEY = Phaser.Input.Keyboard.KeyCodes;
 
@@ -21,8 +22,8 @@ const KEY = Phaser.Input.Keyboard.KeyCodes;
 interface Mode {
   name: string;
   note: string;
-  /** 移る画面。プラクティスだけ別の画面へ行く */
-  scene: 'Play' | 'Practice';
+  /** 移る画面。プラクティスとオプションは別の画面へ行く */
+  scene: 'Play' | 'Practice' | 'Options';
   /** 相手を出さず、一人で飛ぶだけにするか */
   free?: boolean;
   /** 腕前の選択が効くか。効かないものは薄く表示する */
@@ -39,6 +40,8 @@ const MODES: Mode[] = [
   { name: 'プラクティス', note: '輪をくぐって操縦を練習・全10ステージ', scene: 'Practice', usesAi: false,
     p1Ai: () => 0, p2Ai: () => 0 },
   { name: 'フリープレイ', note: '相手なし。一人で飛ぶだけ', scene: 'Play', usesAi: false, free: true,
+    p1Ai: () => 0, p2Ai: () => 0 },
+  { name: 'オプション', note: 'パッドの割り当て・音量・見た目・ルール', scene: 'Options', usesAi: false,
     p1Ai: () => 0, p2Ai: () => 0 },
 ];
 
@@ -153,7 +156,8 @@ export class TitleScene extends Phaser.Scene {
       }).setOrigin(0.5);
     this.add.text(cx, VIEW.height - 46,
       'パッドはスティック上下で選び、○／A で決定・×／B で戻る　　'
-      + '機首は引くと上がる（S・↓ で上昇）　　1P W/S・A/D・E・F・G　　2P ↑↓・←→・Shift・, ・.', {
+      + (settings.pullToClimb ? '機首は引くと上がる（S・↓ で上昇）' : '機首は倒すと上がる（W・↑ で上昇）')
+      + '　　1P W/S・A/D・E・F・G　　2P ↑↓・←→・Shift・, ・.', {
         fontFamily: 'Georgia, serif', fontSize: '15px', color: CREAM,
         backgroundColor: 'rgba(24,16,10,0.5)', padding: { x: 12, y: 5 },
       }).setOrigin(0.5).setAlpha(0.85);
@@ -234,8 +238,11 @@ export class TitleScene extends Phaser.Scene {
     sfx.resume();
     sfx.menuDecide();
     const m = MODES[this.mode];
-    if (m.scene === 'Practice') this.scene.start('Practice');
-    else this.scene.start('Play', { p1Ai: m.p1Ai(this.level), p2Ai: m.p2Ai(this.level), free: m.free });
+    if (m.scene === 'Play') {
+      this.scene.start('Play', { p1Ai: m.p1Ai(this.level), p2Ai: m.p2Ai(this.level), free: m.free });
+    } else {
+      this.scene.start(m.scene);
+    }
   }
 
   override update(): void {

@@ -11,8 +11,9 @@
 
 import Phaser from 'phaser';
 import {
-  BALLOON, ENGINE, FILM_DEFAULT, FLIGHT, PLANE, SCORE, SMOKE, VIEW, groundAt,
+  BALLOON, ENGINE, FLIGHT, PLANE, SMOKE, SCORE, VIEW, groundAt,
 } from '../config';
+import { settings, saveSettings } from '../settings';
 import { sfx } from '../audio';
 import { FilmPipeline } from '../fx/FilmPipeline';
 import { attachFilm } from '../fx/attachFilm';
@@ -257,7 +258,11 @@ export class PlayScene extends Phaser.Scene {
       this.debugText.setVisible(this.showDebug);
     });
     for (let i = 0; i < 5; i++) {
-      k[`f${i}`].on('down', () => this.film?.setLevel(i));
+      k[`f${i}`].on('down', () => {
+        this.film?.setLevel(i);
+        settings.film = i;
+        saveSettings();
+      });
     }
   }
 
@@ -389,10 +394,12 @@ export class PlayScene extends Phaser.Scene {
       // キーボードは倒し切りの3値、パッドは倒した量がそのまま出る。
       // 両方触っている場合は、深く入れているほうを採る。
       //
-      // 上下は操縦桿と同じ向き ―― **引く（下）と機首が上がる**（2026-08-13 変更）。
-      // ここで反転させるのは人の操作だけ。AI が出す pitch は機体基準のままなので触らない
-      const byKey = (p.keys.down.isDown ? 1 : 0) - (p.keys.up.isDown ? 1 : 0);
-      const stick = -p.padState.pitch;
+      // 上下は既定で操縦桿と同じ向き ―― **引く（下）と機首が上がる**（2026-08-13 変更）。
+      // オプション画面で逆にもできる。ここで反転させるのは人の操作だけで、
+      // AI が出す pitch は機体基準のままなので触らない
+      const sign = settings.pullToClimb ? 1 : -1;
+      const byKey = ((p.keys.down.isDown ? 1 : 0) - (p.keys.up.isDown ? 1 : 0)) * sign;
+      const stick = -p.padState.pitch * sign;
       pitch = Math.abs(stick) > Math.abs(byKey) ? stick : byKey;
       throttle = p.keys.throttle.isDown || p.padState.throttle;
       rollEdge = p.padState.rollEdge;
@@ -480,7 +487,7 @@ export class PlayScene extends Phaser.Scene {
     if (!this.running) return;
     p.score += points;
     // フリープレイは数えるだけ。終わりはない
-    if (!this.free && p.score >= SCORE.winning) this.finish(p);
+    if (!this.free && p.score >= settings.winning) this.finish(p);
   }
 
   private finish(p: Player): void {
@@ -659,7 +666,7 @@ export class PlayScene extends Phaser.Scene {
   // ---------------------------------------------------------------- 見た目
 
   private setupFilm(): void {
-    this.film = attachFilm(this, this.film?.getLevel() ?? FILM_DEFAULT);
+    this.film = attachFilm(this, this.film?.getLevel() ?? settings.film);
   }
 
   /**
@@ -731,7 +738,7 @@ export class PlayScene extends Phaser.Scene {
       this.panels[p.id].update({
         score: p.score,
         // フリープレイは勝ち負けが無いので、上限を出さない
-        target: this.free ? null : SCORE.winning,
+        target: this.free ? null : settings.winning,
         hp: p.plane.hp,
         cannonAmmo: p.plane.cannonAmmo,
         temp: p.plane.temp,

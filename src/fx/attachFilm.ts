@@ -10,15 +10,15 @@
  */
 
 import Phaser from 'phaser';
-import { FILM_DEFAULT } from '../config';
 import { FilmPipeline } from './FilmPipeline';
+import { settings } from '../settings';
 import { note } from '../diagnostics';
 
 /**
- * @param level 掛けたあとに設定する強さ。省略すると既定
+ * @param level 掛けたあとに設定する強さ。省略するとオプション画面で選んだ強さ
  * @returns 掛かったパイプライン。掛からなければ null
  */
-export function attachFilm(scene: Phaser.Scene, level: number = FILM_DEFAULT): FilmPipeline | null {
+export function attachFilm(scene: Phaser.Scene, level: number = settings.film): FilmPipeline | null {
   const renderer = scene.game.renderer;
   if (!(renderer instanceof Phaser.Renderer.WebGL.WebGLRenderer)) return null;
 
