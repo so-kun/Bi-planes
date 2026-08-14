@@ -6,7 +6,8 @@
  */
 
 import Phaser from 'phaser';
-import { FILM_DEFAULT, VIEW, groundAt } from '../config';
+import { VIEW, groundAt } from '../config';
+import { settings, saveSettings } from '../settings';
 import { sfx } from '../audio';
 import { FilmPipeline } from '../fx/FilmPipeline';
 import { attachFilm } from '../fx/attachFilm';
@@ -234,9 +235,10 @@ export class PracticeScene extends Phaser.Scene {
     const k = this.keys;
     const up = k.up.isDown || k.upAlt.isDown;
     const down = k.down.isDown || k.downAlt.isDown;
-    // 上下は操縦桿と同じ向き ―― 引く（下）と機首が上がる（2026-08-13 変更）
-    const byKey = (down ? 1 : 0) - (up ? 1 : 0);
-    const stick = -this.padState.pitch;
+    // 上下は既定で操縦桿と同じ向き ―― 引く（下）と機首が上がる。オプション画面で逆にもできる
+    const sign = settings.pullToClimb ? 1 : -1;
+    const byKey = ((down ? 1 : 0) - (up ? 1 : 0)) * sign;
+    const stick = -this.padState.pitch * sign;
     const pitch = Math.abs(stick) > Math.abs(byKey) ? stick : byKey;
     this.plane.setThrottle(k.throttle.isDown || this.padState.throttle ? 1 : 0);
     this.plane.update(pitch, dt);
@@ -302,7 +304,13 @@ export class PracticeScene extends Phaser.Scene {
     this.keys.bgm.on('down', () => sfx.toggleBgm());
     // ステージ選択の曲を引きずらないよう、ここで対戦と同じ曲に入れ替える
     sfx.playBgm('battle');
-    for (let i = 0; i < 5; i++) this.keys[`f${i}`].on('down', () => this.film?.setLevel(i));
+    for (let i = 0; i < 5; i++) {
+      this.keys[`f${i}`].on('down', () => {
+        this.film?.setLevel(i);
+        settings.film = i;
+        saveSettings();
+      });
+    }
   }
 
   private wakeAudio(): void {
@@ -358,7 +366,7 @@ export class PracticeScene extends Phaser.Scene {
   }
 
   private setupFilm(): void {
-    this.film = attachFilm(this, this.film?.getLevel() ?? FILM_DEFAULT);
+    this.film = attachFilm(this, this.film?.getLevel() ?? settings.film);
   }
 
   private watchFilm(dt: number): void {

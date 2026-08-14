@@ -5,6 +5,7 @@
 
 import { AUDIO } from './config';
 import { note } from './diagnostics';
+import { settings, saveSettings } from './settings';
 
 type Ctx = AudioContext;
 
@@ -75,8 +76,8 @@ export class Sfx {
   private bgm: Track | null = null;
   /** 今どの曲を鳴らしたいか。B キーで切っても、次の画面で戻せるように覚えておく */
   private bgmKind: BgmKind = 'battle';
-  /** B キーで切られていないか */
-  private bgmEnabled = true;
+  /** B キーで切られていないか。オプション画面の設定を初期値にする */
+  private bgmEnabled = settings.bgm;
   muted = false;
   /** 音の用意に失敗したか。失敗しても、ゲームは音なしで続ける */
   private failed = false;
@@ -92,7 +93,7 @@ export class Sfx {
       comp.threshold.value = -14;
       comp.ratio.value = 5;
       const master = ac.createGain();
-      master.gain.value = AUDIO.master;
+      master.gain.value = settings.volume;
       const sfxBus = ac.createGain();
       const musicBus = ac.createGain();
       musicBus.gain.value = AUDIO.music;
@@ -122,9 +123,21 @@ export class Sfx {
     return this.ac !== null;
   }
 
+  /** オプション画面で音量を変えたときに呼ぶ。鳴っている最中でもすぐ効く */
+  applyVolume(): void {
+    if (this.ac && !this.muted) this.master.gain.value = settings.volume;
+  }
+
+  /** オプション画面で BGM の入切を変えたときに呼ぶ */
+  applyBgmSetting(): void {
+    this.bgmEnabled = settings.bgm;
+    if (settings.bgm) this.playBgm(this.bgmKind);
+    else this.stopBgm();
+  }
+
   toggleMute(): boolean {
     this.muted = !this.muted;
-    if (this.ac) this.master.gain.value = this.muted ? 0 : AUDIO.master;
+    if (this.ac) this.master.gain.value = this.muted ? 0 : settings.volume;
     return this.muted;
   }
 
@@ -373,10 +386,14 @@ export class Sfx {
     if (!this.ac) return false;
     if (this.bgm) {
       this.bgmEnabled = false;
+      settings.bgm = false;
+      saveSettings();
       this.stopBgm();
       return false;
     }
     this.bgmEnabled = true;
+    settings.bgm = true;
+    saveSettings();
     this.playBgm(this.bgmKind);
     return true;
   }

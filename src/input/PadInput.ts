@@ -10,6 +10,7 @@
  */
 
 import { PAD } from '../config';
+import { settings } from '../settings';
 import { note } from '../diagnostics';
 
 export interface PadState {
@@ -27,13 +28,13 @@ export interface PadState {
   /** 20mm。押した瞬間だけ true */
   cannonEdge: boolean;
   /**
-   * 決定（○／A）。押した瞬間だけ true。
-   * 20mm と同じボタンなので、**飛行中の画面では読まないこと**
+   * 決定。押した瞬間だけ true。
+   * 既定では 20mm と同じ ○／A なので、**飛行中の画面では読まないこと**
    */
   decideEdge: boolean;
   /**
-   * 取り消し（×／B）。押した瞬間だけ true。
-   * 7.7mm と同じボタンなので、**飛行中の画面では読まないこと**
+   * 取り消し。押した瞬間だけ true。
+   * 既定では 7.7mm と同じ ×／B なので、**飛行中の画面では読まないこと**
    */
   cancelEdge: boolean;
   /** Start。飛行中の中断に使う。武器とは重ならない */
@@ -54,9 +55,10 @@ export const PAD_IDLE: PadState = {
 export class PadInput {
   private prevRoll: -1 | 0 | 1 = 0;
   private prevCannon = false;
-  private prevMg = false;
   private prevStart = false;
   private prevSelect = false;
+  private prevDecide = false;
+  private prevCancel = false;
 
   /** @param index 標準配列のパッドの何台目を使うか。1P = 0、2P = 1 */
   constructor(private index = 0) {}
@@ -110,7 +112,8 @@ export class PadInput {
     if (!pad) {
       // 抜かれたときに立ち上がりの記録が残っていると、挿し直した瞬間に暴発する
       this.prevRoll = 0;
-      this.prevCannon = this.prevMg = this.prevStart = this.prevSelect = false;
+      this.prevCannon = this.prevStart = this.prevSelect = false;
+      this.prevDecide = this.prevCancel = false;
       return other ? { ...PAD_IDLE, id: other.id, unsupported: true } : PAD_IDLE;
     }
 
@@ -118,13 +121,15 @@ export class PadInput {
     const value = (i: number): number => pad.buttons[i]?.value ?? 0;
     const axis = (i: number): number => pad.axes[i] ?? 0;
 
-    const b = PAD.buttons;
+    // 割り当てはオプション画面で変えられる（src/settings.ts）。
+    // スティックの軸だけは固定 ―― 番号を変えても意味のある組み合わせにならない
+    const b = settings.pad;
 
     // 機首。スティックを優先し、十字キーは倒し切りとして扱う
     const raw = -axis(PAD.axes.pitch);
-    let pitch = Math.abs(raw) < PAD.deadzone ? 0 : raw;
-    if (pressed(b.up)) pitch = 1;
-    if (pressed(b.down)) pitch = -1;
+    let pitch = Math.abs(raw) < settings.deadzone ? 0 : raw;
+    if (pressed(PAD.buttons.up)) pitch = 1;
+    if (pressed(PAD.buttons.down)) pitch = -1;
 
     // ロールは L / R ボタン。左右を同時に押したときは何もしない
     const roll: -1 | 0 | 1 = pressed(b.rollR) === pressed(b.rollL) ? 0 : pressed(b.rollR) ? 1 : -1;
@@ -139,10 +144,7 @@ export class PadInput {
     const cannonEdge = cannon && !this.prevCannon;
     this.prevCannon = cannon;
 
-    // 7.7mm は押しっぱなしで連射するので、押した瞬間は別に取る（取り消しに使う）
     const mg = pressed(b.mg);
-    const mgEdge = mg && !this.prevMg;
-    this.prevMg = mg;
 
     const start = pressed(b.start);
     const startEdge = start && !this.prevStart;
@@ -151,6 +153,16 @@ export class PadInput {
     const select = pressed(b.select);
     const selectEdge = select && !this.prevSelect;
     this.prevSelect = select;
+
+    // 決定と取り消しは既定では 20mm・7.7mm と同じボタンだが、別々に割り当てられる。
+    // どちらも押した瞬間だけ取る
+    const decide = pressed(b.decide);
+    const decideEdge = decide && !this.prevDecide;
+    this.prevDecide = decide;
+
+    const cancel = pressed(b.cancel);
+    const cancelEdge = cancel && !this.prevCancel;
+    this.prevCancel = cancel;
 
     return {
       connected: true,
@@ -161,12 +173,12 @@ export class PadInput {
       throttle,
       mg,
       cannonEdge,
-      // 決定と取り消しは武器と同じボタン。飛行中の画面では読まない約束になっている
-      decideEdge: cannonEdge,
-      cancelEdge: mgEdge,
+      // 既定では武器と同じボタン。飛行中の画面では読まない約束になっている
+      decideEdge,
+      cancelEdge,
       startEdge,
       selectEdge,
-      anyFace: mg || cannon || start || select,
+      anyFace: mg || cannon || start || select || decide || cancel,
     };
   }
 }
