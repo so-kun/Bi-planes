@@ -16,7 +16,7 @@
  * 「引く」ほうが素直なので、押し続けることになる場面では背面に返して引きに変える。
  */
 
-import { ENGINE, FLIGHT, VIEW, WEAPON } from '../config';
+import { ENGINE, FLIGHT, WEAPON, groundAt } from '../config';
 import type { Plane } from '../objects/Plane';
 import type { Balloon } from '../objects/Balloons';
 import { wrapPi } from '../flight';
@@ -131,9 +131,11 @@ export class Pilot {
     const forward = Math.cos(s.pitch) >= 0 ? 1 : -1;
     let desired: number;
     let urgent = false;
-    // 今いる高さではなく、少し先の高さで判断する。降下が速いほど早く引き起こす
+    // 今いる高さではなく、少し先の高さで判断する。降下が速いほど早く引き起こす。
+    // 地面は場所によって高さが違うので、行き先の x で見る
     const ahead = me.y + Math.max(0, s.vy) * GROUND_LOOKAHEAD;
-    if (ahead > VIEW.groundY - GROUND_MARGIN) {
+    const aheadX = me.x + s.vx * GROUND_LOOKAHEAD;
+    if (ahead > groundAt(aheadX) - GROUND_MARGIN) {
       desired = Math.atan2(-0.95, forward * 0.5);   // 上へ逃げる
       urgent = true;
     } else if (me.readout.stalled && speed < FLIGHT.stallWarnSpeed) {
@@ -142,7 +144,7 @@ export class Pilot {
     } else if (aim) {
       // 地面すれすれの相手を追って一緒に突っ込まないよう、狙う高さに底を設ける。
       // 撃つのを諦める代わりに墜ちない ―― 追い詰めるのは相手が上がってきてからでいい
-      const aimY = Math.min(aim.y, VIEW.groundY - GROUND_MARGIN);
+      const aimY = Math.min(aim.y, groundAt(aim.x) - GROUND_MARGIN);
       desired = Math.atan2(aimY - me.y, aim.x - me.x) + this.jitterAngle;
     } else {
       desired = Math.atan2(0, forward);             // 目標がなければ水平に流す

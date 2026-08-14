@@ -12,7 +12,7 @@
  *   上昇と下降 → 折り返し → 宙返り → インメルマンターン → スプリットS → 組み合わせ
  */
 
-import { VIEW, PLANE } from '../config';
+import { VIEW, PLANE, GROUND_TOP } from '../config';
 
 /** 輪の開口部の半径（長いほうの半径）。ここを機体が横切れば通過 */
 export const RING_RADIUS = PLANE.width * 0.80;
@@ -150,7 +150,7 @@ export function outOfBounds(): string[] {
   STAGES.forEach((s, i) => {
     s.rings.forEach((r, j) => {
       if (r.x < RING_RADIUS || r.x > VIEW.width - RING_RADIUS
-        || r.y < RING_RADIUS + 40 || r.y > VIEW.groundY - RING_RADIUS) {
+        || r.y < RING_RADIUS + 40 || r.y > GROUND_TOP - RING_RADIUS) {
         bad.push(`ステージ${i + 1} の ${j + 1}番目 (${r.x}, ${r.y})`);
       }
     });
