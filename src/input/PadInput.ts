@@ -121,13 +121,14 @@ export class PadInput {
     const value = (i: number): number => pad.buttons[i]?.value ?? 0;
     const axis = (i: number): number => pad.axes[i] ?? 0;
 
-    // 割り当てはオプション画面で変えられる（src/settings.ts）。
+    // 割り当てはオプション画面で、**1P・2P それぞれ**変えられる（src/settings.ts）。
     // スティックの軸だけは固定 ―― 番号を変えても意味のある組み合わせにならない
-    const b = settings.pad;
+    const side = Math.min(this.index, settings.pads.length - 1);
+    const b = settings.pads[side];
 
     // 機首。スティックを優先し、十字キーは倒し切りとして扱う
     const raw = -axis(PAD.axes.pitch);
-    let pitch = Math.abs(raw) < settings.deadzone ? 0 : raw;
+    let pitch = Math.abs(raw) < settings.deadzones[side] ? 0 : raw;
     if (pressed(PAD.buttons.up)) pitch = 1;
     if (pressed(PAD.buttons.down)) pitch = -1;
 
