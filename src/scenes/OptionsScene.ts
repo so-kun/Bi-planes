@@ -17,7 +17,7 @@ import { PadInput } from '../input/PadInput';
 import { PadMenu } from '../input/PadMenu';
 import { StuckKeyGuard } from '../input/StuckKeyGuard';
 import {
-  PAD_ACTIONS, buttonName, resetSettings, saveSettings, settings, type PadBinding,
+  PAD_ACTIONS, PLAYER_NAMES, buttonName, resetSettings, saveSettings, settings, type PadBinding,
 } from '../settings';
 
 const KEY = Phaser.Input.Keyboard.KeyCodes;
@@ -38,9 +38,9 @@ const WINNING = [10, 15, 20, 30, 50];
 /** ボタンの割り当て待ちを打ち切るまでの秒数 */
 const WAIT_LIMIT = 8;
 
-/** 一覧の見た目。16 行が下の案内に掛からないように詰めてある */
-const TOP = 130;
-const STEP = 30;
+/** 一覧の見た目。17 行が下の案内に掛からないように詰めてある */
+const TOP = 122;
+const STEP = 29;
 const LABEL_X = 300;
 const VALUE_X = 790;
 
@@ -56,6 +56,8 @@ export class OptionsScene extends Phaser.Scene {
   private padMenu = new PadMenu();
   private padUpHeld = false;
   private keyGuard!: StuckKeyGuard;
+  /** どちらのパッドを直しているか。0 = 1P、1 = 2P */
+  private side = 0;
 
   /**
    * ボタンの割り当て待ち。null なら待っていない。
@@ -74,6 +76,7 @@ export class OptionsScene extends Phaser.Scene {
 
   create(): void {
     this.index = 0;
+    this.side = 0;
     this.waiting = null;
     this.padUpHeld = false;
     this.padMenu.disarm();
@@ -109,16 +112,6 @@ export class OptionsScene extends Phaser.Scene {
         get: () => (settings.pullToClimb ? '引くと上げ' : '倒すと上げ'),
         step: () => { settings.pullToClimb = !settings.pullToClimb; saveSettings(); } },
       { kind: 'choice',
-        label: 'スティックの遊び',
-        note: '中央の、倒していないとみなす幅。大きいほど手が休まる',
-        get: () => settings.deadzone.toFixed(2),
-        step: (d) => {
-          settings.deadzone = cycle(DEADZONES, DEADZONES.reduce(
-            (a, b) => (Math.abs(b - settings.deadzone) < Math.abs(a - settings.deadzone) ? b : a),
-          ), d);
-          saveSettings();
-        } },
-      { kind: 'choice',
         label: '音量',
         get: () => `${Math.round(settings.volume * 100)}%`,
         step: (d) => {
@@ -143,7 +136,23 @@ export class OptionsScene extends Phaser.Scene {
         label: '勝ちに必要な点',
         get: () => `${settings.winning} 点`,
         step: (d) => { settings.winning = cycle(WINNING, settings.winning, d); saveSettings(); } },
-      ...PAD_ACTIONS.map((a): Row => ({ kind: 'pad', label: `パッド　${a.label}`, action: a.key })),
+      { kind: 'choice',
+        label: '設定するパッド',
+        note: 'これより下は 1P と 2P で別々に持つ。2台つなぐときはそれぞれ合わせられる',
+        get: () => PLAYER_NAMES[this.side],
+        step: (d) => { this.side = (this.side + d + PLAYER_NAMES.length) % PLAYER_NAMES.length; } },
+      { kind: 'choice',
+        label: 'スティックの遊び',
+        note: '中央の、倒していないとみなす幅。大きいほど手が休まる',
+        get: () => settings.deadzones[this.side].toFixed(2),
+        step: (d) => {
+          const now = settings.deadzones[this.side];
+          settings.deadzones[this.side] = cycle(DEADZONES, DEADZONES.reduce(
+            (a, b) => (Math.abs(b - now) < Math.abs(a - now) ? b : a),
+          ), d);
+          saveSettings();
+        } },
+      ...PAD_ACTIONS.map((a): Row => ({ kind: 'pad', label: `　　${a.label}`, action: a.key })),
       { kind: 'action',
         label: '初期設定に戻す',
         note: 'すべての項目を最初の状態へ',
@@ -159,6 +168,13 @@ export class OptionsScene extends Phaser.Scene {
   }
 
   private layout(): void {
+    // パッドの設定はここから下、という区切り。線が1本あるだけで読み違えが減る
+    const divider = this.rows.findIndex((r) => r.kind === 'choice' && r.label === '設定するパッド');
+    if (divider > 0) {
+      const y = TOP + divider * STEP - STEP / 2;
+      this.add.rectangle(VIEW.width / 2, y, 620, 1, 0xf4e6c8, 0.35);
+    }
+
     this.cursor = this.add.text(LABEL_X - 30, TOP, '▶', {
       fontFamily: 'Georgia, serif', fontSize: '18px', color: '#ffd76b',
       stroke: INK, strokeThickness: 4,
@@ -191,7 +207,8 @@ export class OptionsScene extends Phaser.Scene {
       }).setOrigin(0.5);
 
     this.add.text(VIEW.width / 2, VIEW.height - 20,
-      '機首のスティック（左スティック上下・十字キー）とキーボードの割り当ては変えられません', {
+      '「設定するパッド」から下は 1P・2P で別々です　　'
+      + '機首のスティック（左スティック上下・十字キー）とキーボードの割り当ては変えられません', {
         fontFamily: 'Georgia, serif', fontSize: '14px', color: CREAM,
         backgroundColor: 'rgba(24,16,10,0.5)', padding: { x: 12, y: 4 },
       }).setOrigin(0.5).setAlpha(0.72);
@@ -206,7 +223,9 @@ export class OptionsScene extends Phaser.Scene {
       t.value.setAlpha(on ? 1 : 0.72);
       if (r.kind === 'pad') {
         const waiting = this.waiting === r.action;
-        t.value.setText(waiting ? '― 割り当てたいボタンを押す ―' : buttonName(settings.pad[r.action]));
+        t.value.setText(waiting
+          ? '― 割り当てたいボタンを押す ―'
+          : buttonName(settings.pads[this.side][r.action]));
         t.value.setColor(waiting ? '#ffd76b' : on ? '#ffd76b' : CREAM);
       } else if (r.kind === 'choice') {
         t.value.setText(`◂ ${r.get()} ▸`);
@@ -220,7 +239,7 @@ export class OptionsScene extends Phaser.Scene {
     const r = this.rows[this.index];
     let hint = '';
     if (this.waiting) hint = '割り当てたいボタンを押してください（Esc でやめる）';
-    else if (r.kind === 'pad') hint = 'Enter（○A）を押してから、割り当てたいボタンを押します';
+    else if (r.kind === 'pad') hint = `Enter（○A）を押してから、${PLAYER_NAMES[this.side]} に割り当てたいボタンを押します`;
     else if (r.kind !== 'action' && r.note) hint = r.note;
     else if (r.kind === 'action' && r.note) hint = r.note;
     this.hint.setText(hint);
@@ -328,28 +347,35 @@ export class OptionsScene extends Phaser.Scene {
 
     const button = held[0];
     const action = this.waiting!;
-    const before = settings.pad[action];
-    // 同じボタンを使っている操作があれば、そちらに今までのボタンを渡す
+    const bind = settings.pads[this.side];
+    const before = bind[action];
+    // 同じボタンを使っている操作があれば、そちらに今までのボタンを渡す。
+    // 入れ替えるのは直しているほうのパッドだけで、もう一方には触らない
     for (const { key } of PAD_ACTIONS) {
-      if (key !== action && settings.pad[key] === button) settings.pad[key] = before;
+      if (key !== action && bind[key] === button) bind[key] = before;
     }
-    settings.pad[action] = button;
+    bind[action] = button;
     saveSettings();
     this.waiting = null;
     sfx.menuDecide();
     this.refresh();
   }
 
-  /** いま押されているボタンの番号 */
+  /**
+   * いま押されているボタンの番号。
+   *
+   * **直しているほうのパッドを見る** ―― 2P の割り当ては 2P のパッドで押して決める。
+   * その台がつながっていなければ 1台目で代用する（パッド1台で2人分を組めるように）
+   */
   private pressedButtons(): number[] {
     const out: number[] = [];
     try {
       if (!navigator.getGamepads) return out;
-      for (const p of navigator.getGamepads()) {
-        if (!p || !p.connected || p.mapping !== 'standard') continue;
-        p.buttons.forEach((b, i) => { if (b.pressed) out.push(i); });
-        break;                       // 1台目だけ見る
-      }
+      const pads = [...navigator.getGamepads()]
+        .filter((p): p is Gamepad => !!p && p.connected && p.mapping === 'standard');
+      const pad = pads[this.side] ?? pads[0];
+      if (!pad) return out;
+      pad.buttons.forEach((b, i) => { if (b.pressed) out.push(i); });
     } catch {
       return out;                    // 読めない環境。割り当ては変えられないだけ
     }

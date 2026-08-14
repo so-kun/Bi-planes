@@ -32,9 +32,13 @@ export interface PadBinding {
 }
 
 export interface Settings {
-  pad: PadBinding;
-  /** スティック中央の遊び */
-  deadzone: number;
+  /**
+   * パッドの割り当て。**1P と 2P で別々**に持つ。
+   * 手元にある2台のパッドが同じ機種とは限らないので、片方だけ組み替えられるようにしてある
+   */
+  pads: [PadBinding, PadBinding];
+  /** スティック中央の遊び。これもパッドごと */
+  deadzones: [number, number];
   /** 機首の向き。true = 引く（下）と機首が上がる（既定） */
   pullToClimb: boolean;
   /** 全体の音量（0〜1） */
@@ -46,19 +50,21 @@ export interface Settings {
   winning: number;
 }
 
+const DEFAULT_BINDING: PadBinding = {
+  mg: PAD.buttons.mg,
+  cannon: PAD.buttons.cannon,
+  rollL: PAD.buttons.rollL,
+  rollR: PAD.buttons.rollR,
+  throttle: PAD.buttons.throttle,
+  decide: PAD.buttons.cannon,
+  cancel: PAD.buttons.mg,
+  start: PAD.buttons.start,
+  select: PAD.buttons.select,
+};
+
 export const DEFAULTS: Settings = {
-  pad: {
-    mg: PAD.buttons.mg,
-    cannon: PAD.buttons.cannon,
-    rollL: PAD.buttons.rollL,
-    rollR: PAD.buttons.rollR,
-    throttle: PAD.buttons.throttle,
-    decide: PAD.buttons.cannon,
-    cancel: PAD.buttons.mg,
-    start: PAD.buttons.start,
-    select: PAD.buttons.select,
-  },
-  deadzone: PAD.deadzone,
+  pads: [{ ...DEFAULT_BINDING }, { ...DEFAULT_BINDING }],
+  deadzones: [PAD.deadzone, PAD.deadzone],
   pullToClimb: true,
   volume: AUDIO.master,
   bgm: true,
@@ -121,13 +127,21 @@ export function loadSettings(): void {
   if (typeof saved !== 'object' || saved === null) return;
   const s = saved as Partial<Settings>;
 
-  if (s.pad && typeof s.pad === 'object') {
+  // 1P・2P で分ける前の保存（pad / deadzone がひとつだけ）は、両方に配る
+  const old = saved as { pad?: unknown; deadzone?: unknown };
+  const bindings: unknown[] = Array.isArray(s.pads) ? s.pads : [old.pad, old.pad];
+  bindings.forEach((b, i) => {
+    if (i > 1 || !b || typeof b !== 'object') return;
     for (const { key } of PAD_ACTIONS) {
-      const v = (s.pad as unknown as Record<string, unknown>)[key];
-      if (typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= 16) settings.pad[key] = v;
+      const v = (b as Record<string, unknown>)[key];
+      if (typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= 16) settings.pads[i][key] = v;
     }
-  }
-  if (typeof s.deadzone === 'number' && s.deadzone >= 0 && s.deadzone < 0.9) settings.deadzone = s.deadzone;
+  });
+  const zones: unknown[] = Array.isArray(s.deadzones) ? s.deadzones : [old.deadzone, old.deadzone];
+  zones.forEach((z, i) => {
+    if (i > 1) return;
+    if (typeof z === 'number' && z >= 0 && z < 0.9) settings.deadzones[i] = z;
+  });
   if (typeof s.pullToClimb === 'boolean') settings.pullToClimb = s.pullToClimb;
   if (typeof s.volume === 'number' && s.volume >= 0 && s.volume <= 1) settings.volume = s.volume;
   if (typeof s.bgm === 'boolean') settings.bgm = s.bgm;
@@ -147,3 +161,6 @@ export function resetSettings(): void {
   Object.assign(settings, structuredClone(DEFAULTS));
   saveSettings();
 }
+
+/** 遊ぶ人の名前。オプション画面と、どちらのパッドを直すかの表示に使う */
+export const PLAYER_NAMES = ['1P', '2P'];
