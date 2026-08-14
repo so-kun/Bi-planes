@@ -4,7 +4,7 @@
  */
 
 import Phaser from 'phaser';
-import { VIEW, WEAPON } from '../config';
+import { VIEW, WEAPON, groundAt } from '../config';
 
 export type BulletKind = 'mg' | 'cannon';
 
@@ -50,7 +50,7 @@ export class Bullets {
     for (let i = this.list.length - 1; i >= 0; i--) {
       const b = this.list[i];
       b.t += dt;
-      if (b.t >= b.life || b.x < -60 || b.x > VIEW.width + 60 || b.y > VIEW.groundY + 30) {
+      if (b.t >= b.life || b.x < -60 || b.x > VIEW.width + 60 || b.y > groundAt(b.x) + 30) {
         this.list.splice(i, 1);
         continue;
       }

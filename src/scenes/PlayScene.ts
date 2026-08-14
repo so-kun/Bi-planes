@@ -11,7 +11,7 @@
 
 import Phaser from 'phaser';
 import {
-  BALLOON, ENGINE, FILM_DEFAULT, FLIGHT, PLANE, SCORE, SMOKE, VIEW,
+  BALLOON, ENGINE, FILM_DEFAULT, FLIGHT, PLANE, SCORE, SMOKE, VIEW, groundAt,
 } from '../config';
 import { sfx } from '../audio';
 import { FilmPipeline } from '../fx/FilmPipeline';
@@ -411,7 +411,7 @@ export class PlayScene extends Phaser.Scene {
     if (mg) this.fireMg(p);
 
     // 地面への激突は自滅。相手に点が入る
-    if (p.plane.y >= VIEW.groundY) this.crash(p);
+    if (p.plane.y >= groundAt(p.plane.x)) this.crash(p);
 
     this.emitSmoke(p, dt);
     this.warnStall(p, dt);
@@ -456,7 +456,7 @@ export class PlayScene extends Phaser.Scene {
 
   /** 地面への激突。撃たれたわけではないので、相手には自滅ぶんの点が入る */
   private crash(p: Player): void {
-    this.particles.explode(p.plane.x, VIEW.groundY, true);
+    this.particles.explode(p.plane.x, groundAt(p.plane.x), true);
     sfx.explosion();
     this.downPlane(p, this.other(p), SCORE.suicide);
   }

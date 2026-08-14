@@ -6,7 +6,7 @@
  */
 
 import Phaser from 'phaser';
-import { FILM_DEFAULT, VIEW } from '../config';
+import { FILM_DEFAULT, VIEW, groundAt } from '../config';
 import { sfx } from '../audio';
 import { FilmPipeline } from '../fx/FilmPipeline';
 import { attachFilm } from '../fx/attachFilm';
@@ -246,8 +246,8 @@ export class PracticeScene extends Phaser.Scene {
       this.prev = { x: this.plane.x, y: this.plane.y };
     }
     if (this.padState.rollEdge !== 0) this.plane.roll(this.padState.rollEdge);
-    if (this.plane.y >= VIEW.groundY) {
-      this.particles.explode(this.plane.x, VIEW.groundY, true);
+    if (this.plane.y >= groundAt(this.plane.x)) {
+      this.particles.explode(this.plane.x, groundAt(this.plane.x), true);
       sfx.explosion();
       this.plane.destroy();
     }
