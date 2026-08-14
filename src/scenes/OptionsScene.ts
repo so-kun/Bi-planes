@@ -9,7 +9,7 @@
  */
 
 import Phaser from 'phaser';
-import { VIEW } from '../config';
+import { PLANE, VIEW } from '../config';
 import { sfx } from '../audio';
 import { attachFilm } from '../fx/attachFilm';
 import type { FilmPipeline } from '../fx/FilmPipeline';
@@ -34,13 +34,18 @@ type Row =
 const DEADZONES = [0.10, 0.15, 0.22, 0.30, 0.40];
 const FILM_NAMES = ['切', '弱', '既定', '標準', '強'];
 const WINNING = [10, 15, 20, 30, 50];
+/**
+ * 7.7mm 一発の威力。整数だけを並べてある ―― HP に端数が出ると、
+ * 計器の目盛りも「あと何発」も読みにくくなる。既定は 15（7発で撃墜）
+ */
+const MG_DAMAGE = [5, 10, 15, 20, 25, 50];
 
 /** ボタンの割り当て待ちを打ち切るまでの秒数 */
 const WAIT_LIMIT = 8;
 
-/** 一覧の見た目。17 行が下の案内に掛からないように詰めてある */
-const TOP = 122;
-const STEP = 29;
+/** 一覧の見た目。18 行が下の案内に掛からないように詰めてある */
+const TOP = 118;
+const STEP = 28;
 const LABEL_X = 300;
 const VALUE_X = 790;
 
@@ -136,6 +141,14 @@ export class OptionsScene extends Phaser.Scene {
         label: '勝ちに必要な点',
         get: () => `${settings.winning} 点`,
         step: (d) => { settings.winning = cycle(WINNING, settings.winning, d); saveSettings(); } },
+      { kind: 'choice',
+        label: '7.7mm の威力',
+        note: '一発あたり。20mm は一撃撃墜のまま変わらない',
+        get: () => `${settings.mgDamage}（${Math.ceil(PLANE.maxHp / settings.mgDamage)} 発で撃墜）`,
+        step: (d) => {
+          settings.mgDamage = cycle(MG_DAMAGE, settings.mgDamage, d);
+          saveSettings();
+        } },
       { kind: 'choice',
         label: '設定するパッド',
         note: 'これより下は 1P と 2P で別々に持つ。2台つなぐときはそれぞれ合わせられる',

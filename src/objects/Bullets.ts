@@ -5,6 +5,7 @@
 
 import Phaser from 'phaser';
 import { VIEW, WEAPON, groundAt } from '../config';
+import { settings } from '../settings';
 
 export type BulletKind = 'mg' | 'cannon';
 
@@ -34,6 +35,8 @@ export class Bullets {
 
   fire(kind: BulletKind, x: number, y: number, ux: number, uy: number, owner: number): void {
     const spec = kind === 'mg' ? WEAPON.mg : WEAPON.cannon;
+    // 7.7mm の威力はオプションで変えられる。20mm は一撃撃墜のまま
+    const damage = kind === 'mg' ? settings.mgDamage : spec.damage;
     const spread = spec.spread ? (Math.random() - 0.5) * spec.spread : 0;
     const ca = Math.cos(spread), sa = Math.sin(spread);
     const dx = ux * ca - uy * sa;
@@ -41,7 +44,7 @@ export class Bullets {
     this.list.push({
       kind, x, y,
       vx: dx * spec.speed, vy: dy * spec.speed,
-      t: 0, life: spec.life, gravity: spec.gravity, damage: spec.damage,
+      t: 0, life: spec.life, gravity: spec.gravity, damage,
       owner, trail: [],
     });
   }
