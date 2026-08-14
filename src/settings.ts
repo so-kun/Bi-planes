@@ -10,7 +10,7 @@
  * その回だけ設定が残らないだけで、遊べなくなる理由にはならない。
  */
 
-import { AUDIO, FILM_DEFAULT, PAD, SCORE } from './config';
+import { AUDIO, FILM_DEFAULT, PAD, SCORE, WEAPON } from './config';
 
 const STORE_KEY = 'biplanes.settings';
 
@@ -48,6 +48,11 @@ export interface Settings {
   film: number;
   /** 何点先取で勝ちか */
   winning: number;
+  /**
+   * 7.7mm 一発の威力。HP は 100 なので、撃墜までの発数は 100 ÷ これ。
+   * 20mm（一撃撃墜）は変えない ―― 一撃という位置づけそのものが崩れるため
+   */
+  mgDamage: number;
 }
 
 const DEFAULT_BINDING: PadBinding = {
@@ -70,6 +75,7 @@ export const DEFAULTS: Settings = {
   bgm: true,
   film: FILM_DEFAULT,
   winning: SCORE.winning,
+  mgDamage: WEAPON.mg.damage,
 };
 
 /** 今の設定。ここを直接読み書きする */
@@ -147,6 +153,7 @@ export function loadSettings(): void {
   if (typeof s.bgm === 'boolean') settings.bgm = s.bgm;
   if (typeof s.film === 'number' && Number.isInteger(s.film) && s.film >= 0 && s.film <= 4) settings.film = s.film;
   if (typeof s.winning === 'number' && Number.isInteger(s.winning) && s.winning > 0) settings.winning = s.winning;
+  if (typeof s.mgDamage === 'number' && s.mgDamage > 0 && s.mgDamage <= 100) settings.mgDamage = s.mgDamage;
 }
 
 export function saveSettings(): void {
