@@ -1,5 +1,10 @@
 /**
- * 計器盤。得点・体力・スロットルを、真鍮枠の一枚板にまとめて出す。
+ * 計器盤。真鍮枠の一枚板に、数字・帯・丸い計器をまとめて出す。
+ *
+ * **対戦とタイムアタックで同じ板を使う**（2026-08-15 改定）。
+ * 出すものが違うだけなので、銘板の文字と中身を外から渡す作りにした:
+ *   対戦 … SCORE（得点）／ HEALTH（体力）／ 20mm の残弾
+ *   タイムアタック … TIME（合計タイム）／ RINGS（のこりの輪）
  *
  * 意匠はユーザー提供の参考図どおり ―― 濃紺の板に真鍮の縁と鋲、
  * クリーム色の銘板、走行距離計のような数字の窓、区切りのある体力の帯、
@@ -11,7 +16,7 @@
  */
 
 import Phaser from 'phaser';
-import { ENGINE, PLANE, WEAPON } from '../config';
+import { ENGINE, WEAPON } from '../config';
 
 /** 板の大きさ */
 export const PANEL = { w: 340, h: 104 };
@@ -33,12 +38,29 @@ const C = {
 /** 体力の帯。左から赤 → 橙 → 黄。減ると右から消え、最後に赤だけが残る */
 const HEALTH_STEPS = [0xb8392a, 0xc04a26, 0xd06322, 0xd97b24, 0xdf922a, 0xe0a52f, 0xd8b134, 0xcfba3c];
 
+/** 板の作り。画面ごとに変わるところ */
+export interface PanelOptions {
+  /** 数字の窓の銘板 */
+  leftLabel?: string;
+  /** 帯の銘板 */
+  rightLabel?: string;
+  /** 20mm の受け皿を出すか。タイムアタックでは武器が無いので出さない */
+  ammo?: boolean;
+  /** 数字の窓に桁の仕切りを入れるか。タイムは 3 桁に収まらないので入れない */
+  divided?: boolean;
+  /** 帯の色。左から順に灯る */
+  barColors?: number[];
+}
+
 /** 見た目の状態。呼ぶ側はこれだけ渡す */
 export interface PanelState {
-  score: number;
-  /** 勝ちに必要な点。フリープレイでは null（上限を出さない） */
-  target: number | null;
-  hp: number;
+  /** 数字の窓に出す文字。得点は 3 桁に詰めて渡す */
+  digits: string;
+  /** 窓の隅に小さく添える文字。要らなければ空文字 */
+  note: string;
+  /** 帯の満ち具合（0〜1） */
+  bar: number;
+  /** 20mm の残弾。`ammo` を出さない板では見ない */
   cannonAmmo: number;
   /** 水温（0〜1）。ENGINE.tempFloor より下がらない */
   temp: number;
@@ -73,6 +95,8 @@ export class Panel {
     gauge: { cx: 294, cy: 52, r: 37 },
   };
 
+  private opts: Required<PanelOptions>;
+
   constructor(
     private scene: Phaser.Scene,
     private x: number,
@@ -80,7 +104,15 @@ export class Panel {
     private color: number,
     name: string,
     depth = 70,
+    opts: PanelOptions = {},
   ) {
+    this.opts = {
+      leftLabel: opts.leftLabel ?? 'SCORE',
+      rightLabel: opts.rightLabel ?? 'HEALTH',
+      ammo: opts.ammo ?? true,
+      divided: opts.divided ?? true,
+      barColors: opts.barColors ?? HEALTH_STEPS,
+    };
     this.still = scene.add.graphics().setDepth(depth);
     this.live = scene.add.graphics().setDepth(depth + 1);
     const L = Panel.L;
@@ -140,8 +172,8 @@ export class Panel {
       this.screw(g, x + sx, y + sy);
     }
 
-    this.plate(g, x + L.scorePlate.x, y + L.scorePlate.y, L.scorePlate.w, L.scorePlate.h, 'SCORE');
-    this.plate(g, x + L.healthPlate.x, y + L.healthPlate.y, L.healthPlate.w, L.healthPlate.h, 'HEALTH');
+    this.plate(g, x + L.scorePlate.x, y + L.scorePlate.y, L.scorePlate.w, L.scorePlate.h, this.opts.leftLabel);
+    this.plate(g, x + L.healthPlate.x, y + L.healthPlate.y, L.healthPlate.w, L.healthPlate.h, this.opts.rightLabel);
 
     // 数字の窓。奥を暗くして、真鍮の枠を回す
     const w = L.window;
@@ -152,9 +184,11 @@ export class Panel {
     g.fillStyle(C.window, 1);
     g.fillRoundedRect(x + w.x, y + w.y, w.w, w.h, 3);
     // 桁の仕切り
-    g.lineStyle(1.2, 0x3a3226, 0.9);
-    for (let i = 1; i < 3; i++) {
-      g.lineBetween(x + w.x + w.w * i / 3, y + w.y + 3, x + w.x + w.w * i / 3, y + w.y + w.h - 3);
+    if (this.opts.divided) {
+      g.lineStyle(1.2, 0x3a3226, 0.9);
+      for (let i = 1; i < 3; i++) {
+        g.lineBetween(x + w.x + w.w * i / 3, y + w.y + 3, x + w.x + w.w * i / 3, y + w.y + w.h - 3);
+      }
     }
 
     // 体力の帯の受け皿
@@ -167,15 +201,17 @@ export class Panel {
     g.fillRect(x + b.x, y + b.y, b.w, b.h);
 
     // 20mm の受け皿。掘り込んでおかないと弾が地の色に紛れる
-    const a = L.ammo;
-    const trayW = WEAPON.cannon.ammo * a.gap + 6;
-    g.fillStyle(C.brassLo, 1);
-    g.fillRoundedRect(x + a.x - 6, y + a.y - 4, trayW + 4, a.h + 8, 4);
-    g.fillStyle(C.window, 1);
-    g.fillRoundedRect(x + a.x - 4, y + a.y - 2, trayW, a.h + 4, 3);
-    this.labels.push(this.scene.add.text(x + a.x + trayW + 4, y + a.y + a.h / 2, '20mm', {
-      fontFamily: 'Georgia, serif', fontSize: '10px', color: '#8d7a52',
-    }).setOrigin(0, 0.5).setDepth(this.still.depth + 1));
+    if (this.opts.ammo) {
+      const a = L.ammo;
+      const trayW = WEAPON.cannon.ammo * a.gap + 6;
+      g.fillStyle(C.brassLo, 1);
+      g.fillRoundedRect(x + a.x - 6, y + a.y - 4, trayW + 4, a.h + 8, 4);
+      g.fillStyle(C.window, 1);
+      g.fillRoundedRect(x + a.x - 4, y + a.y - 2, trayW, a.h + 4, 3);
+      this.labels.push(this.scene.add.text(x + a.x + trayW + 4, y + a.y + a.h / 2, '20mm', {
+        fontFamily: 'Georgia, serif', fontSize: '10px', color: '#8d7a52',
+      }).setOrigin(0, 0.5).setDepth(this.still.depth + 1));
+    }
 
     this.drawShield(g);
     this.drawGaugeFace(g);
@@ -284,17 +320,18 @@ export class Panel {
     const L = Panel.L;
     g.clear();
 
-    // 数字。走行距離計らしく、頭を 0 で埋める
-    this.digits.setText(String(Math.max(0, Math.min(999, s.score))).padStart(3, '0'));
-    this.targetText.setText(s.target === null ? '' : `/ ${s.target}`);
+    // 数字。呼ぶ側が整えたものをそのまま出す
+    this.digits.setText(s.digits);
+    this.targetText.setText(s.note);
 
-    // 体力の目盛り
+    // 帯の目盛り
     const b = L.bar;
-    const lit = Math.ceil(Phaser.Math.Clamp(s.hp / PLANE.maxHp, 0, 1) * HEALTH_STEPS.length);
-    const seg = (b.w - (HEALTH_STEPS.length - 1) * 2) / HEALTH_STEPS.length;
-    for (let i = 0; i < HEALTH_STEPS.length; i++) {
+    const steps = this.opts.barColors;
+    const lit = Math.ceil(Phaser.Math.Clamp(s.bar, 0, 1) * steps.length);
+    const seg = (b.w - (steps.length - 1) * 2) / steps.length;
+    for (let i = 0; i < steps.length; i++) {
       const sx = x + b.x + i * (seg + 2);
-      g.fillStyle(i < lit ? HEALTH_STEPS[i] : C.dark, 1);
+      g.fillStyle(i < lit ? steps[i] : C.dark, 1);
       g.fillRect(sx, y + b.y + 2, seg, b.h - 4);
       if (i < lit) {
         // 上端に細いつやを入れると、塗りが立体に見える
@@ -309,7 +346,7 @@ export class Panel {
 
     // 20mm の残弾。真鍮の弾を並べ、撃つと沈んで暗くなる
     const a = L.ammo;
-    for (let i = 0; i < WEAPON.cannon.ammo; i++) {
+    for (let i = 0; this.opts.ammo && i < WEAPON.cannon.ammo; i++) {
       const live = i < s.cannonAmmo;
       const px = x + a.x + i * a.gap;
       const py = y + a.y + (live ? 0 : 3);

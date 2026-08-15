@@ -39,7 +39,7 @@ export interface PadState {
   cancelEdge: boolean;
   /** Start。飛行中の中断に使う。武器とは重ならない */
   startEdge: boolean;
-  /** Select。プラクティスのやり直しに使う。武器とは重ならない */
+  /** Select。タイムアタックのやり直しに使う。武器とは重ならない */
   selectEdge: boolean;
   /** 何かボタンが押されているか。「押されるまで受け付けない」の判定に使う */
   anyFace: boolean;

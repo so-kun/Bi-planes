@@ -8,7 +8,7 @@ import { OpeningScene } from './scenes/OpeningScene';
 import { TitleScene } from './scenes/TitleScene';
 import { OptionsScene } from './scenes/OptionsScene';
 import { PlayScene } from './scenes/PlayScene';
-import { PracticeScene } from './scenes/PracticeScene';
+import { TimeAttackScene } from './scenes/TimeAttackScene';
 
 // 保存してある設定を、画面が立ち上がる前に読む。
 // あとから読むと、既定の値で作られた画面が残ってしまう
@@ -34,7 +34,7 @@ const game = new Phaser.Game({
   // ブラウザ側の「操作があるまで鳴らせない」仕掛けと二重に噛み合う。
   // Safari は同時に持てる AudioContext の数が少ないので、無駄には持たない
   audio: { noAudio: true },
-  scene: [BootScene, OpeningScene, TitleScene, OptionsScene, PlayScene, PracticeScene],
+  scene: [BootScene, OpeningScene, TitleScene, OptionsScene, PlayScene, TimeAttackScene],
 });
 
 // 落ち方を見えるようにする。描画の輪も止まらないように包む

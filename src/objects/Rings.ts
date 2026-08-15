@@ -1,5 +1,5 @@
 /**
- * プラクティスの輪。番号の順に、決められた向きにくぐる。
+ * タイムアタックの輪。番号の順に、決められた向きにくぐる。
  *
  * 輪は「横向きに置かれた輪」に見えるよう、くぐる向きに潰した楕円で描く。
  * 潰れている方向がそのまま「入る向き」を表すので、形を見れば
@@ -12,7 +12,7 @@
  */
 
 import Phaser from 'phaser';
-import { RING_RADIUS, RING_SQUASH, type Ring } from '../practice/stages';
+import { RING_RADIUS, RING_SQUASH, type Ring } from '../timeattack/stages';
 
 /** 手描き風の揺らぎを作るときの分割数 */
 const SEGMENTS = 44;
@@ -137,22 +137,40 @@ export class Rings {
       path(1.05);
       g.strokePath();
 
-      // 入る向きの矢印。輪の手前から中心へ向けて引く
-      const tail = RING_RADIUS * 1.05;
-      const head = RING_RADIUS * 0.32;
-      const x0 = r.x - ax * tail;
-      const y0 = r.y - ay * tail;
-      const x1 = r.x - ax * head;
-      const y1 = r.y - ay * head;
-      g.lineStyle(7, INK, isNext ? 0.8 : 0.35);
-      g.lineBetween(x0, y0, x1, y1);
-      g.lineStyle(3.5, color, isNext ? 0.95 : 0.45);
-      g.lineBetween(x0, y0, x1, y1);
-      for (const side of [1, -1]) {
-        const a = r.dir + Math.PI + side * 0.55;
-        g.lineStyle(3.5, color, isNext ? 0.95 : 0.45);
-        g.lineBetween(x1, y1, x1 + Math.cos(a) * 17, y1 + Math.sin(a) * 17);
-      }
+      // 入る向きの矢印。輪の手前から中心へ向けて差し込む。
+      //
+      // **鏃は塗りつぶした三角**にしてある。細い線を2本ひげのように生やしていたころは、
+      // 遠目には軸と区別がつかず**ただの横棒**に見えて、向きが読めなかった。
+      // 次にくぐる輪だけ、矢印がゆっくり前後に動いて流れを示す
+      const slide = isNext ? Math.sin(t * 3.4) * RING_RADIUS * 0.06 : 0;
+      const tip = RING_RADIUS * 0.30 - slide;          // 鏃の先。輪の面のすぐ手前
+      const headLen = RING_RADIUS * 0.44;
+      const halfW = RING_RADIUS * 0.27;
+      const tail = RING_RADIUS * 1.5 - slide;
+
+      const px = (d: number, s = 0): number => r.x - ax * d - ay * s;
+      const py = (d: number, s = 0): number => r.y - ay * d + ax * s;
+      const base = tip + headLen;
+      const head: [number, number][] = [
+        [px(tip), py(tip)],
+        [px(base, halfW), py(base, halfW)],
+        [px(base, -halfW), py(base, -halfW)],
+      ];
+      const pts = head.map(([a, b]) => new Phaser.Geom.Point(a, b));
+
+      // 軸。太い黒の上に色を乗せて、輪と同じペン画に寄せる
+      g.lineStyle(13, INK, isNext ? 0.85 : 0.35);
+      g.lineBetween(px(tail), py(tail), px(base - 2), py(base - 2));
+      g.lineStyle(7, color, isNext ? 1 : 0.45);
+      g.lineBetween(px(tail), py(tail), px(base - 2), py(base - 2));
+
+      // 鏃。黒で一回り大きく描いてから色を塗ると、輪郭線のある絵になる
+      g.fillStyle(INK, isNext ? 0.85 : 0.35);
+      g.lineStyle(11, INK, isNext ? 0.85 : 0.35);
+      g.fillPoints(pts, true);
+      g.strokePoints(pts, true);
+      g.fillStyle(color, isNext ? 1 : 0.5);
+      g.fillPoints(pts, true);
     });
 
     this.labels.forEach((label, i) => {

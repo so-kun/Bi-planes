@@ -27,7 +27,7 @@ export interface PadBinding {
   cancel: number;
   /** 飛行中に中断してタイトルへ */
   start: number;
-  /** プラクティスのやり直し */
+  /** タイムアタックのやり直し */
   select: number;
 }
 
@@ -74,7 +74,8 @@ export interface Settings {
   tempRise: number;
   /**
    * コンピュータの腕前。1 = 弱 / 2 = 普通 / 3 = 強。
-   * ステージ選択の左右でも選べる ―― どちらで変えても同じところを見る
+   * **設定はここだけ**（2026-08-15 改定）―― ステージ選択にも同じ選択があったが、
+   * 同じものを2か所で触れると、どちらが本当か分からなくなるので一本化した
    */
   aiLevel: number;
 }

@@ -117,7 +117,7 @@ function gameRows(ctx: RowContext): Row[] {
       } },
     { kind: 'shared',
       label: 'コンピュータの強さ',
-      note: 'ステージ選択の左右でも選べる。どちらで変えても同じところを見ている',
+      note: '「1人で遊ぶ」の 2P の腕前。弱いほど当ててこない',
       get: () => AI_LEVELS[settings.aiLevel - 1]?.name ?? String(settings.aiLevel),
       step: (d) => { settings.aiLevel = cycle(CHOICES.aiLevel, settings.aiLevel, d); saveSettings(); } },
     { kind: 'shared',

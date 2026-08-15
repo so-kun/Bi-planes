@@ -1,8 +1,14 @@
 /**
- * プラクティス。操縦の練習が目的なので、敵も武装も出さない。
+ * タイムアタック。番号の付いた輪を順にくぐり、**10ステージの合計タイム**を競う。
  *
- * 番号の付いた輪が空に浮かび、その順に潜っていく。全部潜ればステージ終了。
- * 10 ステージの合計タイムを競い、いちばん短いものをハイスコアとして残す。
+ * もとは「プラクティス」という練習の場だったが、遊びの芯はタイムそのものなので
+ * 名前と作りをタイムに寄せた（2026-08-15 改定）:
+ *
+ * - 計器盤を対戦と同じ真鍮の板で出す（TIME・のこりの輪・水温）
+ * - **自爆はタイムに +3 秒**。落ちてもすぐ戻れるぶん、代償を時間で払わせる
+ * - 終わったら、ステージごとのタイムと自爆の回数を並べて見せる
+ *
+ * 敵も武装も出ない。輪には**くぐる向き**があり、面をその向きに横切ったときだけ通る。
  */
 
 import Phaser from 'phaser';
@@ -18,15 +24,25 @@ import { PadMenu } from '../input/PadMenu';
 import { StuckKeyGuard } from '../input/StuckKeyGuard';
 import { PadInput, type PadState } from '../input/PadInput';
 import { Countdown } from '../ui/Countdown';
+import { Panel, PANEL } from '../ui/Panel';
+import { ScorePops } from '../ui/ScorePops';
 import { PauseMenu } from '../ui/PauseMenu';
-import { STAGES, START, formatTime, PRACTICE_STAGES } from '../practice/stages';
+import { STAGES, START, formatTime, STAGE_COUNT } from '../timeattack/stages';
+
+/** のこりの輪の帯。体力と違って減っても不吉に見えないよう、真鍮の色でそろえる */
+const RING_BAR = [0xd59a34, 0xd59a34, 0xd8b134, 0xd8b134, 0xcfba3c, 0xcfba3c, 0xc9c05a, 0xc9c05a];
 
 const KEY = Phaser.Input.Keyboard.KeyCodes;
 const BEST_KEY = 'biplanes.practice.best';
 /** ステージを終えてから次が始まるまでの間 */
 const INTERVAL = 1.8;
+/**
+ * 自爆したときにタイムへ足す秒数。
+ * すぐ出撃位置へ戻れるので、地面すれすれを 攻めるほうが速い、という抜け道を塞ぐ
+ */
+const CRASH_PENALTY = 3;
 
-export class PracticeScene extends Phaser.Scene {
+export class TimeAttackScene extends Phaser.Scene {
   private plane!: Plane;
   private particles!: Particles;
   private rings!: Rings;
@@ -58,13 +74,19 @@ export class PracticeScene extends Phaser.Scene {
   /** フィルム処理が外れていないか見張る間隔 */
   private filmWatchdog = 1;
 
-  private hud!: Phaser.GameObjects.Graphics;
+  /** 計器盤。対戦と同じ板を、出すものだけ変えて使う */
+  private panel!: Panel;
+  /** ステージと自爆とハイスコアを添える一行 */
   private hudText!: Phaser.GameObjects.Text;
+  /** 自爆したときの「+3.00」を出す */
+  private pops!: ScorePops;
+  /** 自爆した回数。結果に出す */
+  private crashes = 0;
   private centerText!: Phaser.GameObjects.Text;
   private stageName!: Phaser.GameObjects.Text;
 
   constructor() {
-    super('Practice');
+    super('TimeAttack');
   }
 
   create(): void {
@@ -98,6 +120,7 @@ export class PracticeScene extends Phaser.Scene {
     this.film = null;
     this.filmWatchdog = 1;
     this.menuHeld = false;
+    this.crashes = 0;
 
     this.setupInput();
     this.setupHud();
@@ -124,11 +147,23 @@ export class PracticeScene extends Phaser.Scene {
     this.stageName.setText(`ステージ ${this.stageIndex + 1}　${stage.name}`);
   }
 
+  /**
+   * 自爆の代償。**タイムに 3 秒足す**。
+   * すぐ出撃位置へ戻れるので、時間で払わせないと「落ちたほうが速い」場面ができてしまう。
+   * 走っていないとき（ステージの合間・終わったあと）は取らない
+   */
+  private penalise(x: number, y: number): void {
+    if (this.finished || this.interval > 0 || this.countdown.running) return;
+    this.crashes++;
+    this.stageTime += CRASH_PENALTY;
+    this.pops.add(x, y - 40, `+${CRASH_PENALTY}.00`, '#e8836a');
+  }
+
   private finishStage(): void {
     this.times.push(this.stageTime);
     sfx.beep(true);
     this.interval = INTERVAL;
-    const isLast = this.stageIndex >= PRACTICE_STAGES - 1;
+    const isLast = this.stageIndex >= STAGE_COUNT - 1;
     this.centerText.setText(
       isLast ? '' : `ステージ ${this.stageIndex + 1} クリア\n${formatTime(this.stageTime)}`,
     );
@@ -145,7 +180,8 @@ export class PracticeScene extends Phaser.Scene {
       saveBest(total);
     }
     this.centerText.setText(
-      `全10ステージ クリア\n\n合計 ${formatTime(total)}\n`
+      `全${STAGE_COUNT}ステージ 完走\n\n合計 ${formatTime(total)}\n`
+      + (this.crashes > 0 ? `（自爆 ${this.crashes} 回 ＝ +${formatTime(this.crashes * CRASH_PENALTY)}）\n` : '（自爆なし）\n')
       + (isBest ? '★ ハイスコア更新 ★' : `ハイスコア ${formatTime(this.best!)}`)
       + '\n\nEnter / ○A でもう一度　　Esc / ×B でタイトルへ',
     );
@@ -241,6 +277,7 @@ export class PracticeScene extends Phaser.Scene {
   private restart(): void {
     this.stageIndex = 0;
     this.times = [];
+    this.crashes = 0;
     this.finished = false;
     this.padMenu.disarm();
     this.centerText.setColor('#f4e6c8');
@@ -284,8 +321,9 @@ export class PracticeScene extends Phaser.Scene {
     }
 
     this.particles.update(dt);
+    this.pops.update(dt);
     this.rings.draw(this.t);
-    this.drawHud();
+    this.drawHud(dt);
   }
 
   /** 機体を飛ばす。合図の間は出撃位置で待たせる（対戦と同じ） */
@@ -321,9 +359,11 @@ export class PracticeScene extends Phaser.Scene {
     this.plane.update(pitch, dt);
     if (this.padState.rollEdge !== 0) this.plane.roll(this.padState.rollEdge);
     if (this.plane.y >= groundAt(this.plane.x)) {
-      this.particles.explode(this.plane.x, groundAt(this.plane.x), true);
+      const y = groundAt(this.plane.x);
+      this.particles.explode(this.plane.x, y, true);
       sfx.explosion();
       this.plane.destroy();
+      this.penalise(this.plane.x, y);
     }
   }
 
@@ -405,14 +445,26 @@ export class PracticeScene extends Phaser.Scene {
   // ---------------------------------------------------------------- 表示
 
   private setupHud(): void {
-    this.hud = this.add.graphics().setDepth(70);
-    this.hudText = this.add.text(0, 0, '', {
-      fontFamily: 'Georgia, "Times New Roman", serif', fontSize: '20px', color: '#241a12',
-      align: 'center',
+    this.pops = new ScorePops(this);
+
+    // 計器盤は対戦と同じ板。出すものだけ差し替える ――
+    // 得点の代わりに合計タイム、体力の代わりにのこりの輪。水温計はそのまま要る
+    // （全開の使いどころがタイムを決めるので、むしろ対戦より見る）
+    this.panel = new Panel(this, 18, 14, 0xd59a34, '', 70, {
+      leftLabel: 'TIME',
+      rightLabel: 'RINGS',
+      ammo: false,
+      divided: false,
+      barColors: RING_BAR,
+    });
+
+    this.hudText = this.add.text(18 + PANEL.w / 2, 14 + PANEL.h + 6, '', {
+      fontFamily: 'Georgia, serif', fontSize: '15px', color: '#f4e6c8',
+      backgroundColor: 'rgba(24,16,10,0.5)', padding: { x: 8, y: 3 }, align: 'center',
     }).setOrigin(0.5, 0).setDepth(71);
 
-    this.stageName = this.add.text(VIEW.width / 2, 92, '', {
-      fontFamily: 'Georgia, "Times New Roman", serif', fontSize: '22px', color: '#f4e6c8',
+    this.stageName = this.add.text(VIEW.width / 2, 30, '', {
+      fontFamily: 'Georgia, "Times New Roman", serif', fontSize: '24px', color: '#f4e6c8',
       stroke: '#241a12', strokeThickness: 5,
     }).setOrigin(0.5, 0).setDepth(71);
 
@@ -429,21 +481,21 @@ export class PracticeScene extends Phaser.Scene {
       }).setOrigin(0.5).setDepth(71).setAlpha(0.9);
   }
 
-  private drawHud(): void {
-    const g = this.hud;
-    g.clear();
-    const w = 330;
-    const x = (VIEW.width - w) / 2;
-    g.fillStyle(0xf4e6c8, 1).lineStyle(5, 0x241a12, 1);
-    g.fillRoundedRect(x, 18, w, 62, 9);
-    g.strokeRoundedRect(x, 18, w, 62, 9);
-
+  private drawHud(dt: number): void {
     const total = this.times.reduce((a, b) => a + b, 0) + (this.finished ? 0 : this.stageTime);
-    this.hudText.setPosition(VIEW.width / 2, 26);
+    const ringsAll = STAGES[Math.min(this.stageIndex, STAGE_COUNT - 1)].rings.length;
+    this.panel.update({
+      digits: formatTime(total),
+      // 窓の隅に、今どのステージかを小さく添える
+      note: `${Math.min(this.stageIndex + 1, STAGE_COUNT)}/${STAGE_COUNT}`,
+      bar: ringsAll > 0 ? this.rings.remaining / ringsAll : 0,
+      cannonAmmo: 0,
+      temp: this.plane.temp,
+    }, dt);
+
     this.hudText.setText(
-      `ステージ ${Math.min(this.stageIndex + 1, PRACTICE_STAGES)} / ${PRACTICE_STAGES}`
-      + `　　輪 のこり ${this.rings.remaining}\n`
-      + `合計 ${formatTime(total)}`
+      `輪 のこり ${this.rings.remaining}`
+      + (this.crashes > 0 ? `　　自爆 ${this.crashes} 回（+${formatTime(this.crashes * CRASH_PENALTY)}）` : '')
       + (this.best !== null ? `　　ハイスコア ${formatTime(this.best)}` : ''),
     );
   }
