@@ -156,7 +156,7 @@ export class TitleScene extends Phaser.Scene {
       }).setOrigin(0.5);
     this.add.text(cx, VIEW.height - 46,
       'パッドはスティック上下で選び、○／A で決定・×／B で戻る　　'
-      + (settings.pullToClimb ? '機首は引くと上がる（S・↓ で上昇）' : '機首は倒すと上がる（W・↑ で上昇）')
+      + (settings.pullToClimb[0] ? '機首は引くと上がる（S・↓ で上昇）' : '機首は倒すと上がる（W・↑ で上昇）')
       + '　　1P W/S・A/D・E・F・G　　2P ↑↓・←→・Shift・, ・.', {
         fontFamily: 'Georgia, serif', fontSize: '15px', color: CREAM,
         backgroundColor: 'rgba(24,16,10,0.5)', padding: { x: 12, y: 5 },
