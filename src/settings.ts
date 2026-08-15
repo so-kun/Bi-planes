@@ -39,8 +39,11 @@ export interface Settings {
   pads: [PadBinding, PadBinding];
   /** スティック中央の遊び。これもパッドごと */
   deadzones: [number, number];
-  /** 機首の向き。true = 引く（下）と機首が上がる（既定） */
-  pullToClimb: boolean;
+  /**
+   * 機首の向き。true = 引く（下）と機首が上がる（既定）。
+   * **1P と 2P で別々**に持つ ―― その人のキーボードとパッドの両方に効く
+   */
+  pullToClimb: [boolean, boolean];
   /** 全体の音量（0〜1） */
   volume: number;
   bgm: boolean;
@@ -70,7 +73,7 @@ const DEFAULT_BINDING: PadBinding = {
 export const DEFAULTS: Settings = {
   pads: [{ ...DEFAULT_BINDING }, { ...DEFAULT_BINDING }],
   deadzones: [PAD.deadzone, PAD.deadzone],
-  pullToClimb: true,
+  pullToClimb: [true, true],
   volume: AUDIO.master,
   bgm: true,
   film: FILM_DEFAULT,
@@ -148,7 +151,12 @@ export function loadSettings(): void {
     if (i > 1) return;
     if (typeof z === 'number' && z >= 0 && z < 0.9) settings.deadzones[i] = z;
   });
-  if (typeof s.pullToClimb === 'boolean') settings.pullToClimb = s.pullToClimb;
+  // 1P・2P で分ける前の保存は真偽値ひとつだったので、そのときは両方に配る
+  const climb: unknown = s.pullToClimb;
+  if (typeof climb === 'boolean') settings.pullToClimb = [climb, climb];
+  else if (Array.isArray(climb)) {
+    climb.forEach((v, i) => { if (i <= 1 && typeof v === 'boolean') settings.pullToClimb[i] = v; });
+  }
   if (typeof s.volume === 'number' && s.volume >= 0 && s.volume <= 1) settings.volume = s.volume;
   if (typeof s.bgm === 'boolean') settings.bgm = s.bgm;
   if (typeof s.film === 'number' && Number.isInteger(s.film) && s.film >= 0 && s.film <= 4) settings.film = s.film;

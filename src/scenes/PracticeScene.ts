@@ -236,7 +236,7 @@ export class PracticeScene extends Phaser.Scene {
     const up = k.up.isDown || k.upAlt.isDown;
     const down = k.down.isDown || k.downAlt.isDown;
     // 上下は既定で操縦桿と同じ向き ―― 引く（下）と機首が上がる。オプション画面で逆にもできる
-    const sign = settings.pullToClimb ? 1 : -1;
+    const sign = settings.pullToClimb[0] ? 1 : -1;
     const byKey = ((down ? 1 : 0) - (up ? 1 : 0)) * sign;
     const stick = -this.padState.pitch * sign;
     const pitch = Math.abs(stick) > Math.abs(byKey) ? stick : byKey;

@@ -397,7 +397,7 @@ export class PlayScene extends Phaser.Scene {
       // 上下は既定で操縦桿と同じ向き ―― **引く（下）と機首が上がる**（2026-08-13 変更）。
       // オプション画面で逆にもできる。ここで反転させるのは人の操作だけで、
       // AI が出す pitch は機体基準のままなので触らない
-      const sign = settings.pullToClimb ? 1 : -1;
+      const sign = settings.pullToClimb[p.id] ? 1 : -1;
       const byKey = ((p.keys.down.isDown ? 1 : 0) - (p.keys.up.isDown ? 1 : 0)) * sign;
       const stick = -p.padState.pitch * sign;
       pitch = Math.abs(stick) > Math.abs(byKey) ? stick : byKey;
