@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!--
   Bi-Planes の改善案の試作台。ゲーム本体とは別物で、採用が決まったものだけを src/ へ入れる。
-  ブラウザで直接開いて使う（音は「エンジン始動」を押してから鳴る）。
-  中身は同じものを Artifact でも配っている ―― こちらはパッドの振動も試せる。
+  **ブラウザで直接開いて使う** ―― 枠（iframe）の中に置くと、ブラウザがパッドを見せてくれないため、
+  振動が試せない。音のほうはどちらでも鳴る。
 -->
 <title>エンジン試運転台</title>
 <style>
@@ -388,6 +388,24 @@
     </div>
 
     <div>
+      <p class="label">診断</p>
+      <div class="table-wrap">
+        <table id="diag">
+          <tbody>
+            <tr><td>このページの居場所</td><td class="num-cell" id="d-frame">—</td></tr>
+            <tr><td>パッドを見る窓口（getGamepads）</td><td class="num-cell" id="d-api">—</td></tr>
+            <tr><td>枠に許された権限（gamepad）</td><td class="num-cell" id="d-policy">—</td></tr>
+            <tr><td>見えているパッド</td><td class="num-cell" id="d-count">—</td></tr>
+            <tr><td>振動の口（vibrationActuator）</td><td class="num-cell" id="d-motor">—</td></tr>
+            <tr><td>いま押しているボタン</td><td class="num-cell" id="d-buttons">—</td></tr>
+            <tr><td>最後に頼んだ振動の返事</td><td class="num-cell" id="d-result">—</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="caption" id="d-advice"></p>
+    </div>
+
+    <div>
       <p class="label">強さ</p>
       <div class="seg" role="group" aria-label="振動の強さ">
         <button data-strength="0" aria-pressed="false">切</button>
@@ -754,35 +772,85 @@
   const padName = $('pad-name');
   const rumbleOut = $('rumble-out');
 
+  let apiError = '';
   function livePads() {
-    let list = [];
     try {
-      list = [...(navigator.getGamepads ? navigator.getGamepads() : [])].filter((p) => p && p.connected);
-    } catch { return []; }
-    return list;
+      if (!navigator.getGamepads) return [];
+      return [...navigator.getGamepads()].filter((p) => p && p.connected);
+    } catch (err) {
+      apiError = String(err && err.name ? err.name : err);
+      return [];
+    }
   }
+
+  // 枠の中（iframe）に置かれたページは、既定ではパッドを見せてもらえない。
+  // 見えない理由がこれなのか、パッドが押されていないだけなのかを分けて出す
+  const inFrame = window.self !== window.top;
+  let sawEvent = false;
+  window.addEventListener('gamepadconnected', () => { sawEvent = true; });
+
+  function policyState() {
+    try {
+      const fp = document.featurePolicy || document.permissionsPolicy;
+      if (!fp || !fp.allowsFeature) return '調べられません';
+      return fp.allowsFeature('gamepad') ? '許可されています' : '禁じられています';
+    } catch { return '調べられません'; }
+  }
+
+  const dFrame = $('d-frame'), dApi = $('d-api'), dPolicy = $('d-policy');
+  const dCount = $('d-count'), dMotor = $('d-motor'), dButtons = $('d-buttons');
+  const dResult = $('d-result'), dAdvice = $('d-advice');
+
+  dFrame.textContent = inFrame ? '枠の中（iframe）' : 'そのまま開かれている';
+  dApi.textContent = navigator.getGamepads ? 'あります' : 'ありません';
+  dPolicy.textContent = policyState();
 
   function watchPads() {
     const pads = livePads();
-    if (!navigator.getGamepads) {
-      padState.className = 'pill ng';
-      padState.textContent = 'このブラウザはパッドを見せてくれません';
-      return;
+    const withMotor = pads.filter((p) => p.vibrationActuator);
+
+    dApi.textContent = navigator.getGamepads
+      ? (apiError ? `呼ぶと断られます（${apiError}）` : 'あります')
+      : 'ありません';
+    dCount.textContent = pads.length
+      ? `${pads.length}台（gamepadconnected ${sawEvent ? '届いた' : '未着'}）`
+      : `0台（gamepadconnected ${sawEvent ? '届いた' : '未着'}）`;
+    dMotor.textContent = pads.length
+      ? pads.map((p) => (p.vibrationActuator
+          ? `あり（${(p.vibrationActuator.effects || ['dual-rumble']).join(', ')}）`
+          : 'なし')).join(' ／ ')
+      : '—';
+    const held = [];
+    for (const p of pads) {
+      p.buttons.forEach((b, i) => { if (b.pressed) held.push(i); });
     }
+    dButtons.textContent = pads.length ? (held.length ? held.join(' ') : '（押されていません）') : '—';
+
     if (pads.length === 0) {
       padState.className = 'pill';
-      padState.textContent = 'パッドのボタンを一度押してください';
+      padState.textContent = inFrame && policyState() !== '許可されています'
+        ? '枠の中なので、パッドが見えません'
+        : 'パッドのボタンを一度押してください';
       padName.textContent = '—';
+      dAdvice.textContent = inFrame
+        ? 'このページは枠の中に置かれています。ブラウザは枠の中のページにパッドを見せない決まりなので、'
+          + '振動はここでは試せません。同じ内容のファイル（samples/overheat-sound-sample.html）を'
+          + '手元に保存して、ブラウザで直接開いてください。音のほうは枠の中でも鳴ります。'
+        : 'パッドのボタンを一度押すと見えるようになります（ブラウザの決まりです）。'
+          + 'それでも 0 台のままなら、別のブラウザ（Chrome / Edge）で試してください。';
       return;
     }
-    const withMotor = pads.filter((p) => p.vibrationActuator);
+
     padState.className = withMotor.length ? 'pill ok' : 'pill ng';
     padState.textContent = withMotor.length
       ? `${pads.length}台つながっています（振動あり ${withMotor.length}台）`
       : `${pads.length}台つながっていますが、振動の口がありません`;
     padName.textContent = pads.map((p) => p.id.slice(0, 34)).join(' ／ ');
+    dAdvice.textContent = withMotor.length
+      ? '「出来事」のボタンを押すと震えます。震えないときは、下の「返事」を見てください。'
+      : 'このパッドは振動の口を見せていません。無線でつないでいる場合、有線にすると出ることがあります。';
   }
-  setInterval(watchPads, 700);
+  setInterval(watchPads, 400);
   watchPads();
 
   function fire(kind) {
@@ -799,9 +867,23 @@
     const weak = Math.min(1, spec.weak * strength);
     const strong = Math.min(1, spec.strong * strength);
     for (const p of pads) {
-      p.vibrationActuator.playEffect('dual-rumble', {
-        startDelay: 0, duration: spec.duration, weakMagnitude: weak, strongMagnitude: strong,
-      }).catch(() => {});
+      let promise;
+      try {
+        promise = p.vibrationActuator.playEffect('dual-rumble', {
+          startDelay: 0, duration: spec.duration, weakMagnitude: weak, strongMagnitude: strong,
+        });
+      } catch (err) {
+        dResult.textContent = `断られました（${err && err.name ? err.name : err}）`;
+        continue;
+      }
+      if (promise && promise.then) {
+        promise.then(
+          (r) => { dResult.textContent = `${String(r)}（complete なら実際に回っています）`; },
+          (err) => { dResult.textContent = `失敗（${err && err.name ? err.name : err}）`; },
+        );
+      } else {
+        dResult.textContent = '返事がありません（古い作りのブラウザ）';
+      }
     }
     rumbleOut.textContent =
       `${spec.name}　高 ${weak.toFixed(2)} ／ 低 ${strong.toFixed(2)} ／ ${spec.duration}ms`;
