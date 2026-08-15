@@ -138,23 +138,58 @@ function activeScenes(game: Phaser.Game): string {
   }
 }
 
+/** 見張りの間隔（ミリ秒）と、何回ぶん進まなければ知らせるか */
+const BEAT_INTERVAL = 500;
+const BEAT_STALL = 6;                       // 3 秒ぶん
+
 /**
  * 描画の輪が回り続けているかを、輪の外から見張る。
  * 止まっていれば画面に出す ―― 「キーもパッドも効かない」という症状のとき、
- * 絵が止まっているのかどうかで原因が分かれるため
+ * 絵が止まっているのかどうかで原因が分かれるため。
+ *
+ * **別のタブやアプリへ移っている間は数えない**（2026-08-15 改定）。
+ * ブラウザは見えていない画面の描画（requestAnimationFrame）を止めるが、
+ * この見張りに使う `setInterval` は動き続ける ―― そのままだと、
+ * 少し席を外して戻るたびに「描画が止まっています」が出てしまう。
+ * 実際、タイトル画面に置いたまま離れただけで出ていた。
+ *
+ * 見えていて、窓も選ばれていて、それでも 3 秒ぶん進まないときだけ知らせる
  */
 function watchHeartbeat(game: Phaser.Game): void {
   let last = -1;
   let stalled = 0;
+  let warned = false;
+
+  /** 数えない状態。ブラウザが描画を止めているだけで、こちらの不具合ではない */
+  const dormant = (): boolean => {
+    const loop = game.loop as unknown as { inFocus?: boolean };
+    return document.hidden || loop.inFocus === false;
+  };
+
+  // 戻ってきた直後は輪が動き出すまで少し掛かる。そのぶん数え直す
+  for (const ev of ['visibilitychange', 'focus', 'blur', 'pageshow']) {
+    window.addEventListener(ev, () => { stalled = 0; last = -1; });
+  }
+
   window.setInterval(() => {
     const now = game.loop.frame;
-    if (now !== last) { last = now; stalled = 0; return; }
-    stalled++;
-    if (stalled === 3) {                    // 1.5 秒ぶん進んでいない
-      note(`画面の更新が止まっています（${now} コマ目・${activeScenes(game)}）。`
-        + '\n  この行が出ているときは、操作ではなく描画そのものが止まっています。');
+    if (dormant() || now !== last) {
+      if (warned && now !== last) {
+        warned = false;
+        note('画面の更新は戻りました。');
+      }
+      last = now;
+      stalled = 0;
+      return;
     }
-  }, 500);
+    stalled++;
+    if (stalled === BEAT_STALL) {
+      warned = true;
+      note(`画面の更新が止まっています（${now} コマ目・${activeScenes(game)}）。`
+        + '\n  この行が出ているときは、操作ではなく描画そのものが止まっています'
+        + '（別のタブやアプリを見ている間は数えていません）。');
+    }
+  }, BEAT_INTERVAL);
 }
 
 /** 起動直後に一度だけ呼ぶ */
