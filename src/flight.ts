@@ -83,12 +83,16 @@ function controlAuthority(speed: number): number {
  * 右へ飛んでいた機が宙返りで左向きになると背面になり、正立に戻すにはロールが要る。
  * ロール操作が飾りではなく必須の操作になるのはこのため。
  * @param damageFactor 被弾による性能低下。エンジンと舵の効きに掛ける（1 = 無傷）
+ * @param fullThrust   全開のときの推力。省略するとオプションで選んだ値。
+ *                     **明示して渡せるようにしてあるのは、設定を変えずに測るため** ――
+ *                     オプションの「速度」表示と `tools/flight-probe.mjs` がこれを使う
  */
 export function stepFlight(
   state: FlightState,
   input: FlightInput,
   dt: number,
   damageFactor: { engine: number; handling: number } = { engine: 1, handling: 1 },
+  fullThrust: number = settings.thrust,
 ): FlightReadout {
   const speed = Math.hypot(state.vx, state.vy);
   const moving = speed > FLIGHT.minSpeed;
@@ -140,7 +144,7 @@ export function stepFlight(
   const drag = FLIGHT.dragScale * q * cd;
 
   // 全開の推力だけオプションで変えられる。巡航は据え置き
-  const power = state.throttle > 0 ? settings.thrust : FLIGHT.thrust[0];
+  const power = state.throttle > 0 ? fullThrust : FLIGHT.thrust[0];
   const thrust = power * damageFactor.engine;
 
   const ax = thrust * nx - drag * ux + lift * upx;
@@ -152,4 +156,31 @@ export function stepFlight(
   state.y += state.vy * dt;
 
   return { speed, aoa, stalled, cl };
+}
+
+/** 落ち着いた速度の計算結果。同じ推力を何度も聞かれるので覚えておく */
+const levelSpeeds = new Map<number, number>();
+
+/**
+ * その推力で水平飛行を続けたときに落ち着く速度。
+ *
+ * オプション画面で「全開のパワー」を選ぶときに、速度で見せるために使う。
+ * **表を手で書き写さない**ためのもの ―― 書き写すと、飛びの数値をいじったときに
+ * 表示だけが古いまま残る。高度を保つように舵を当てながら回して、行き着く先を見る
+ */
+export function levelSpeed(fullThrust: number): number {
+  const known = levelSpeeds.get(fullThrust);
+  if (known !== undefined) return known;
+
+  const dt = 1 / 60;
+  const state: FlightState = { x: 0, y: 360, vx: 270, vy: 0, pitch: 0, roll: 0, throttle: 1 };
+  let readout: FlightReadout = { speed: 0, aoa: 0, stalled: false, cl: 0 };
+  for (let i = 0; i < 40 / dt; i++) {
+    // 画面座標は下が正。低いほど（y が大きいほど）機首を上げる
+    const hold = Math.max(-1, Math.min(1, (state.y - 360) * 0.004 + state.vy * 0.02));
+    readout = stepFlight(state, { pitch: hold }, dt, undefined, fullThrust);
+  }
+  const speed = Math.round(readout.speed);
+  levelSpeeds.set(fullThrust, speed);
+  return speed;
 }

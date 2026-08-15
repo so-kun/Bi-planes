@@ -16,7 +16,8 @@
  * 「引く」ほうが素直なので、押し続けることになる場面では背面に返して引きに変える。
  */
 
-import { ENGINE, FLIGHT, WEAPON, groundAt } from '../config';
+import { ENGINE, FLIGHT, WEAPON, groundAt, shortestDx, wrapX } from '../config';
+import type { AiLevel } from '../config';
 import type { Plane } from '../objects/Plane';
 import type { Balloon } from '../objects/Balloons';
 import { wrapPi } from '../flight';
@@ -31,29 +32,6 @@ export interface Intent {
 }
 
 const IDLE: Intent = { pitch: 0, rollEdge: 0, throttle: false, mg: false, cannonEdge: false };
-
-export interface Level {
-  name: string;
-  /** 引き金を引く狙いの許容範囲（ラジアン）。狭いほど正確 */
-  aim: number;
-  /** 迷ってから動くまでの間（秒）。長いほど鈍い */
-  react: number;
-  /** 未来位置の読みの正確さ。0 なら現在位置を撃つ */
-  lead: number;
-  /** 狙いに乗せる揺らぎ（ラジアン）。大きいほど下手 */
-  jitter: number;
-  /** 7.7mm を撃ちはじめる距離。射程に対する割合 */
-  mgRange: number;
-  /** 20mm を使うか */
-  cannon: boolean;
-}
-
-/** 切 / 弱 / 普通 / 強。切は先頭に置いて、番号 0 = 人が操縦とそろえる */
-export const AI_LEVELS: Level[] = [
-  { name: '弱', aim: 0.17, react: 0.50, lead: 0.35, jitter: 0.26, mgRange: 0.55, cannon: false },
-  { name: '普通', aim: 0.10, react: 0.26, lead: 0.80, jitter: 0.11, mgRange: 0.85, cannon: true },
-  { name: '強', aim: 0.06, react: 0.10, lead: 1.00, jitter: 0.03, mgRange: 1.00, cannon: true },
-];
 
 /**
  * 引き起こしを始める余裕。
@@ -84,9 +62,9 @@ export class Pilot {
    */
   private cooling = false;
 
-  constructor(private level: Level) {}
+  constructor(private level: AiLevel) {}
 
-  setLevel(level: Level): void {
+  setLevel(level: AiLevel): void {
     this.level = level;
   }
 
@@ -134,7 +112,7 @@ export class Pilot {
     // 今いる高さではなく、少し先の高さで判断する。降下が速いほど早く引き起こす。
     // 地面は場所によって高さが違うので、行き先の x で見る
     const ahead = me.y + Math.max(0, s.vy) * GROUND_LOOKAHEAD;
-    const aheadX = me.x + s.vx * GROUND_LOOKAHEAD;
+    const aheadX = wrapX(me.x + s.vx * GROUND_LOOKAHEAD);
     if (ahead > groundAt(aheadX) - GROUND_MARGIN) {
       desired = Math.atan2(-0.95, forward * 0.5);   // 上へ逃げる
       urgent = true;
@@ -144,8 +122,10 @@ export class Pilot {
     } else if (aim) {
       // 地面すれすれの相手を追って一緒に突っ込まないよう、狙う高さに底を設ける。
       // 撃つのを諦める代わりに墜ちない ―― 追い詰めるのは相手が上がってきてからでいい
-      const aimY = Math.min(aim.y, groundAt(aim.x) - GROUND_MARGIN);
-      desired = Math.atan2(aimY - me.y, aim.x - me.x) + this.jitterAngle;
+      const aimY = Math.min(aim.y, groundAt(wrapX(aim.x)) - GROUND_MARGIN);
+      // 画面の左右はつながっているので、近いほうの向きへ向く。
+      // そのまま引き算すると、端をまたいだ相手を画面の反対側まで追いかけてしまう
+      desired = Math.atan2(aimY - me.y, shortestDx(aim.x - me.x)) + this.jitterAngle;
     } else {
       desired = Math.atan2(0, forward);             // 目標がなければ水平に流す
     }
@@ -179,7 +159,7 @@ export class Pilot {
     const pitch = pull * gain;
 
     // 引き金。狙いが乗っていて、届く距離にいるときだけ
-    const dist = aim ? Math.hypot(aim.x - me.x, aim.y - me.y) : Infinity;
+    const dist = aim ? Math.hypot(shortestDx(aim.x - me.x), aim.y - me.y) : Infinity;
     // 地面や失速から逃げている間は、機首が相手ではなく逃げる方へ向いている。
     // このとき撃つと、あらぬ方向へ撃つことになる
     // 再出撃直後の相手には当たらないので撃たない。
@@ -223,7 +203,7 @@ export class Pilot {
     let best: Balloon | null = null;
     let bestD = Infinity;
     for (const b of balloons) {
-      const d = Math.hypot(b.img.x - me.x, b.img.y - me.y);
+      const d = Math.hypot(shortestDx(b.img.x - me.x), b.img.y - me.y);
       if (d < bestD) { bestD = d; best = b; }
     }
     return best;
@@ -236,7 +216,7 @@ export class Pilot {
     const y = isPlane ? target.y : target.img.y;
     const vx = isPlane ? target.state.vx : 0;
     const vy = isPlane ? target.state.vy : target.vy;
-    const t = Math.hypot(x - me.x, y - me.y) / WEAPON.mg.speed;
+    const t = Math.hypot(shortestDx(x - me.x), y - me.y) / WEAPON.mg.speed;
     return { x: x + vx * t * lead, y: y + vy * t * lead };
   }
 }

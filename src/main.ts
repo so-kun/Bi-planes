@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { VIEW } from './config';
 import { sfx } from './audio';
-import { loadSettings } from './settings';
+import { loadSettings, settings } from './settings';
 import { installDiagnostics } from './diagnostics';
 import { BootScene } from './scenes/BootScene';
 import { OpeningScene } from './scenes/OpeningScene';
@@ -41,6 +41,11 @@ const game = new Phaser.Game({
 installDiagnostics(game);
 
 // プレイテスト中に値を覗けるようにしておく。
-// sfx も出しておくと、ブラウザを立ち上げた自動確認から音の状態を測れる
-(window as unknown as { game: Phaser.Game; sfx: typeof sfx }).game = game;
-(window as unknown as { sfx: typeof sfx }).sfx = sfx;
+// sfx と settings も出しておくと、ブラウザを立ち上げた自動確認から
+// 音の状態や、保存を読んだあとに実際に効いている設定を測れる
+const peek = window as unknown as {
+  game: Phaser.Game; sfx: typeof sfx; settings: typeof settings;
+};
+peek.game = game;
+peek.sfx = sfx;
+peek.settings = settings;

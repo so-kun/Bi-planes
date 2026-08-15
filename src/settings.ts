@@ -10,7 +10,7 @@
  * その回だけ設定が残らないだけで、遊べなくなる理由にはならない。
  */
 
-import { AUDIO, ENGINE, FILM_DEFAULT, FLIGHT, PAD, SCORE, WEAPON } from './config';
+import { AI_LEVELS, AUDIO, ENGINE, FILM_PRESETS, FILM_DEFAULT, FLIGHT, PAD, SCORE, WEAPON } from './config';
 
 const STORE_KEY = 'biplanes.settings';
 
@@ -85,6 +85,11 @@ const DEFAULT_BINDING: PadBinding = {
   select: PAD.buttons.select,
 };
 
+/**
+ * 最初の状態。数値は `src/config.ts` から取る ―― 遊びの数値の出どころは1か所にする。
+ * **数値の項目は、下の `CHOICES` に並んでいる値であること**（保存を読むときに
+ * その表へ寄せるので、外れていると既定のまま遊べない値ができてしまう）
+ */
 export const DEFAULTS: Settings = {
   pads: [{ ...DEFAULT_BINDING }, { ...DEFAULT_BINDING }],
   deadzones: [PAD.deadzone, PAD.deadzone],
@@ -97,6 +102,36 @@ export const DEFAULTS: Settings = {
   thrust: FLIGHT.thrust[1],
   tempRise: ENGINE.tempRise,
   aiLevel: 2,
+};
+
+/**
+ * 選べる値。**オプション画面が並べるのも、保存を読むときに検査するのもこの表**。
+ *
+ * 別々に持っていたころは、画面に無い値が保存に入っていても素通りしていた ――
+ * `aiLevel: 4`（段階は3つしかない）や `mgDamage: 12.5`（HP に端数が出る）が
+ * そのまま効いてしまう。ひとつの表にしておけば、その食い違いは起こらない。
+ *
+ * 段階の数を config 側から取っている項目（フィルム・コンピュータの強さ）は、
+ * 中身を増やせばここも自動でついてくる
+ */
+export const CHOICES = {
+  /** スティック中央の遊び */
+  deadzone: [0.10, 0.15, 0.22, 0.30, 0.40],
+  /** フィルムの強さ。切〜強 */
+  film: FILM_PRESETS.map((_, i) => i),
+  /** 何点先取で勝ちか */
+  winning: [10, 15, 20, 30, 50],
+  /**
+   * 7.7mm 一発の威力。整数だけを並べてある ―― HP に端数が出ると、
+   * 計器の目盛りも「あと何発」も読みにくくなる
+   */
+  mgDamage: [5, 10, 15, 20, 25, 50],
+  /** 全開のときの推力。落ち着く速度は飛びの計算から出す（`levelSpeed`） */
+  thrust: [150, 180, 220, 260, 300],
+  /** 全開のときに水温が上がる速さ（毎秒）。0 は「上がらない」＝過熱しない */
+  tempRise: [0, 0.07, 0.10, 0.14, 0.20, 0.28],
+  /** コンピュータの強さ。0 は「人が操縦」なので設定には入れない */
+  aiLevel: AI_LEVELS.map((_, i) => i + 1),
 };
 
 /** 今の設定。ここを直接読み書きする */
@@ -130,6 +165,20 @@ const BUTTON_NAMES: Record<number, string> = {
 
 export function buttonName(index: number): string {
   return BUTTON_NAMES[index] ?? `ボタン ${index}`;
+}
+
+/** 並んでいる値のうち、いちばん近いものへ寄せる */
+function nearest(list: number[], value: number): number {
+  return list.reduce((a, b) => (Math.abs(b - value) < Math.abs(a - value) ? b : a));
+}
+
+/**
+ * 保存された数値を取り込む。
+ * **選べる値の表にあるものへ寄せる** ―― 画面に出しようのない値が
+ * 保存に入っていても、そのまま効いてしまわないようにする
+ */
+function pick(list: number[], value: unknown, now: number): number {
+  return typeof value === 'number' && Number.isFinite(value) ? nearest(list, value) : now;
 }
 
 /**
@@ -167,7 +216,7 @@ export function loadSettings(): void {
   const zones: unknown[] = Array.isArray(s.deadzones) ? s.deadzones : [old.deadzone, old.deadzone];
   zones.forEach((z, i) => {
     if (i > 1) return;
-    if (typeof z === 'number' && z >= 0 && z < 0.9) settings.deadzones[i] = z;
+    settings.deadzones[i] = pick(CHOICES.deadzone, z, settings.deadzones[i]);
   });
   // 1P・2P で分ける前の保存は真偽値ひとつだったので、そのときは両方に配る
   const climb: unknown = s.pullToClimb;
@@ -175,14 +224,17 @@ export function loadSettings(): void {
   else if (Array.isArray(climb)) {
     climb.forEach((v, i) => { if (i <= 1 && typeof v === 'boolean') settings.pullToClimb[i] = v; });
   }
-  if (typeof s.volume === 'number' && s.volume >= 0 && s.volume <= 1) settings.volume = s.volume;
+  // 音量だけは連なった値なので、表に寄せずに範囲で見る（0.1 刻みに丸める）
+  if (typeof s.volume === 'number' && s.volume >= 0 && s.volume <= 1) {
+    settings.volume = Math.round(s.volume * 10) / 10;
+  }
   if (typeof s.bgm === 'boolean') settings.bgm = s.bgm;
-  if (typeof s.film === 'number' && Number.isInteger(s.film) && s.film >= 0 && s.film <= 4) settings.film = s.film;
-  if (typeof s.winning === 'number' && Number.isInteger(s.winning) && s.winning > 0) settings.winning = s.winning;
-  if (typeof s.mgDamage === 'number' && s.mgDamage > 0 && s.mgDamage <= 100) settings.mgDamage = s.mgDamage;
-  if (typeof s.thrust === 'number' && s.thrust > 0 && s.thrust <= 1000) settings.thrust = s.thrust;
-  if (typeof s.tempRise === 'number' && s.tempRise >= 0 && s.tempRise <= 2) settings.tempRise = s.tempRise;
-  if (typeof s.aiLevel === 'number' && Number.isInteger(s.aiLevel) && s.aiLevel >= 1) settings.aiLevel = s.aiLevel;
+  settings.film = pick(CHOICES.film, s.film, settings.film);
+  settings.winning = pick(CHOICES.winning, s.winning, settings.winning);
+  settings.mgDamage = pick(CHOICES.mgDamage, s.mgDamage, settings.mgDamage);
+  settings.thrust = pick(CHOICES.thrust, s.thrust, settings.thrust);
+  settings.tempRise = pick(CHOICES.tempRise, s.tempRise, settings.tempRise);
+  settings.aiLevel = pick(CHOICES.aiLevel, s.aiLevel, settings.aiLevel);
 }
 
 export function saveSettings(): void {

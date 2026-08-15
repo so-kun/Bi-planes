@@ -40,8 +40,6 @@ export class PracticeScene extends Phaser.Scene {
   private padMenu = new PadMenu();
 
   private stageIndex = 0;
-  /** 前のフレームの機体位置。輪の面を横切ったかの判定に要る */
-  private prev = { x: START.x, y: START.y };
   /** 今のステージの経過時間 */
   private stageTime = 0;
   /** 終わったステージのタイム */
@@ -80,15 +78,20 @@ export class PracticeScene extends Phaser.Scene {
     }, START.x, START.y, START.facing);
     this.plane.container.setDepth(30);
 
-    // **画面は作り直されても構築子は呼ばれない。** 持ち越すと困るものはここで必ず戻す ――
-    // woke を戻し忘れると、画面を出るときに止めたエンジン音が二度と鳴らなくなる
+    // **画面は作り直されても構築子は呼ばれない。** class の初期値が働くのは最初の一度きりなので、
+    // 持ち越すと困るものはここで必ず戻す ―― woke を戻し忘れると、
+    // 画面を出るときに止めたエンジン音が二度と鳴らなくなり、
+    // film を戻し忘れると、オプションで変えたフィルムの強さが効かなくなる
     this.best = loadBest();
     this.stageIndex = 0;
     this.times = [];
+    this.stageTime = 0;
     this.finished = false;
     this.interval = 0;
     this.t = 0;
     this.woke = false;
+    this.film = null;
+    this.filmWatchdog = 1;
 
     this.setupInput();
     this.setupHud();
@@ -106,7 +109,6 @@ export class PracticeScene extends Phaser.Scene {
     const stage = STAGES[this.stageIndex];
     this.rings.load(stage.rings);
     this.plane.reset(START.x, START.y, START.facing);
-    this.prev = { x: START.x, y: START.y };
     this.stageTime = 0;
     this.interval = 0;
     this.countdown.begin();
@@ -207,7 +209,7 @@ export class PracticeScene extends Phaser.Scene {
       this.flyPlane(dt, live);
       if (live) {
         this.stageTime += dt;
-        if (this.rings.check(this.prev.x, this.prev.y, this.plane.x, this.plane.y)) {
+        if (this.rings.check(this.plane.prevX, this.plane.prevY, this.plane.x, this.plane.y)) {
           sfx.pop();
           this.particles.popBalloon(this.plane.x, this.plane.y);
           if (this.rings.cleared) this.finishStage();
@@ -222,7 +224,6 @@ export class PracticeScene extends Phaser.Scene {
 
   /** 機体を飛ばす。合図の間は出撃位置で待たせる（対戦と同じ） */
   private flyPlane(dt: number, live: boolean): void {
-    this.prev = { x: this.plane.x, y: this.plane.y };
     if (!live) {
       this.plane.state.x = START.x;
       this.plane.state.y = START.y;
@@ -234,7 +235,6 @@ export class PracticeScene extends Phaser.Scene {
     if (!this.plane.alive) {
       // 練習なので落ちてもすぐ戻す。タイムは止めない（落ちること自体が損）
       this.plane.reset(START.x, START.y, START.facing);
-      this.prev = { x: START.x, y: START.y };
       return;
     }
     // 練習では矢印キーも 1P の操作に使える。相手がいないので取り合いにならない
@@ -247,12 +247,10 @@ export class PracticeScene extends Phaser.Scene {
     const stick = -this.padState.pitch * sign;
     const pitch = Math.abs(stick) > Math.abs(byKey) ? stick : byKey;
     this.plane.setThrottle(k.throttle.isDown || this.padState.throttle ? 1 : 0);
+    // 輪をくぐったかは、機体が持っている「前のフレームの位置」との線分で見る。
+    // 画面端で回り込んだフレームは機体側が前の位置を置き直すので、
+    // 通っていない輪を横切ったことにはならない
     this.plane.update(pitch, dt);
-    // 画面端でつながって飛ぶと位置が大きく跳ぶ。そのまま線分で見ると
-    // 通っていない輪を横切ったことになるので、跳んだフレームは見送る
-    if (Math.abs(this.plane.x - this.prev.x) > VIEW.width / 2) {
-      this.prev = { x: this.plane.x, y: this.plane.y };
-    }
     if (this.padState.rollEdge !== 0) this.plane.roll(this.padState.rollEdge);
     if (this.plane.y >= groundAt(this.plane.x)) {
       this.particles.explode(this.plane.x, groundAt(this.plane.x), true);
@@ -371,8 +369,9 @@ export class PracticeScene extends Phaser.Scene {
     );
   }
 
+  /** 強さは必ずオプションの設定から取る（理由は PlayScene の同名の処理を参照） */
   private setupFilm(): void {
-    this.film = attachFilm(this, this.film?.getLevel() ?? settings.film);
+    this.film = attachFilm(this);
   }
 
   private watchFilm(dt: number): void {

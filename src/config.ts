@@ -92,6 +92,38 @@ export const PLANE = {
 };
 
 /**
+ * 画面の左右はつながっている（本家準拠）。
+ *
+ * **機体も弾も同じところで回り込む。** 別々にすると、機体だけが向こう側から出てきて
+ * 弾は端で消える、という食い違いが起きる。
+ * 出しろは機体の半分 ―― 端で機体が隠れきった瞬間に反対側から出てくる幅で、
+ * これ以上広げると姿が完全に消えている時間ができる
+ */
+export const WRAP = {
+  pad: PLANE.width / 2,
+  /** 回り込みの周期。左の外れから右の外れまで */
+  get span(): number { return VIEW.width + this.pad * 2; },
+};
+
+/** 画面の外へ出た位置を、反対側へ回り込ませる */
+export function wrapX(x: number): number {
+  if (x < -WRAP.pad) return x + WRAP.span;
+  if (x > VIEW.width + WRAP.pad) return x - WRAP.span;
+  return x;
+}
+
+/**
+ * 左右がつながっているときの、近いほうの横の差。
+ * 端をまたいだ相手を「画面の反対側にいる遠い相手」と見ないようにする
+ */
+export function shortestDx(dx: number): number {
+  const span = WRAP.span;
+  if (dx > span / 2) return dx - span;
+  if (dx < -span / 2) return dx + span;
+  return dx;
+}
+
+/**
  * 自作フライトモデルの係数。
  * 揚力 L = LIFT_SCALE * v^2 * CL(迎え角)、抗力 D = DRAG_SCALE * v^2 * CD。
  * 迎え角が STALL_AOA を超えると CL が急落する ＝ 失速。
@@ -273,6 +305,36 @@ export const ENGINE = {
   /** そのときの損傷。7.7mm 一発ぶんと同じにしてある */
   overheatDamage: 15,
 };
+
+/**
+ * コンピュータの腕前。中身の使い方は `src/ai/Pilot.ts` を参照。
+ *
+ * 数値をここに置いてあるのは、設定の読み込み（`src/settings.ts`）が
+ * **選べる段階の数**をここから取れるようにするため ―― 別々に持つと、
+ * 段階を増やしたときに保存の検査だけが古いままになる
+ */
+export interface AiLevel {
+  name: string;
+  /** 引き金を引く狙いの許容範囲（ラジアン）。狭いほど正確 */
+  aim: number;
+  /** 迷ってから動くまでの間（秒）。長いほど鈍い */
+  react: number;
+  /** 未来位置の読みの正確さ。0 なら現在位置を撃つ */
+  lead: number;
+  /** 狙いに乗せる揺らぎ（ラジアン）。大きいほど下手 */
+  jitter: number;
+  /** 7.7mm を撃ちはじめる距離。射程に対する割合 */
+  mgRange: number;
+  /** 20mm を使うか */
+  cannon: boolean;
+}
+
+/** 弱 / 普通 / 強。設定の番号は 1 始まりで、0 は「人が操縦」を表す */
+export const AI_LEVELS: AiLevel[] = [
+  { name: '弱', aim: 0.17, react: 0.50, lead: 0.35, jitter: 0.26, mgRange: 0.55, cannon: false },
+  { name: '普通', aim: 0.10, react: 0.26, lead: 0.80, jitter: 0.11, mgRange: 0.85, cannon: true },
+  { name: '強', aim: 0.06, react: 0.10, lead: 1.00, jitter: 0.03, mgRange: 1.00, cannon: true },
+];
 
 export const SCORE = {
   balloon: 1,
