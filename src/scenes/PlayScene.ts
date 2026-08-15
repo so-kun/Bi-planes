@@ -527,7 +527,10 @@ export class PlayScene extends Phaser.Scene {
   /**
    * 水温が振り切れたまま吹かし続けた。エンジンが焼き付いて、
    * 弾を受けたのと同じだけ傷む ―― 吹かしっぱなしの代償はここで払わせる。
-   * 撃たれたわけではないので、落ちても相手に点は入らない
+   *
+   * **焼き付いて落ちたときも、激突と同じ扱いで相手に点が入る**（2026-08-15 改定）。
+   * それまでは 0 点で、**点を与えずに死ねる唯一の道**として残っていた ――
+   * 激突だけを塞いでも、抜け道が別に空いていては意味がない
    */
   private overheat(p: Player): void {
     p.plane.takeDamage(ENGINE.overheatDamage, 'engine');
@@ -538,24 +541,27 @@ export class PlayScene extends Phaser.Scene {
     if (p.plane.hp <= 0) {
       this.particles.explode(p.plane.x, p.plane.y, false);
       sfx.explosion();
-      this.downPlane(p, null, 0);
+      this.downPlane(p, this.other(p), this.suicidePoints(p));
     }
   }
 
   /**
-   * 地面への激突。相手に自滅ぶんの点が入る。
+   * 自滅で相手に入る点。**傷ついた機体で落ちたら撃墜と同じ**（2026-08-15 決定）。
    *
-   * **傷ついた機体で落ちたときは撃墜と同じ点**（2026-08-15 決定）。
-   * 同じにしておかないと、追い詰められた側がわざと地面へ突っ込んで、
-   * 相手に入る点を 3 から 1 へ減らす逃げ道ができてしまう。
-   * 見分けは体力の帯そのもの ―― 目盛りが欠けていれば「傷ついた機体」
+   * 追い詰められた側がわざと落ちて、相手に入る点を 3 から 1 へ減らす逃げ道を塞ぐため。
+   * 見分けは体力の帯そのもの ―― 目盛りが欠けていれば「傷ついた機体」。
+   * 焼き付きは体力が尽きて起きるものなので、こちらは必ず撃墜と同じ点になる
    */
+  private suicidePoints(p: Player): number {
+    return p.plane.hp < PLANE.maxHp ? SCORE.suicideHurt : SCORE.suicide;
+  }
+
+  /** 地面への激突。相手に自滅ぶんの点が入る（`suicidePoints`） */
   private crash(p: Player): void {
     const y = groundAt(p.plane.x);
     this.particles.explode(p.plane.x, y, true);
     sfx.explosion();
-    const hurt = p.plane.hp < PLANE.maxHp;
-    this.downPlane(p, this.other(p), hurt ? SCORE.suicideHurt : SCORE.suicide, { x: p.plane.x, y });
+    this.downPlane(p, this.other(p), this.suicidePoints(p), { x: p.plane.x, y });
   }
 
   /** 撃墜された側の後始末と、仕留めた側への加点 */
