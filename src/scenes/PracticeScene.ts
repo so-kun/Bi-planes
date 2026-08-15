@@ -80,17 +80,23 @@ export class PracticeScene extends Phaser.Scene {
     }, START.x, START.y, START.facing);
     this.plane.container.setDepth(30);
 
+    // **画面は作り直されても構築子は呼ばれない。** 持ち越すと困るものはここで必ず戻す ――
+    // woke を戻し忘れると、画面を出るときに止めたエンジン音が二度と鳴らなくなる
     this.best = loadBest();
     this.stageIndex = 0;
     this.times = [];
     this.finished = false;
     this.interval = 0;
+    this.t = 0;
+    this.woke = false;
 
     this.setupInput();
     this.setupHud();
     this.setupFilm();
 
     this.countdown = new Countdown(this);
+    // 音がもう起きていれば、ここでエンジンも曲も鳴りはじめる
+    this.wakeAudio();
     this.beginStage();
   }
 

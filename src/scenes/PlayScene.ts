@@ -110,6 +110,14 @@ export class PlayScene extends Phaser.Scene {
   }
 
   create(): void {
+    // **画面は作り直されても構築子は呼ばれない。** 前の試合から持ち越すと困るものは、
+    // ここで必ず戻す ―― 戻し忘れると、決着した状態のまま次の試合が始まって
+    // いつまでも動かなかったり（winner）、エンジン音が鳴らなくなったりする（padWoke）
+    this.winner = null;
+    this.padWoke = false;
+    this.bgmOn = false;
+    this.filmWatchdog = 1;
+
     const bg = this.add.image(0, 0, 'bg-sunset').setOrigin(0);
     bg.setDisplaySize(VIEW.width, VIEW.height);
     bg.setDepth(0);
@@ -138,9 +146,11 @@ export class PlayScene extends Phaser.Scene {
       for (let n = 0; n < this.startAi[i]; n++) this.cycleAi(p);
     });
     this.aiText.setAlpha(0);
-    // ステージ選択の曲が鳴っていれば、ここで対戦の曲に入れ替わる。
-    // まだ音を鳴らせない場合（この画面から直に始めたとき）は wakeAudio で鳴りだす
-    this.startBgm();
+    // 音がもう起きていれば、ここでエンジンも曲も鳴りはじめる。
+    // まだ鳴らせない場合（この画面から直に始めたとき）は、最初の操作で鳴りだす。
+    // **画面に入るたびに呼ぶ**こと ―― 画面を出るときにエンジンを止めているので、
+    // 最初の操作待ちにすると、戻ってきたときに無音のままになる
+    this.wakeAudio();
     this.beginCountdown();
   }
 

@@ -230,8 +230,13 @@ export class Plane {
 
     this.readout = stepFlight(this.state, { pitch: pitchInput }, dt, this.damage);
 
-    // 画面端はラップアラウンド（本家準拠）
-    const pad = PLANE.width;
+    // 画面端はラップアラウンド（本家準拠）。
+    //
+    // 端から出しろは**機体の半分**。もとは機体1つぶん取っていたが、
+    // そのぶん**姿が完全に消えている時間**ができて、端をまたぐたびに間延びしていた。
+    // 半分にすると、右端で機体が隠れきった瞬間に左端から出てくる ――
+    // 見えない時間がなくなり、追う側も見失わない
+    const pad = PLANE.width / 2;
     if (this.state.x < -pad) this.state.x += VIEW.width + pad * 2;
     if (this.state.x > VIEW.width + pad) this.state.x -= VIEW.width + pad * 2;
     // 高いところは空気が薄い、という扱いで下向きの力が強まる。
