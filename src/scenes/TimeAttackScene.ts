@@ -23,6 +23,8 @@ import { Rings } from '../objects/Rings';
 import { PadMenu } from '../input/PadMenu';
 import { StuckKeyGuard } from '../input/StuckKeyGuard';
 import { PadInput, type PadState } from '../input/PadInput';
+import { Rumble, STRAIN_INTERVAL } from '../input/Rumble';
+import { EngineSound } from '../sound/planeEngine';
 import { Countdown } from '../ui/Countdown';
 import { Panel, PANEL } from '../ui/Panel';
 import { ScorePops } from '../ui/ScorePops';
@@ -82,6 +84,15 @@ export class TimeAttackScene extends Phaser.Scene {
   private pops!: ScorePops;
   /** 自爆した回数。結果に出す */
   private crashes = 0;
+  /**
+   * エンジン音とパッドの振動。対戦と同じものを使う ――
+   * 画面ごとに書くと、片方だけ古いまま残る（実際、ここは音を一度も
+   * 更新していなかったので、全開にしても赤帯に入っても音が変わらなかった）
+   */
+  private engine = new EngineSound(0);
+  private rumble = new Rumble();
+  /** 赤帯のうなりを送り直すまでの残り時間 */
+  private strainTimer = 0;
   private centerText!: Phaser.GameObjects.Text;
   private stageName!: Phaser.GameObjects.Text;
 
@@ -121,6 +132,8 @@ export class TimeAttackScene extends Phaser.Scene {
     this.filmWatchdog = 1;
     this.menuHeld = false;
     this.crashes = 0;
+    this.strainTimer = 0;
+    this.engine.forget();
 
     this.setupInput();
     this.setupHud();
@@ -145,6 +158,23 @@ export class TimeAttackScene extends Phaser.Scene {
     this.centerText.setVisible(false);
     // 何の練習かを見出しに出す。ステージの狙いが分かっていたほうが身につく
     this.stageName.setText(`ステージ ${this.stageIndex + 1}　${stage.name}`);
+  }
+
+  /**
+   * 水温が赤帯に入っている間、パッドを低くうならせる（対戦と同じ）。
+   * タイムアタックは全開の使いどころが記録を決めるので、
+   * 音と計器に続く三つ目の知らせがそのまま効く
+   */
+  private shakeStrain(dt: number): void {
+    if (this.plane.strain <= 0) {
+      this.strainTimer = 0;
+      return;
+    }
+    this.strainTimer -= dt;
+    if (this.strainTimer > 0) return;
+    this.strainTimer = STRAIN_INTERVAL;
+    this.rumble.play(0, this.pad.gamepadIndex, 'strain', this.time.now / 1000,
+      0.5 + this.plane.strain * 0.5);
   }
 
   /**
@@ -194,6 +224,7 @@ export class TimeAttackScene extends Phaser.Scene {
   private toTitle(): void {
     sfx.duck(false);
     sfx.stopEngines();
+    this.rumble.stop(this.pad.gamepadIndex);
     this.scene.start('Title');
   }
 
@@ -205,7 +236,8 @@ export class TimeAttackScene extends Phaser.Scene {
     this.pause.show();
     this.padMenu.disarm();
     this.menuHeld = false;
-    sfx.setEngine(0, 1, false);
+    this.engine.idle();
+    this.rumble.stop(this.pad.gamepadIndex);
     sfx.duck(true);
     sfx.menuDecide();
   }
@@ -339,8 +371,9 @@ export class TimeAttackScene extends Phaser.Scene {
       return;
     }
     if (!this.plane.alive) {
-      // 練習なので落ちてもすぐ戻す。タイムは止めない（落ちること自体が損）
+      // 落ちてもすぐ戻す。時計は止めない（落ちること自体が損）
       this.plane.reset(START.x, START.y, START.facing);
+      this.engine.forget();
       return;
     }
     // 練習では矢印キーも 1P の操作に使える。相手がいないので取り合いにならない
@@ -357,12 +390,16 @@ export class TimeAttackScene extends Phaser.Scene {
     // 画面端で回り込んだフレームは機体側が前の位置を置き直すので、
     // 通っていない輪を横切ったことにはならない
     this.plane.update(pitch, dt);
+    this.engine.follow(this.plane);
+    this.shakeStrain(dt);
     if (this.padState.rollEdge !== 0) this.plane.roll(this.padState.rollEdge);
     if (this.plane.y >= groundAt(this.plane.x)) {
       const y = groundAt(this.plane.x);
       this.particles.explode(this.plane.x, y, true);
       sfx.explosion();
       this.plane.destroy();
+      this.engine.idle();
+      this.rumble.play(0, this.pad.gamepadIndex, 'explosion', this.time.now / 1000);
       this.penalise(this.plane.x, y);
     }
   }
@@ -399,6 +436,7 @@ export class TimeAttackScene extends Phaser.Scene {
       this.keyGuard.detach();
       sfx.duck(false);
       sfx.stopEngines();
+      this.rumble.stop(this.pad.gamepadIndex);
       this.rings.destroy();
       window.removeEventListener('blur', releaseAll);
       window.removeEventListener('focus', releaseAll);
@@ -439,7 +477,8 @@ export class TimeAttackScene extends Phaser.Scene {
   private wakeAudio(): void {
     sfx.resume();
     sfx.startEngines(1);
-    sfx.setEngine(0, 2, false);
+    // 段階は毎フレーム機体から流す（`EngineSound.follow`）ので、ここでは控えを消すだけ
+    this.engine.forget();
   }
 
   // ---------------------------------------------------------------- 表示
