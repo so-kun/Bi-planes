@@ -62,7 +62,7 @@ export class Plane {
 
   /**
    * 前のフレームの位置。速いものの当たり判定を**線分**で見るために持つ ――
-   * 弾（`src/collision.ts`）と、プラクティスの輪くぐり（`src/objects/Rings.ts`）が使う。
+   * 弾（`src/collision.ts`）と、タイムアタックの輪くぐり（`src/objects/Rings.ts`）が使う。
    * 画面端で回り込んだフレームは、飛んだぶんを線分にしないよう今の位置を入れる
    */
   prevX: number;

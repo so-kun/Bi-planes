@@ -29,10 +29,14 @@ import { Rumble, STRAIN_INTERVAL } from '../input/Rumble';
 import { Pilot } from '../ai/Pilot';
 import { Countdown } from '../ui/Countdown';
 import { PauseMenu } from '../ui/PauseMenu';
+import { ScorePops } from '../ui/ScorePops';
 import { Panel, PANEL } from '../ui/Panel';
 import { rendererLine } from '../diagnostics';
 
 const KEY = Phaser.Input.Keyboard.KeyCodes;
+
+/** 得点の吹き出しの色。機体の色より明るく取って、夕焼けの空でも読めるようにする */
+const POP_COLOR = ['#f6a487', '#a9cdea'];
 
 type Key = Phaser.Input.Keyboard.Key;
 
@@ -103,6 +107,8 @@ export class PlayScene extends Phaser.Scene {
 
   /** 計器盤。1人につき1枚（src/ui/Panel.ts） */
   private panels: Panel[] = [];
+  /** 点が入った場所に出す「+3」 */
+  private pops!: ScorePops;
   private debugText!: Phaser.GameObjects.Text;
   /** 操縦がどちらかを切り替えたときだけ出す表示 */
   private aiText!: Phaser.GameObjects.Text;
@@ -431,6 +437,7 @@ export class PlayScene extends Phaser.Scene {
     this.balloons.update(dt);
     this.particles.update(dt);
     this.checkHits();
+    this.pops.update(dt);
     this.bullets.draw();
     this.drawHud(dt);
     if (this.aiText.alpha > 0) this.aiText.setAlpha(Math.max(0, this.aiText.alpha - dt * 0.5));
@@ -537,20 +544,22 @@ export class PlayScene extends Phaser.Scene {
 
   /** 地面への激突。撃たれたわけではないので、相手には自滅ぶんの点が入る */
   private crash(p: Player): void {
-    this.particles.explode(p.plane.x, groundAt(p.plane.x), true);
+    const y = groundAt(p.plane.x);
+    this.particles.explode(p.plane.x, y, true);
     sfx.explosion();
-    this.downPlane(p, this.other(p), SCORE.suicide);
+    this.downPlane(p, this.other(p), SCORE.suicide, { x: p.plane.x, y });
   }
 
   /** 撃墜された側の後始末と、仕留めた側への加点 */
-  private downPlane(p: Player, credit: Player | null, points: number): void {
+  private downPlane(p: Player, credit: Player | null, points: number, at?: { x: number; y: number }): void {
     this.shake(p, 'explosion');
+    const where = at ?? { x: p.plane.x, y: p.plane.y };
     p.plane.destroy();
     p.respawnTimer = PLANE.respawnDelay;
     // 落ちた機のエンジン音は絞る。鳴ったままだと空にいない機の音が残る
     sfx.setEngine(p.id, 1, false);
     p.lastEngineState = '';
-    if (credit) this.addScore(credit, points);
+    if (credit) this.addScore(credit, points, where.x, where.y - 40);
   }
 
   /** 相手。フリープレイでは相手がいないので null を返す */
@@ -558,9 +567,14 @@ export class PlayScene extends Phaser.Scene {
     return this.players[p.id === 0 ? 1 : 0] ?? null;
   }
 
-  private addScore(p: Player, points: number): void {
+  /**
+   * 加点。**入った場所に「+3」を出す**（2026-08-15 追加）――
+   * 計器の数字だけでは、撃墜で入ったのか気球で入ったのかが分からない
+   */
+  private addScore(p: Player, points: number, x: number, y: number): void {
     if (!this.running) return;
     p.score += points;
+    this.pops.add(x, y, `+${points}`, POP_COLOR[p.id] ?? POP_COLOR[0]);
     // フリープレイは数えるだけ。終わりはない
     if (!this.free && p.score >= settings.winning) this.finish(p);
   }
@@ -755,7 +769,7 @@ export class PlayScene extends Phaser.Scene {
         const shooter = this.players[b.owner];
         if (shooter) {
           if (balloon.gold) this.repair(shooter);
-          this.addScore(shooter, SCORE.balloon);
+          this.addScore(shooter, SCORE.balloon, hb.x, hb.y - 30);
         }
         break;
       }
@@ -881,6 +895,7 @@ export class PlayScene extends Phaser.Scene {
   }
 
   private setupHud(): void {
+    this.pops = new ScorePops(this);
     const margin = 18;
     for (const p of this.players) {
       // 1P は左端、2P は右端。中身の並びは左右で同じにする ――
@@ -931,10 +946,11 @@ export class PlayScene extends Phaser.Scene {
   private drawHud(dt: number): void {
     for (const p of this.players) {
       this.panels[p.id].update({
-        score: p.score,
+        // 走行距離計らしく、頭を 0 で埋める
+        digits: String(Math.max(0, Math.min(999, p.score))).padStart(3, '0'),
         // フリープレイは勝ち負けが無いので、上限を出さない
-        target: this.free ? null : settings.winning,
-        hp: p.plane.hp,
+        note: this.free ? '' : `/ ${settings.winning}`,
+        bar: p.plane.hp / PLANE.maxHp,
         cannonAmmo: p.plane.cannonAmmo,
         temp: p.plane.temp,
       }, dt);

@@ -1,5 +1,5 @@
 /**
- * プラクティスのステージ。
+ * タイムアタックのステージ。
  *
  * 配置と順番は**全ステージ手で組んである**。乱数で作ると
  * 「この配置ならこの機動」という狙いが作れないし、タイムも比べられない。
@@ -139,7 +139,7 @@ export const STAGES: Stage[] = [
   },
 ];
 
-export const PRACTICE_STAGES = STAGES.length;
+export const STAGE_COUNT = STAGES.length;
 
 /** 出撃位置。全ステージ共通 */
 export const START = { x: 230, y: 380, facing: 1 as const };
