@@ -4,7 +4,7 @@
  */
 
 import Phaser from 'phaser';
-import { VIEW, WEAPON, groundAt } from '../config';
+import { WEAPON, groundAt, wrapX } from '../config';
 import { settings } from '../settings';
 
 export type BulletKind = 'mg' | 'cannon';
@@ -13,6 +13,13 @@ export interface Bullet {
   kind: BulletKind;
   x: number;
   y: number;
+  /**
+   * 前のフレームの位置。当たり判定は**この点と今の点を結んだ線分**で見る
+   * （`src/collision.ts`）。弾は速く、点で見ると機体をまたいで通り抜ける。
+   * 画面端で回り込んだフレームだけは、飛んだぶんを線分にしないよう今の位置を入れる
+   */
+  px: number;
+  py: number;
   vx: number;
   vy: number;
   t: number;
@@ -42,7 +49,7 @@ export class Bullets {
     const dx = ux * ca - uy * sa;
     const dy = ux * sa + uy * ca;
     this.list.push({
-      kind, x, y,
+      kind, x, y, px: x, py: y,
       vx: dx * spec.speed, vy: dy * spec.speed,
       t: 0, life: spec.life, gravity: spec.gravity, damage,
       owner, trail: [],
@@ -53,13 +60,26 @@ export class Bullets {
     for (let i = this.list.length - 1; i >= 0; i--) {
       const b = this.list[i];
       b.t += dt;
-      if (b.t >= b.life || b.x < -60 || b.x > VIEW.width + 60 || b.y > groundAt(b.x) + 30) {
+      // 消えるのは寿命が尽きたときと地面に当たったとき。
+      // 左右は消さずに回り込ませる ―― 機体だけが向こう側から出てきて弾は端で消える、
+      // という食い違いをなくすため（機体と同じ `wrapX`）
+      if (b.t >= b.life || b.y > groundAt(b.x) + 30) {
         this.list.splice(i, 1);
         continue;
       }
+      b.px = b.x;
+      b.py = b.y;
       b.vy += b.gravity * dt;
       b.x += b.vx * dt;
       b.y += b.vy * dt;
+      const wrapped = wrapX(b.x);
+      if (wrapped !== b.x) {
+        b.x = wrapped;
+        // 回り込んだフレームは画面を横断する線分になってしまうので、判定に使わない
+        b.px = b.x;
+        b.py = b.y;
+        b.trail.length = 0;
+      }
       if (b.kind === 'cannon') {
         b.trail.push({ x: b.x, y: b.y });
         if (b.trail.length > 16) b.trail.shift();

@@ -2,6 +2,11 @@
  * フライトモデルの数値を確かめる。ブラウザを立ち上げずに調整できるようにするためのもの。
  *
  *   node tools/flight-probe.mjs
+ *   node tools/flight-probe.mjs --thrust=300     全開のパワーを変えて測る
+ *
+ * 全開のパワーはオプション画面で変えられるので、既定値だけを測っても
+ * 遊ぶ人が触る範囲が分からない。`--thrust` で任意の値を渡せるようにしてある
+ * （渡さなければ既定のまま）。
  *
  * 見るのは 3 つ:
  *   1. スロットル段階ごとの水平飛行の速度（想定: アイドルは維持できず沈む、巡航 約270、全開 約360）
@@ -18,7 +23,15 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const out = join(mkdtempSync(join(tmpdir(), 'flight-')), 'flight.mjs');
 execFileSync('npx', ['esbuild', join(root, 'src/flight.ts'), '--bundle', '--format=esm', `--outfile=${out}`, '--log-level=error'], { cwd: root });
-const { stepFlight } = await import(pathToFileURL(out).href);
+const flight = await import(pathToFileURL(out).href);
+const { levelSpeed } = flight;
+
+/** 全開のパワー。--thrust=... を渡さなければ既定（オプションの初期値） */
+const arg = process.argv.find((a) => a.startsWith('--thrust='));
+const THRUST = arg ? Number(arg.slice('--thrust='.length)) : undefined;
+
+/** 全開のパワーを差し替えられるようにした呼び出し。以下はすべてこれを通す */
+const stepFlight = (state, input, dt) => flight.stepFlight(state, input, dt, undefined, THRUST);
 
 const DT = 1 / 60;
 
@@ -140,6 +153,7 @@ function slowClimb() {
 }
 
 const names = ['巡航', '全開'];
+if (THRUST !== undefined) console.log(`（全開のパワー ${THRUST}）`);
 console.log('■ 水平飛行');
 for (let t = 0; t < names.length; t++) {
   const r = levelFlight(t);
@@ -156,5 +170,12 @@ console.log('\n■ 宙返り（舵を引き切って一周）');
 console.log(' ', JSON.stringify(loopRadius()));
 console.log('\n■ 急上昇からの立て直し');
 console.log(' ', JSON.stringify(stallRecovery(), null, 0));
+
+// オプション画面はこの levelSpeed をそのまま呼んで「速度」を出している。
+// ここで並べて見せておけば、表示と実際の食い違いが起きない
+console.log('\n■ オプションで選べる全開のパワーと、落ち着く速度');
+for (const power of [150, 180, 220, 260, 300]) {
+  console.log(`  パワー ${String(power).padStart(3)}  速度 ${String(levelSpeed(power)).padStart(4)}`);
+}
 
 writeFileSync(join(tmpdir(), 'flight-probe-done'), 'ok');

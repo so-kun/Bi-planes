@@ -11,9 +11,10 @@
 
 import Phaser from 'phaser';
 import {
-  BALLOON, ENGINE, FLIGHT, PLANE, SMOKE, SCORE, VIEW, groundAt,
+  AI_LEVELS, BALLOON, ENGINE, FLIGHT, PLANE, SMOKE, SCORE, VIEW, groundAt,
 } from '../config';
 import { settings, saveSettings } from '../settings';
+import { sweepHit } from '../collision';
 import { sfx } from '../audio';
 import { FilmPipeline } from '../fx/FilmPipeline';
 import { attachFilm } from '../fx/attachFilm';
@@ -24,7 +25,7 @@ import { Bullets } from '../objects/Bullets';
 import { PadMenu } from '../input/PadMenu';
 import { StuckKeyGuard } from '../input/StuckKeyGuard';
 import { PadInput, PAD_IDLE, type PadState } from '../input/PadInput';
-import { Pilot, AI_LEVELS } from '../ai/Pilot';
+import { Pilot } from '../ai/Pilot';
 import { Countdown } from '../ui/Countdown';
 import { Panel, PANEL } from '../ui/Panel';
 import { rendererLine } from '../diagnostics';
@@ -110,13 +111,7 @@ export class PlayScene extends Phaser.Scene {
   }
 
   create(): void {
-    // **画面は作り直されても構築子は呼ばれない。** 前の試合から持ち越すと困るものは、
-    // ここで必ず戻す ―― 戻し忘れると、決着した状態のまま次の試合が始まって
-    // いつまでも動かなかったり（winner）、エンジン音が鳴らなくなったりする（padWoke）
-    this.winner = null;
-    this.padWoke = false;
-    this.bgmOn = false;
-    this.filmWatchdog = 1;
+    this.resetState();
 
     const bg = this.add.image(0, 0, 'bg-sunset').setOrigin(0);
     bg.setDisplaySize(VIEW.width, VIEW.height);
@@ -142,9 +137,7 @@ export class PlayScene extends Phaser.Scene {
     this.countdown = new Countdown(this);
 
     // タイトルで選んだ操縦を反映してから、開始の合図に入る
-    this.players.forEach((p, i) => {
-      for (let n = 0; n < this.startAi[i]; n++) this.cycleAi(p);
-    });
+    this.players.forEach((p, i) => this.setAi(p, this.startAi[i]));
     this.aiText.setAlpha(0);
     // 音がもう起きていれば、ここでエンジンも曲も鳴りはじめる。
     // まだ鳴らせない場合（この画面から直に始めたとき）は、最初の操作で鳴りだす。
@@ -152,6 +145,30 @@ export class PlayScene extends Phaser.Scene {
     // 最初の操作待ちにすると、戻ってきたときに無音のままになる
     this.wakeAudio();
     this.beginCountdown();
+  }
+
+  /**
+   * **画面は作り直されても構築子は呼ばれない。** class の初期値が働くのは最初の一度きりなので、
+   * 前の試合から持ち越すと困るものは**すべてここに書く**。
+   *
+   * ここに書き漏らすと、症状が出るのは決まって「2回目から」で原因が見えにくい:
+   * 決着した状態のまま次の試合が始まって動かない（winner）、
+   * エンジン音だけ鳴らない（padWoke）、オプションで変えたフィルムの強さが効かない（film）。
+   *
+   * 作った表示物の控え（panels・downedTexts・aiBadges）も、前の画面のものが残ると
+   * 消えた文字を掴んだままになるので空にする
+   */
+  private resetState(): void {
+    this.winner = null;
+    this.padWoke = false;
+    this.bgmOn = false;
+    this.filmWatchdog = 1;
+    this.film = null;
+    this.showDebug = false;
+    this.players = [];
+    this.panels = [];
+    this.downedTexts = [];
+    this.aiBadges = [];
   }
 
   // ---------------------------------------------------------------- 開始の合図
@@ -305,7 +322,16 @@ export class PlayScene extends Phaser.Scene {
    * 2P を任せれば1人で遊べる。フリープレイで 1P を任せれば、一機が飛ぶ様子を眺められる
    */
   private cycleAi(p: Player): void {
-    p.ai = (p.ai + 1) % (AI_LEVELS.length + 1);
+    this.setAi(p, (p.ai + 1) % (AI_LEVELS.length + 1));
+  }
+
+  /**
+   * 操縦を直に決める。0 = 人、1..3 = 弱・普通・強。
+   * 範囲の外は詰めて受け取る ―― 呼ぶ側（タイトルの選択や保存された設定）が
+   * 段階の数を知らないまま渡してきても、「人が操縦」に化けないようにする
+   */
+  private setAi(p: Player, level: number): void {
+    p.ai = Math.max(0, Math.min(AI_LEVELS.length, Math.round(level)));
     if (p.ai > 0) p.pilot.setLevel(AI_LEVELS[p.ai - 1]);
     p.pilot.reset();
     this.flashAi();
@@ -567,6 +593,10 @@ export class PlayScene extends Phaser.Scene {
   /**
    * 当たり判定。弾は自機以外の機体と気球に当たる。
    *
+   * **弾は線分で見る。** その瞬間の位置だけで見ると、7.7mm は 60fps でも
+   * 1 フレームに 25px 進むので取りこぼしが出て、フレームが落ちるとすり抜ける。
+   * 相手も動いているので、線分は相手から見た動きで作る（`src/collision.ts`）。
+   *
    * 機体に当たったときは、当たりどころで壊れる場所が決まる（2026-08-12 決定）:
    * 機首側ならエンジン、尾翼側なら舵。狙って壊し分けられるようにするため
    */
@@ -577,11 +607,17 @@ export class PlayScene extends Phaser.Scene {
       for (const p of this.players) {
         // 再出撃直後は弾がすり抜ける。出てきたところを撃たれて何もできないのを防ぐ
         if (p.id === b.owner || !p.plane.alive || p.plane.invulnerable) continue;
-        const dx = b.x - p.plane.x;
-        const dy = b.y - p.plane.y;
-        if (dx * dx + dy * dy > PLANE.hitRadius * PLANE.hitRadius) continue;
+        // 相手を止めて見たときの、弾の通り道
+        const ax = b.px - p.plane.prevX;
+        const ay = b.py - p.plane.prevY;
+        const bx = b.x - p.plane.x;
+        const by = b.y - p.plane.y;
+        const t = sweepHit(ax, ay, bx, by, PLANE.hitRadius);
+        if (t === null) continue;
 
-        // 機体の前後どちらに当たったか。機軸に沿って射影する
+        // 機体の前後どちらに当たったか。いちばん近づいた瞬間の位置を機軸へ射影する
+        const dx = ax + (bx - ax) * t;
+        const dy = ay + (by - ay) * t;
         const along = dx * Math.cos(p.plane.state.pitch) + dy * Math.sin(p.plane.state.pitch);
         p.plane.takeDamage(b.damage, along >= 0 ? 'engine' : 'handling');
         this.bullets.remove(b);
@@ -599,7 +635,8 @@ export class PlayScene extends Phaser.Scene {
 
       for (const balloon of [...this.balloons.list]) {
         const hb = this.balloons.hitBox(balloon);
-        if ((b.x - hb.x) ** 2 + (b.y - hb.y) ** 2 >= hb.r * hb.r) continue;
+        // 気球はゆっくり上がるだけなので、弾の線分をそのまま当てる
+        if (sweepHit(b.px - hb.x, b.py - hb.y, b.x - hb.x, b.y - hb.y, hb.r) === null) continue;
         this.bullets.remove(b);
         this.balloons.pop(balloon);
         this.particles.popBalloon(hb.x, hb.y);
@@ -675,8 +712,15 @@ export class PlayScene extends Phaser.Scene {
 
   // ---------------------------------------------------------------- 見た目
 
+  /**
+   * フィルム処理を掛ける。強さは**必ずオプションの設定から取る** ――
+   * 前の画面で使っていた `this.film` を見にいくと、画面を作り直しても
+   * 構築子は呼ばれないため、古いパイプラインの強さを引き継いでしまい、
+   * オプションで変えた強さが試合に出なくなる（1-5 キーも設定に書き込むので、
+   * ここを見れば掛け直しでも強さは保たれる）
+   */
   private setupFilm(): void {
-    this.film = attachFilm(this, this.film?.getLevel() ?? settings.film);
+    this.film = attachFilm(this);
   }
 
   /**

@@ -7,8 +7,7 @@
  */
 
 import Phaser from 'phaser';
-import { VIEW } from '../config';
-import { AI_LEVELS } from '../ai/Pilot';
+import { AI_LEVELS, VIEW } from '../config';
 import { sfx } from '../audio';
 import { attachFilm } from '../fx/attachFilm';
 import { PadInput } from '../input/PadInput';

@@ -19,17 +19,15 @@
  */
 
 import Phaser from 'phaser';
-import { ENGINE, PLANE, VIEW } from '../config';
-import { AI_LEVELS } from '../ai/Pilot';
+import { VIEW } from '../config';
 import { sfx } from '../audio';
 import { attachFilm } from '../fx/attachFilm';
 import type { FilmPipeline } from '../fx/FilmPipeline';
 import { PadInput, PAD_IDLE } from '../input/PadInput';
 import { PadMenu } from '../input/PadMenu';
 import { StuckKeyGuard } from '../input/StuckKeyGuard';
-import {
-  PAD_ACTIONS, PLAYER_NAMES, buttonName, resetSettings, saveSettings, settings, type PadBinding,
-} from '../settings';
+import { PAD_ACTIONS, PLAYER_NAMES, buttonName, saveSettings, settings, type PadBinding } from '../settings';
+import { PAGE_TITLE, buildRows, type Page, type Row } from '../ui/optionRows';
 
 const KEY = Phaser.Input.Keyboard.KeyCodes;
 const CREAM = '#f4e6c8';
@@ -37,48 +35,6 @@ const INK = '#241a12';
 const GOLD = '#ffd76b';
 /** 1P・2P の色。機体と計器盤に合わせてある */
 const SIDE_COLOR = ['#e8836a', '#8fb6d8'];
-
-/**
- * 一覧に並ぶもの。
- *
- * - `shared` … 全体で1つ。どちらが変えても同じところに効く
- * - `each` … 人ごとに持つ。1P・2P の2列で出す
- * - `pad` … 人ごとのボタン割り当て。決定してから押して決める
- * - `action` … 押すだけ
- */
-type Row =
-  | { kind: 'shared'; label: string; note?: string; get: () => string; step: (d: -1 | 1) => void }
-  | { kind: 'each'; label: string; note?: string; get: (side: number) => string;
-      step: (side: number, d: -1 | 1) => void }
-  | { kind: 'pad'; label: string; note?: string; action: keyof PadBinding }
-  | { kind: 'action'; label: string; note?: string; run: () => void };
-
-/** 選べる値。左右で前後に動かす */
-const DEADZONES = [0.10, 0.15, 0.22, 0.30, 0.40];
-const FILM_NAMES = ['切', '弱', '既定', '標準', '強'];
-const WINNING = [10, 15, 20, 30, 50];
-/**
- * 7.7mm 一発の威力。整数だけを並べてある ―― HP に端数が出ると、
- * 計器の目盛りも「あと何発」も読みにくくなる。既定は 15（7発で撃墜）
- */
-const MG_DAMAGE = [5, 10, 15, 20, 25, 50];
-/**
- * 全開の推力と、そのときに落ち着く速度（`node tools/flight-probe.mjs` で実測）。
- * 巡航は 96（速度 288）で据え置き ―― 巡航まで速くすると、全開が「ここぞという時の手」でなくなる
- */
-const THRUST = [
-  { power: 150, speed: 371 },
-  { power: 180, speed: 409 },
-  { power: 220, speed: 454 },
-  { power: 260, speed: 495 },
-  { power: 300, speed: 532 },
-];
-/**
- * 全開のときに水温が上がる速さ（毎秒）。
- * 冷えきり（0.30）から振り切れ（1.0）までの秒数で見せる ―― 数字だけでは手応えに結び付かない。
- * 0 は「上がらない」＝過熱そのものが起きない
- */
-const TEMP_RISE = [0, 0.07, 0.10, 0.14, 0.20, 0.28];
 
 /** ボタンの割り当て待ちを打ち切るまでの秒数 */
 const WAIT_LIMIT = 8;
@@ -91,15 +47,6 @@ const LABEL_X = 244;
 const GAP = 30;
 /** 人ごとの項目の値を出す位置。全体で1つの項目は左の列だけ使う */
 const COL_X = [690, 940];
-
-/** どの画面か */
-type Page = 'menu' | 'game' | 'pad';
-
-const PAGE_TITLE: Record<Page, string> = {
-  menu: 'オプション',
-  game: 'ゲーム設定',
-  pad: 'コントローラー設定',
-};
 
 export class OptionsScene extends Phaser.Scene {
   private page: Page = 'menu';
@@ -139,6 +86,15 @@ export class OptionsScene extends Phaser.Scene {
   private waitArmed = [false, false];
   /** 待ちはじめてからの秒数。押されないまま置き去りにならないよう打ち切る */
   private waitTimer = [0, 0];
+  /**
+   * 割り当てを決めた直後。**指を離すまでその人の操作を読まない**。
+   *
+   * 決めたボタンはまだ押されたままなので、そのまま読むと
+   * 「いま決定に割り当てたボタンが押された」ことになって画面が進んでしまう ――
+   * 立ち上がりを見ている側（PadInput）は、割り当てが変わる前の別のボタンを
+   * 見張っていたので、押しっぱなしでも「今押された」に見える
+   */
+  private settling = [false, false];
 
   constructor() {
     super('Options');
@@ -161,6 +117,7 @@ export class OptionsScene extends Phaser.Scene {
     this.waiting = [null, null];
     this.waitArmed = [false, false];
     this.waitTimer = [0, 0];
+    this.settling = [false, false];
     this.padUpHeld = [false, false];
     this.padStates = this.pads.map((p) => p.read());
     for (const m of this.padMenus) m.disarm();
@@ -183,133 +140,22 @@ export class OptionsScene extends Phaser.Scene {
 
   // ---------------------------------------------------------------- 項目
 
+  /**
+   * 並べる項目を作る。中身は `src/ui/optionRows.ts`。
+   * 画面を出たり入ったりするたびに作り直すので、値は必ずそのつど `settings` から読む
+   */
   private buildRows(): void {
-    const cycle = <T>(list: T[], now: T, d: -1 | 1): T => {
-      const i = list.indexOf(now);
-      return list[((i < 0 ? 0 : i) + d + list.length) % list.length];
-    };
-    const nearest = (list: number[], now: number): number =>
-      list.reduce((a, b) => (Math.abs(b - now) < Math.abs(a - now) ? b : a));
-
-    if (this.page === 'menu') {
-      this.rows = [
-        { kind: 'action', label: 'ゲーム設定',
-          note: '音・見た目・ルール・機体の性能',
-          run: () => this.go('game') },
-        { kind: 'action', label: 'コントローラー設定',
-          note: '機首の向き・スティックの遊び・ボタンの割り当て（1P・2P それぞれ）',
-          run: () => this.go('pad') },
-        { kind: 'action', label: '初期設定に戻す',
-          note: 'すべての項目を最初の状態へ',
-          run: () => this.resetAll() },
-      ];
-      return;
-    }
-
-    if (this.page === 'game') {
-      this.rows = [
-        { kind: 'shared',
-          label: '音量',
-          get: () => `${Math.round(settings.volume * 100)}%`,
-          step: (d) => {
-            settings.volume = Math.min(1, Math.max(0, Math.round((settings.volume + d * 0.1) * 10) / 10));
-            sfx.applyVolume();
-            saveSettings();
-          } },
-        { kind: 'shared',
-          label: 'BGM',
-          get: () => (settings.bgm ? '入' : '切'),
-          step: () => { settings.bgm = !settings.bgm; sfx.applyBgmSetting(); saveSettings(); } },
-        { kind: 'shared',
-          label: '古いフィルム風の効果',
-          note: '粒とゆらぎの強さ。切ると絵がそのまま出る',
-          get: () => FILM_NAMES[settings.film] ?? String(settings.film),
-          step: (d) => {
-            settings.film = (settings.film + d + FILM_NAMES.length) % FILM_NAMES.length;
-            this.film?.setLevel(settings.film);
-            saveSettings();
-          } },
-        { kind: 'shared',
-          label: 'コンピュータの強さ',
-          note: 'ステージ選択の左右でも選べる。どちらで変えても同じところを見ている',
-          get: () => AI_LEVELS[settings.aiLevel - 1]?.name ?? String(settings.aiLevel),
-          step: (d) => {
-            settings.aiLevel = ((settings.aiLevel - 1 + d + AI_LEVELS.length) % AI_LEVELS.length) + 1;
-            saveSettings();
-          } },
-        { kind: 'shared',
-          label: '勝ちに必要な点',
-          get: () => `${settings.winning} 点`,
-          step: (d) => { settings.winning = cycle(WINNING, settings.winning, d); saveSettings(); } },
-        { kind: 'shared',
-          label: '7.7mm の威力',
-          note: '一発あたり。20mm は一撃撃墜のまま変わらない',
-          get: () => `${settings.mgDamage}（${Math.ceil(PLANE.maxHp / settings.mgDamage)} 発で撃墜）`,
-          step: (d) => { settings.mgDamage = cycle(MG_DAMAGE, settings.mgDamage, d); saveSettings(); } },
-        { kind: 'shared',
-          label: '全開のパワー',
-          note: '押している間の推力。巡航（速度 288）は変わらない',
-          get: () => {
-            const now = THRUST.find((t) => t.power === settings.thrust);
-            return now ? `${now.power}（速度 ${now.speed}）` : String(settings.thrust);
-          },
-          step: (d) => {
-            const now = nearest(THRUST.map((t) => t.power), settings.thrust);
-            settings.thrust = cycle(THRUST.map((t) => t.power), now, d);
-            saveSettings();
-          } },
-        { kind: 'shared',
-          label: '全開で水温が上がる速さ',
-          note: '「上がらない」にすると過熱しなくなる。冷える速さは変わらない',
-          get: () => (settings.tempRise <= 0
-            ? '上がらない'
-            : `振り切れまで ${((1 - ENGINE.tempFloor) / settings.tempRise).toFixed(1)} 秒`),
-          step: (d) => {
-            settings.tempRise = cycle(TEMP_RISE, nearest(TEMP_RISE, settings.tempRise), d);
-            saveSettings();
-          } },
-        { kind: 'action', label: '戻る', run: () => this.go('menu') },
-      ];
-      return;
-    }
-
-    this.rows = [
-      { kind: 'each',
-        label: '機首の向き',
-        note: '「引くと上げ」は操縦桿と同じ向き。その人のキーとパッドの両方に効く',
-        get: (side) => (settings.pullToClimb[side] ? '引くと上げ' : '倒すと上げ'),
-        step: (side) => { settings.pullToClimb[side] = !settings.pullToClimb[side]; saveSettings(); } },
-      { kind: 'each',
-        label: 'スティックの遊び',
-        note: '中央の、倒していないとみなす幅。大きいほど手が休まる',
-        get: (side) => settings.deadzones[side].toFixed(2),
-        step: (side, d) => {
-          settings.deadzones[side] = cycle(DEADZONES, nearest(DEADZONES, settings.deadzones[side]), d);
-          saveSettings();
-        } },
-      ...PAD_ACTIONS.map((a): Row => ({
-        kind: 'pad',
-        label: `　　${a.label}`,
-        note: '決定（Enter・○A）を押してから、割り当てたいボタンを押す',
-        action: a.key,
-      })),
-      { kind: 'action', label: '戻る', run: () => this.go('menu') },
-    ];
+    this.rows = buildRows(this.page, {
+      film: () => this.film,
+      go: (page) => this.go(page),
+      afterReset: () => this.refresh(),
+    });
   }
 
   /** 別の画面へ。画面ごとに作り直すので、控えは create で空にしている */
   private go(page: Page): void {
     sfx.menuDecide();
     this.scene.start('Options', { page });
-  }
-
-  private resetAll(): void {
-    resetSettings();
-    sfx.applyVolume();
-    sfx.applyBgmSetting();
-    this.film?.setLevel(settings.film);
-    sfx.menuDecide();
-    this.refresh();
   }
 
   /** 人ごとの項目が始まる行。ここに区切り線と 1P / 2P の見出しを置く */
@@ -393,8 +239,11 @@ export class OptionsScene extends Phaser.Scene {
       this.labels[i].setAlpha(on ? 1 : 0.72);
 
       this.values[i].forEach((t, c) => {
-        const mine = this.index[c] === i && this.active(c);
         const each = r.kind === 'each' || r.kind === 'pad';
+        // 人ごとの列は自分のカーソルが乗っているときだけ、
+        // 全体で1つの項目は**どちらのカーソルが乗っていても**金色にする ――
+        // 列が1つしかないので、2P が選んでいるときに何も光らないのは分かりにくい
+        const mine = each ? this.index[c] === i && this.active(c) : on;
         if (r.kind === 'pad') {
           t.setText(this.waiting[c] === r.action
             ? '― 押してください ―'
@@ -519,6 +368,15 @@ export class OptionsScene extends Phaser.Scene {
       this.refresh();
       return;
     }
+    // 相手がボタンを割り当てている最中は画面を閉じない ――
+    // 二人で同時に触れる画面なので、片方の取り消しでもう片方の作業が消えると理不尽になる
+    const busy = this.waiting.findIndex((w, i) => i !== side && w !== null);
+    if (busy >= 0) {
+      this.hint.setText(`${PLAYER_NAMES[busy]} がボタンを割り当て中です`);
+      this.hint.setVisible(true);
+      sfx.menuBack();
+      return;
+    }
     saveSettings();
     sfx.menuBack();
     // 下の画面からは入口へ、入口からはステージ選択へ戻る
@@ -561,6 +419,12 @@ export class OptionsScene extends Phaser.Scene {
     bind[action] = button;
     saveSettings();
     this.waiting[side] = null;
+    // 決めたボタンはまだ押されたまま。指を離すまでこの人の操作は読まない ――
+    // 「決定」や「取り消し」を割り当て直した直後に、その押しっぱなしが
+    // 決定や取り消しとして効いてしまうのを断つ
+    this.settling[side] = true;
+    this.padMenus[side].disarm();
+    this.padUpHeld[side] = false;
     sfx.menuDecide();
     this.refresh();
   }
@@ -597,6 +461,11 @@ export class OptionsScene extends Phaser.Scene {
       if (this.waiting[side]) {
         this.captureButton(side, dt);
         continue;                    // 待っている人はほかの操作を読まない
+      }
+      if (this.settling[side]) {
+        // 割り当てを決めた直後。指を離すまで読まない
+        if (this.pressedButtons(side).length === 0) this.settling[side] = false;
+        continue;
       }
       const s = this.padStates[side];
       if (!s.connected) continue;

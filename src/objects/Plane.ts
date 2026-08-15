@@ -11,7 +11,7 @@
  */
 
 import Phaser from 'phaser';
-import { ENGINE, PLANE, VIEW, WEAPON } from '../config';
+import { ENGINE, PLANE, VIEW, WEAPON, wrapX } from '../config';
 import { settings } from '../settings';
 import { stepFlight, wrapPi, type FlightReadout, type FlightState } from '../flight';
 
@@ -60,6 +60,14 @@ export class Plane {
 
   readout: FlightReadout = { speed: 0, aoa: 0, stalled: false, cl: 0 };
 
+  /**
+   * 前のフレームの位置。速いものの当たり判定を**線分**で見るために持つ ――
+   * 弾（`src/collision.ts`）と、プラクティスの輪くぐり（`src/objects/Rings.ts`）が使う。
+   * 画面端で回り込んだフレームは、飛んだぶんを線分にしないよう今の位置を入れる
+   */
+  prevX: number;
+  prevY: number;
+
   /** 再出撃直後の無敵の残り時間 */
   private invuln = 0;
   /** 点滅と震えを進めるための時計。飛んでいる限り止めない */
@@ -74,6 +82,8 @@ export class Plane {
       throttle: 0,
     };
     this.facing = facing;
+    this.prevX = x;
+    this.prevY = y;
 
     const mk = (key: string): Phaser.GameObjects.Image => {
       const img = scene.add.image(0, 0, key).setOrigin(0.5);
@@ -192,6 +202,8 @@ export class Plane {
   reset(x: number, y: number, facing: Facing): void {
     this.state.x = x;
     this.state.y = y;
+    this.prevX = x;
+    this.prevY = y;
     this.state.vx = facing * 260;
     this.state.vy = 0;
     this.state.pitch = facing === 1 ? 0 : Math.PI;
@@ -215,6 +227,8 @@ export class Plane {
     this.overheated = false;
     if (!this.alive) return;
 
+    this.prevX = this.state.x;
+    this.prevY = this.state.y;
     this.updateTemp(dt);
     this.mgCooldown = Math.max(0, this.mgCooldown - dt);
     this.cannonCooldown = Math.max(0, this.cannonCooldown - dt);
@@ -232,15 +246,16 @@ export class Plane {
 
     this.readout = stepFlight(this.state, { pitch: pitchInput }, dt, this.damage);
 
-    // 画面端はラップアラウンド（本家準拠）。
-    //
-    // 端から出しろは**機体の半分**。もとは機体1つぶん取っていたが、
-    // そのぶん**姿が完全に消えている時間**ができて、端をまたぐたびに間延びしていた。
-    // 半分にすると、右端で機体が隠れきった瞬間に左端から出てくる ――
-    // 見えない時間がなくなり、追う側も見失わない
-    const pad = PLANE.width / 2;
-    if (this.state.x < -pad) this.state.x += VIEW.width + pad * 2;
-    if (this.state.x > VIEW.width + pad) this.state.x -= VIEW.width + pad * 2;
+    // 画面端はラップアラウンド（本家準拠）。出しろは `WRAP.pad`（機体の半分）で、
+    // **弾も同じところで回り込む**（src/config.ts）。
+    // 回り込んだフレームは位置が大きく跳ぶので、当たり判定に使う「前の位置」は
+    // 今の位置に置き直す ―― そのままだと画面を横断する線分になってしまう
+    const wrapped = wrapX(this.state.x);
+    if (wrapped !== this.state.x) {
+      this.state.x = wrapped;
+      this.prevX = wrapped;
+      this.prevY = this.state.y;
+    }
     // 高いところは空気が薄い、という扱いで下向きの力が強まる。
     // 硬い壁で跳ね返すより自然で、機体が画面から消えることもない
     if (this.state.y < VIEW.softCeilingY) {
