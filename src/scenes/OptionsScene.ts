@@ -20,6 +20,7 @@
 
 import Phaser from 'phaser';
 import { ENGINE, PLANE, VIEW } from '../config';
+import { AI_LEVELS } from '../ai/Pilot';
 import { sfx } from '../audio';
 import { attachFilm } from '../fx/attachFilm';
 import type { FilmPipeline } from '../fx/FilmPipeline';
@@ -226,6 +227,14 @@ export class OptionsScene extends Phaser.Scene {
           step: (d) => {
             settings.film = (settings.film + d + FILM_NAMES.length) % FILM_NAMES.length;
             this.film?.setLevel(settings.film);
+            saveSettings();
+          } },
+        { kind: 'shared',
+          label: 'コンピュータの強さ',
+          note: 'ステージ選択の左右でも選べる。どちらで変えても同じところを見ている',
+          get: () => AI_LEVELS[settings.aiLevel - 1]?.name ?? String(settings.aiLevel),
+          step: (d) => {
+            settings.aiLevel = ((settings.aiLevel - 1 + d + AI_LEVELS.length) % AI_LEVELS.length) + 1;
             saveSettings();
           } },
         { kind: 'shared',

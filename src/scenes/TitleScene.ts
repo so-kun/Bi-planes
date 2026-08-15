@@ -14,7 +14,7 @@ import { attachFilm } from '../fx/attachFilm';
 import { PadInput } from '../input/PadInput';
 import { PadMenu } from '../input/PadMenu';
 import { StuckKeyGuard } from '../input/StuckKeyGuard';
-import { settings } from '../settings';
+import { settings, saveSettings } from '../settings';
 
 const KEY = Phaser.Input.Keyboard.KeyCodes;
 
@@ -41,7 +41,7 @@ const MODES: Mode[] = [
     p1Ai: () => 0, p2Ai: () => 0 },
   { name: 'フリープレイ', note: '相手なし。一人で飛ぶだけ', scene: 'Play', usesAi: false, free: true,
     p1Ai: () => 0, p2Ai: () => 0 },
-  { name: 'オプション', note: 'パッドの割り当て・音量・見た目・ルール', scene: 'Options', usesAi: false,
+  { name: 'オプション', note: '音・見た目・ルール・機体の性能・パッドの割り当て', scene: 'Options', usesAi: false,
     p1Ai: () => 0, p2Ai: () => 0 },
 ];
 
@@ -50,7 +50,6 @@ const INK = '#241a12';
 
 export class TitleScene extends Phaser.Scene {
   private mode = 0;
-  private level = 2;
   private modeTexts: Phaser.GameObjects.Text[] = [];
   private noteTexts: Phaser.GameObjects.Text[] = [];
   private levelTexts: Phaser.GameObjects.Text[] = [];
@@ -199,10 +198,11 @@ export class TitleScene extends Phaser.Scene {
   }
 
   private pick(d: number): void {
-    const next = Phaser.Math.Clamp(this.level + d, 1, AI_LEVELS.length);
+    const next = Phaser.Math.Clamp(settings.aiLevel + d, 1, AI_LEVELS.length);
     // 端で止まっているときは鳴らさない。変わっていないのに音がするとうるさい
-    if (next !== this.level) sfx.menuLevel(d < 0 ? -1 : 1);
-    this.level = next;
+    if (next !== settings.aiLevel) sfx.menuLevel(d < 0 ? -1 : 1);
+    settings.aiLevel = next;
+    saveSettings();
     this.refresh();
   }
 
@@ -220,7 +220,7 @@ export class TitleScene extends Phaser.Scene {
     const usesAi = MODES[this.mode].usesAi;
     this.levelLabel.setAlpha(usesAi ? 0.9 : 0.3);
     AI_LEVELS.forEach((_, i) => {
-      const on = usesAi && i === this.level - 1;
+      const on = usesAi && i === settings.aiLevel - 1;
       this.levelTexts[i].setColor(on ? '#ffd76b' : CREAM);
       this.levelTexts[i].setAlpha(usesAi ? (on ? 1 : 0.5) : 0.25);
     });
@@ -239,7 +239,7 @@ export class TitleScene extends Phaser.Scene {
     sfx.menuDecide();
     const m = MODES[this.mode];
     if (m.scene === 'Play') {
-      this.scene.start('Play', { p1Ai: m.p1Ai(this.level), p2Ai: m.p2Ai(this.level), free: m.free });
+      this.scene.start('Play', { p1Ai: m.p1Ai(settings.aiLevel), p2Ai: m.p2Ai(settings.aiLevel), free: m.free });
     } else {
       this.scene.start(m.scene);
     }

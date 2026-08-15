@@ -66,6 +66,11 @@ export interface Settings {
    * 冷える速さ（`ENGINE.tempFall`）は変えない
    */
   tempRise: number;
+  /**
+   * コンピュータの腕前。1 = 弱 / 2 = 普通 / 3 = 強。
+   * ステージ選択の左右でも選べる ―― どちらで変えても同じところを見る
+   */
+  aiLevel: number;
 }
 
 const DEFAULT_BINDING: PadBinding = {
@@ -91,6 +96,7 @@ export const DEFAULTS: Settings = {
   mgDamage: WEAPON.mg.damage,
   thrust: FLIGHT.thrust[1],
   tempRise: ENGINE.tempRise,
+  aiLevel: 2,
 };
 
 /** 今の設定。ここを直接読み書きする */
@@ -176,6 +182,7 @@ export function loadSettings(): void {
   if (typeof s.mgDamage === 'number' && s.mgDamage > 0 && s.mgDamage <= 100) settings.mgDamage = s.mgDamage;
   if (typeof s.thrust === 'number' && s.thrust > 0 && s.thrust <= 1000) settings.thrust = s.thrust;
   if (typeof s.tempRise === 'number' && s.tempRise >= 0 && s.tempRise <= 2) settings.tempRise = s.tempRise;
+  if (typeof s.aiLevel === 'number' && Number.isInteger(s.aiLevel) && s.aiLevel >= 1) settings.aiLevel = s.aiLevel;
 }
 
 export function saveSettings(): void {
