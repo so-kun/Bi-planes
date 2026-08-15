@@ -542,12 +542,20 @@ export class PlayScene extends Phaser.Scene {
     }
   }
 
-  /** 地面への激突。撃たれたわけではないので、相手には自滅ぶんの点が入る */
+  /**
+   * 地面への激突。相手に自滅ぶんの点が入る。
+   *
+   * **傷ついた機体で落ちたときは撃墜と同じ点**（2026-08-15 決定）。
+   * 同じにしておかないと、追い詰められた側がわざと地面へ突っ込んで、
+   * 相手に入る点を 3 から 1 へ減らす逃げ道ができてしまう。
+   * 見分けは体力の帯そのもの ―― 目盛りが欠けていれば「傷ついた機体」
+   */
   private crash(p: Player): void {
     const y = groundAt(p.plane.x);
     this.particles.explode(p.plane.x, y, true);
     sfx.explosion();
-    this.downPlane(p, this.other(p), SCORE.suicide, { x: p.plane.x, y });
+    const hurt = p.plane.hp < PLANE.maxHp;
+    this.downPlane(p, this.other(p), hurt ? SCORE.suicideHurt : SCORE.suicide, { x: p.plane.x, y });
   }
 
   /** 撃墜された側の後始末と、仕留めた側への加点 */
