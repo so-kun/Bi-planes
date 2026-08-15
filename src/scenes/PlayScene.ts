@@ -25,8 +25,10 @@ import { Bullets } from '../objects/Bullets';
 import { PadMenu } from '../input/PadMenu';
 import { StuckKeyGuard } from '../input/StuckKeyGuard';
 import { PadInput, PAD_IDLE, type PadState } from '../input/PadInput';
+import { Rumble, STRAIN_INTERVAL } from '../input/Rumble';
 import { Pilot } from '../ai/Pilot';
 import { Countdown } from '../ui/Countdown';
+import { PauseMenu } from '../ui/PauseMenu';
 import { Panel, PANEL } from '../ui/Panel';
 import { rendererLine } from '../diagnostics';
 
@@ -52,6 +54,12 @@ interface Player {
   padState: PadState;
   /** パッドでの決定・取り消し・中断。武器と同じボタンなので受け付けを絞る */
   padMenu: PadMenu;
+  /** その人のパッドの振動。読んでいるのと同じパッドへ送る */
+  rumble: Rumble;
+  /** 赤帯のうなりを送り直すまでの残り時間 */
+  strainTimer: number;
+  /** 一時停止の画面で、スティックを倒しっぱなしにしても1度しか動かさないための記録 */
+  menuHeld: boolean;
   score: number;
   respawnTimer: number;
   smokeTimer: { engine: number; handling: number };
@@ -90,6 +98,8 @@ export class PlayScene extends Phaser.Scene {
   private free = false;
   /** 開始の合図。この間は操作を受け付けず、機体は出撃位置で待つ */
   private countdown!: Countdown;
+  /** ＋（Start）や Esc で出る、終了の確認 */
+  private pause!: PauseMenu;
 
   /** 計器盤。1人につき1枚（src/ui/Panel.ts） */
   private panels: Panel[] = [];
@@ -135,6 +145,7 @@ export class PlayScene extends Phaser.Scene {
     this.balloons.spawn(760, false);
 
     this.countdown = new Countdown(this);
+    this.pause = new PauseMenu(this);
 
     // タイトルで選んだ操縦を反映してから、開始の合図に入る
     this.players.forEach((p, i) => this.setAi(p, this.startAi[i]));
@@ -191,6 +202,8 @@ export class PlayScene extends Phaser.Scene {
   private tickCountdown(): boolean {
     const live = this.countdown.tick();
     if (live) return true;
+    // 一時停止から戻るときの合図では動かさない。その場で待たせる
+    if (!this.countdown.pinning) return false;
     // 機体は出撃位置に据え置く。合図の間に動きださないように
     for (const p of this.players) {
       p.plane.state.x = p.home.x;
@@ -258,7 +271,10 @@ export class PlayScene extends Phaser.Scene {
     }
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.keyGuard.detach();
+      sfx.duck(false);
       sfx.stopEngines();
+      // 画面を出るときに震えたままにしない
+      for (const p of this.players) p.rumble.stop(p.pad.gamepadIndex);
       window.removeEventListener('blur', releaseAll);
       window.removeEventListener('focus', releaseAll);
       document.removeEventListener('visibilitychange', onVisibility);
@@ -274,8 +290,21 @@ export class PlayScene extends Phaser.Scene {
       p.keys.cannon.on('down', () => { if (this.running) this.fireCannon(p); });
     }
 
-    k.restart.on('down', () => { if (this.winner) this.restart(); });
-    k.title.on('down', () => this.toTitle());
+    k.restart.on('down', () => {
+      if (this.pause.open) { this.choosePause(); return; }
+      if (this.winner) this.restart();
+    });
+    // Esc も「その場でタイトルへ」をやめて、いったん止めて聞き直す。
+    // 決着が付いたあとは画面に「Esc でタイトルへ」と出ているので、そのまま戻す
+    k.title.on('down', () => {
+      if (this.pause.open) { this.resumeGame(); return; }
+      if (this.winner) { this.toTitle(); return; }
+      this.openPause();
+    });
+    // 一時停止の画面でだけ働く上下。飛んでいる間の機首は押しっぱなしで読むので、
+    // ここで押した瞬間を拾っても邪魔にならない
+    for (const key of [k.p1Up, k.p2Up]) key.on('down', () => this.movePause(-1));
+    for (const key of [k.p1Down, k.p2Down]) key.on('down', () => this.movePause(1));
     k.ai1.on('down', () => this.cycleAi(this.players[0]));
     k.ai2.on('down', () => { if (this.players[1]) this.cycleAi(this.players[1]); });
     k.mute.on('down', () => sfx.toggleMute());
@@ -306,6 +335,9 @@ export class PlayScene extends Phaser.Scene {
       pad: new PadInput(id),
       padState: PAD_IDLE,
       padMenu: new PadMenu(),
+      rumble: new Rumble(),
+      strainTimer: 0,
+      menuHeld: false,
       score: 0,
       respawnTimer: 0,
       smokeTimer: { engine: 0, handling: 0 },
@@ -383,6 +415,11 @@ export class PlayScene extends Phaser.Scene {
       this.padWoke = true;
       this.wakeAudio();
     }
+    // 止めている間は何も進めない。読むのは一時停止の画面の操作だけ
+    if (this.pause.open) {
+      this.readPauseInput();
+      return;
+    }
     if (this.readPadMenu()) return;
 
     const live = this.tickCountdown();
@@ -458,6 +495,7 @@ export class PlayScene extends Phaser.Scene {
 
     this.emitSmoke(p, dt);
     this.warnStall(p, dt);
+    this.shakeStrain(p, dt);
   }
 
   // ---------------------------------------------------------------- 射撃と撃墜
@@ -506,6 +544,7 @@ export class PlayScene extends Phaser.Scene {
 
   /** 撃墜された側の後始末と、仕留めた側への加点 */
   private downPlane(p: Player, credit: Player | null, points: number): void {
+    this.shake(p, 'explosion');
     p.plane.destroy();
     p.respawnTimer = PLANE.respawnDelay;
     // 落ちた機のエンジン音は絞る。鳴ったままだと空にいない機の音が残る
@@ -544,8 +583,73 @@ export class PlayScene extends Phaser.Scene {
   }
 
   private toTitle(): void {
+    sfx.duck(false);
     sfx.stopEngines();
+    for (const p of this.players) p.rumble.stop(p.pad.gamepadIndex);
     this.scene.start('Title');
+  }
+
+  // ---------------------------------------------------------------- 一時停止
+
+  /**
+   * ＋（Start）や Esc で止める。
+   *
+   * 押した瞬間にタイトルへ戻る作りだったので、押し間違えると試合がそこで消えていた。
+   * 止めている間は**何も進めない** ―― 機体も弾も気球も煙も、開始の合図さえ止まる。
+   * エンジン音は絞り、曲は小さくして残す（止めると戻ったとき頭から鳴り直すため）
+   */
+  private openPause(): void {
+    if (this.pause.open) return;
+    this.pause.show();
+    this.disarmPads();
+    for (const p of this.players) {
+      p.menuHeld = false;
+      p.rumble.stop(p.pad.gamepadIndex);
+      sfx.setEngine(p.id, 1, false);
+      p.lastEngineState = '';
+    }
+    sfx.duck(true);
+    sfx.menuDecide();
+  }
+
+  /** 止めるのをやめて戻る。握り直す間を置くため、GO! を短く出してから動かす */
+  private resumeGame(): void {
+    if (!this.pause.open) return;
+    this.pause.hide();
+    this.disarmPads();
+    sfx.duck(false);
+    sfx.menuBack();
+    this.countdown.beginResume();
+  }
+
+  private movePause(d: -1 | 1): void {
+    if (!this.pause.open) return;
+    this.pause.move(d);
+    sfx.menuMove();
+  }
+
+  private choosePause(): void {
+    if (this.pause.choice === 'quit') this.toTitle();
+    else this.resumeGame();
+  }
+
+  /** 止めている間の操作。どちらのパッドでも動かせる */
+  private readPauseInput(): void {
+    for (const p of this.players) {
+      const s = p.padState;
+      if (Math.abs(s.pitch) > 0.5) {
+        if (!p.menuHeld) {
+          p.menuHeld = true;
+          this.movePause(s.pitch > 0 ? -1 : 1);   // スティックを上に倒すと pitch は正
+        }
+      } else {
+        p.menuHeld = false;
+      }
+      const m = p.padMenu.read(s);
+      // ＋ をもう一度押しても戻れる ―― 押し間違えたときにいちばん自然な戻り方
+      if (m.start || m.cancel) { this.resumeGame(); return; }
+      if (m.decide) { this.choosePause(); return; }
+    }
   }
 
   /**
@@ -567,7 +671,13 @@ export class PlayScene extends Phaser.Scene {
   private readPadMenu(): boolean {
     for (const p of this.players) {
       const m = p.padMenu.read(p.padState);
-      if (m.start) { this.toTitle(); return true; }
+      if (m.start) {
+        // 決着が付いたあとは画面に戻り方が出ているので、そのままタイトルへ。
+        // 飛んでいる最中は、いったん止めて聞き直す
+        if (this.running) { this.openPause(); return true; }
+        this.toTitle();
+        return true;
+      }
       if (this.running) continue;
       if (m.decide) { this.restart(); return true; }
       if (m.cancel) { this.toTitle(); return true; }
@@ -623,6 +733,7 @@ export class PlayScene extends Phaser.Scene {
         this.bullets.remove(b);
         consumed = true;
         sfx.hit();
+        this.shake(p, 'hit');
 
         if (p.plane.hp <= 0) {
           this.particles.explode(p.plane.x, p.plane.y, false);
@@ -664,15 +775,45 @@ export class PlayScene extends Phaser.Scene {
 
   // ---------------------------------------------------------------- 音と煙
 
-  /** スロットル・損傷・水温が変わったときだけエンジン音を鳴らし直す */
+  /**
+   * スロットル・損傷・水温が変わったときだけエンジン音を鳴らし直す。
+   *
+   * 水温は入切ではなく**踏み込み具合**（0〜1）で渡す ―― 赤帯に入った瞬間だけ
+   * 変わってあとは同じだと、まずいことに気づけないため。
+   * 毎フレーム渡し直すとタイマーを組み直してしまうので、5段に丸めてから見る
+   */
   private syncEngineSound(p: Player): void {
     const damaged = p.plane.hp < 70;
-    const strained = p.plane.overRedline;
-    const key = `${p.plane.state.throttle}/${damaged}/${strained}`;
+    const strain = Math.round(p.plane.strain * 5) / 5;
+    const key = `${p.plane.state.throttle}/${damaged}/${strain}`;
     if (key === p.lastEngineState) return;
     p.lastEngineState = key;
     // EngineVoice の段階は 1..3。巡航を 2、全開を 3 に対応させる
-    sfx.setEngine(p.id, p.plane.state.throttle + 2, damaged, strained);
+    sfx.setEngine(p.id, p.plane.state.throttle + 2, damaged, strain);
+  }
+
+  /**
+   * パッドの振動。
+   *
+   * 水温が赤帯に入っている間は、低いうなりを送り続ける ――
+   * 音と計器に続く三つ目の知らせで、手を見なくても分かるようにする。
+   * 強さは踏み込み具合に従う（対応していないブラウザでは何も起きない）
+   */
+  private shakeStrain(p: Player, dt: number): void {
+    if (p.ai > 0 || !p.plane.alive || p.plane.strain <= 0) {
+      p.strainTimer = 0;
+      return;
+    }
+    p.strainTimer -= dt;
+    if (p.strainTimer > 0) return;
+    p.strainTimer = STRAIN_INTERVAL;
+    p.rumble.play(p.id, p.pad.gamepadIndex, 'strain', this.time.now / 1000, 0.5 + p.plane.strain * 0.5);
+  }
+
+  /** 撃たれた・落ちたときの振動。コンピュータが操縦している機の分は送らない */
+  private shake(p: Player, kind: 'hit' | 'explosion'): void {
+    if (p.ai > 0) return;
+    p.rumble.play(p.id, p.pad.gamepadIndex, kind, this.time.now / 1000);
   }
 
   /**
@@ -765,7 +906,7 @@ export class PlayScene extends Phaser.Scene {
       '1P  S/W 機首上げ下げ  A/D ロール  E 全開  F 7.7mm  G 20mm　　'
       + (this.free ? '' : '2P  ↓/↑ 機首上げ下げ  ←/→ ロール  Shift 全開  , 7.7mm  . 20mm　　')
       + `V${this.free ? '' : '/C'} CPU 操縦${this.free ? '' : '（1P/2P）'}`
-      + '  Esc / パッド Start タイトル  1-5 フィルム  B BGM  M 消音  Tab 計器', {
+      + '  Esc / パッド ＋ 一時停止  1-5 フィルム  B BGM  M 消音  Tab 計器', {
         fontFamily: 'Georgia, serif', fontSize: '14px', color: '#f4e6c8',
         backgroundColor: 'rgba(24,16,10,0.5)', padding: { x: 12, y: 5 },
       }).setOrigin(0.5).setDepth(71).setAlpha(0.9);

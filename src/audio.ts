@@ -27,8 +27,12 @@ export class Sfx {
   /** 音を鳴らせるようになる前に要求された段階。鳴らしはじめるときに使う */
   private engineLevel: number[] = [];
   private engineDamaged: boolean[] = [];
-  /** 水温が赤帯に入っているか。入っていると音がざらつく */
-  private engineStrained: boolean[] = [];
+  /**
+   * 水温の踏み込み具合（0 = 赤帯の手前、1 = 振り切れ）。
+   * 入切の2値ではなく度合いで持つ ―― 赤帯に入った瞬間だけ変わって、
+   * あとは同じだと「まずい」と気づけないため
+   */
+  private engineStrain: number[] = [];
   private bgm: Track | null = null;
   /** 今どの曲を鳴らしたいか。B キーで切っても、次の画面で戻せるように覚えておく */
   private bgmKind: BgmKind = 'battle';
@@ -267,18 +271,19 @@ export class Sfx {
     for (let i = 0; i < count; i++) {
       if (this.engines[i]) continue;
       this.engines[i] = new EngineVoice(
-        this.ac, this.engineBus, this.engineLevel[i] ?? 2, this.engineDamaged[i] ?? false,
-        this.engineStrained[i] ?? false,
+        this.ac, this.engineBus, noiseBuffer(this.ac),
+        this.engineLevel[i] ?? 2, this.engineDamaged[i] ?? false, this.engineStrain[i] ?? 0,
       );
     }
     this.balanceEngines();
   }
 
-  setEngine(index: number, level: number, damaged: boolean, strained = false): void {
+  /** @param strain 水温の踏み込み具合（0 = 赤帯の手前、1 = 振り切れ） */
+  setEngine(index: number, level: number, damaged: boolean, strain = 0): void {
     this.engineLevel[index] = level;
     this.engineDamaged[index] = damaged;
-    this.engineStrained[index] = strained;
-    this.engines[index]?.set(level, damaged, strained);
+    this.engineStrain[index] = strain;
+    this.engines[index]?.set(level, damaged, strain);
   }
 
   stopEngines(): void {
@@ -330,6 +335,15 @@ export class Sfx {
     this.bgm?.stop();
     this.bgm = kind === 'menu' ? new MenuBgm(this.ac, this.musicBus) : new BattleBgm(this.ac, this.musicBus);
     this.bgm.start();
+  }
+
+  /**
+   * 曲を一時的に絞る。一時停止の間に使う ――
+   * 止めてしまうと戻ったときに頭から鳴り直すので、小さくするだけにする
+   */
+  duck(on: boolean): void {
+    if (!this.ac) return;
+    this.musicBus.gain.setTargetAtTime(AUDIO.music * (on ? 0.35 : 1), this.ac.currentTime, 0.12);
   }
 
   stopBgm(): void {

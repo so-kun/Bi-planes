@@ -193,6 +193,15 @@ export class Plane {
   /** 水温が赤帯に入っているか。計器の針を赤くするのに使う */
   get overRedline(): boolean { return this.temp >= ENGINE.redline; }
 
+  /**
+   * 赤帯からどれだけ踏み込んでいるか（0 = 赤帯の手前、1 = 振り切れ）。
+   * エンジン音の荒れ方と、パッドの振動の強さがこれで決まる ――
+   * 入切の2値だと、赤帯に入った瞬間だけ変わってあとは同じになってしまう
+   */
+  get strain(): number {
+    return Math.max(0, Math.min(1, (this.temp - ENGINE.redline) / (1 - ENGINE.redline)));
+  }
+
   /** 損傷の度合いを 0（無傷）〜1（下限まで落ちた）で返す。煙の量に使う */
   hurt(part: 'engine' | 'handling'): number {
     const floor = PLANE.damageFloor[part];

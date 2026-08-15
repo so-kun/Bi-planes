@@ -44,6 +44,12 @@ export interface Settings {
    * **1P と 2P で別々**に持つ ―― その人のキーボードとパッドの両方に効く
    */
   pullToClimb: [boolean, boolean];
+  /**
+   * パッドの振動の強さ（倍率）。0 = 切。**1P と 2P で別々**に持つ ――
+   * 振動はその人のパッドへ送るものなので、好みも人ごとに分かれる。
+   * 対応していないブラウザ（Safari）では何も起きない
+   */
+  rumble: [number, number];
   /** 全体の音量（0〜1） */
   volume: number;
   bgm: boolean;
@@ -94,6 +100,7 @@ export const DEFAULTS: Settings = {
   pads: [{ ...DEFAULT_BINDING }, { ...DEFAULT_BINDING }],
   deadzones: [PAD.deadzone, PAD.deadzone],
   pullToClimb: [true, true],
+  rumble: [1, 1],
   volume: AUDIO.master,
   bgm: true,
   film: FILM_DEFAULT,
@@ -117,6 +124,8 @@ export const DEFAULTS: Settings = {
 export const CHOICES = {
   /** スティック中央の遊び */
   deadzone: [0.10, 0.15, 0.22, 0.30, 0.40],
+  /** 振動の強さ。切 / 弱 / 標準 / 強 */
+  rumble: [0, 0.5, 1, 1.5],
   /** フィルムの強さ。切〜強 */
   film: FILM_PRESETS.map((_, i) => i),
   /** 何点先取で勝ちか */
@@ -137,18 +146,45 @@ export const CHOICES = {
 /** 今の設定。ここを直接読み書きする */
 export const settings: Settings = structuredClone(DEFAULTS);
 
-/** 割り当てられる操作の名前。オプション画面の並び順でもある */
-export const PAD_ACTIONS: { key: keyof PadBinding; label: string }[] = [
-  { key: 'mg', label: '7.7mm 機銃' },
-  { key: 'cannon', label: '20mm 機関砲' },
-  { key: 'rollL', label: 'ロール左' },
-  { key: 'rollR', label: 'ロール右' },
-  { key: 'throttle', label: '全開' },
-  { key: 'decide', label: '決定' },
-  { key: 'cancel', label: '取り消し' },
-  { key: 'start', label: '中断（タイトルへ）' },
-  { key: 'select', label: 'やり直し' },
+/**
+ * その操作を**いつ読むか**。
+ *
+ * - `fly` … 飛んでいる間だけ読む（武器・舵・スロットル）
+ * - `menu` … 画面の選択でだけ読む（決定・取り消し）
+ * - `both` … どちらでも読む（中断・やり直し）
+ *
+ * 重ねられるかどうかはこれで決まる。既定で **20mm と決定が同じ ○A** なのは、
+ * 飛んでいる間は決定を読まず、画面では 20mm を撃たないから ―― 同じ場面で
+ * 二役にならないものは、同じボタンに乗せてよい
+ */
+export type PadScene = 'fly' | 'menu' | 'both';
+
+/** 割り当てられる操作。オプション画面の並び順でもある */
+export const PAD_ACTIONS: { key: keyof PadBinding; label: string; scene: PadScene }[] = [
+  { key: 'mg', label: '7.7mm 機銃', scene: 'fly' },
+  { key: 'cannon', label: '20mm 機関砲', scene: 'fly' },
+  { key: 'rollL', label: 'ロール左', scene: 'fly' },
+  { key: 'rollR', label: 'ロール右', scene: 'fly' },
+  { key: 'throttle', label: '全開', scene: 'fly' },
+  { key: 'decide', label: '決定', scene: 'menu' },
+  { key: 'cancel', label: '取り消し', scene: 'menu' },
+  { key: 'start', label: '中断（タイトルへ）', scene: 'both' },
+  { key: 'select', label: 'やり直し', scene: 'both' },
 ];
+
+/**
+ * 同じボタンに重ねられない組み合わせか。
+ *
+ * **同じ場面で読むものどうしだけがぶつかる。** すべてを一つの集まりとして
+ * 見ていたころは、決定に○A を割り当てると 20mm がそこから追い出されていた ――
+ * この二つは同じ場面に出てこないので、追い出す理由がない
+ */
+export function padConflicts(a: keyof PadBinding, b: keyof PadBinding): boolean {
+  if (a === b) return false;
+  const sa = PAD_ACTIONS.find((x) => x.key === a)?.scene ?? 'both';
+  const sb = PAD_ACTIONS.find((x) => x.key === b)?.scene ?? 'both';
+  return sa === 'both' || sb === 'both' || sa === sb;
+}
 
 /**
  * 標準配列のボタン番号に付いている名前。
@@ -218,6 +254,11 @@ export function loadSettings(): void {
     if (i > 1) return;
     settings.deadzones[i] = pick(CHOICES.deadzone, z, settings.deadzones[i]);
   });
+  if (Array.isArray(s.rumble)) {
+    s.rumble.forEach((v, i) => {
+      if (i <= 1) settings.rumble[i] = pick(CHOICES.rumble, v, settings.rumble[i]);
+    });
+  }
   // 1P・2P で分ける前の保存は真偽値ひとつだったので、そのときは両方に配る
   const climb: unknown = s.pullToClimb;
   if (typeof climb === 'boolean') settings.pullToClimb = [climb, climb];

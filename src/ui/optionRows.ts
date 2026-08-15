@@ -49,7 +49,12 @@ export interface RowContext {
   go: (page: Page) => void;
   /** 初期設定に戻したあと、表示を作り直す */
   afterReset: () => void;
+  /** その人のパッドを試しに震わせる。選んだ強さがその場で手に伝わるように */
+  buzz: (side: number) => void;
 }
+
+/** 振動の強さの呼び名。値は `CHOICES.rumble` と同じ並び */
+const RUMBLE_NAMES = ['切', '弱', '標準', '強'];
 
 const FILM_NAMES = ['切', '弱', '既定', '標準', '強'];
 
@@ -158,10 +163,21 @@ function padRows(ctx: RowContext): Row[] {
         settings.deadzones[side] = cycle(CHOICES.deadzone, settings.deadzones[side], d);
         saveSettings();
       } },
+    { kind: 'each',
+      label: '振動の強さ',
+      note: '被弾・過熱・撃墜で震えます。選ぶとその場で試しに震えます'
+        + '（Safari など対応していないブラウザでは何も起きません）',
+      get: (side) => RUMBLE_NAMES[CHOICES.rumble.indexOf(settings.rumble[side])] ?? String(settings.rumble[side]),
+      step: (side, d) => {
+        settings.rumble[side] = cycle(CHOICES.rumble, settings.rumble[side], d);
+        saveSettings();
+        ctx.buzz(side);
+      } },
     ...PAD_ACTIONS.map((a): Row => ({
       kind: 'pad',
       label: `　　${a.label}`,
-      note: '決定（Enter・○A）を押してから、割り当てたいボタンを押す',
+      note: '割り当てたいボタンを、そのまま押してください'
+        + '（十字キーの上下とスティックは項目を選ぶのに使います）',
       action: a.key,
     })),
     { kind: 'action', label: '戻る', run: () => ctx.go('menu') },
