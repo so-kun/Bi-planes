@@ -5,7 +5,7 @@
  */
 
 import Phaser from 'phaser';
-import { PLANE, SMOKE } from '../config';
+import { FIRE, PLANE, SMOKE } from '../config';
 
 type Layer = Phaser.GameObjects.Container;
 
@@ -33,12 +33,21 @@ interface Shard {
   spin: number;
 }
 
+/** 燃えているエンジンから飛ぶ火の粉。進む向きに寝かせて描く */
+interface Ember {
+  gfx: Phaser.GameObjects.Rectangle;
+  t: number;
+  life: number;
+  vx: number;
+  vy: number;
+}
+
 const rand = Phaser.Math.FloatBetween;
 const pick = <T>(a: readonly T[]): T => a[Math.floor(Math.random() * a.length)];
 
 const DARK = ['puff-dark-01', 'puff-dark-02', 'puff-dark-03', 'puff-dark-04'];
 const WHITE = DARK.map((k) => `${k}-white`);
-const FIRE = DARK.map((k) => `${k}-fire`);
+const FIRE_KEYS = DARK.map((k) => `${k}-fire`);
 const CORE = DARK.map((k) => `${k}-core`);
 const EMBER = DARK.map((k) => `${k}-ember`);
 const DUST = DARK.map((k) => `${k}-dust`);
@@ -47,15 +56,19 @@ const BSMOKE = DARK.map((k) => `${k}-bsmoke`);
 export class Particles {
   private puffs: Puff[] = [];
   private shards: Shard[] = [];
+  private embers: Ember[] = [];
 
   /**
    * @param below 機体より奥に描く層（飛行中の煙）
+   * @param flame 煙より手前・機体より奥（エンジンの炎）。
+   *              煙と同じ層に混ぜると、あとから出た煙に炎が隠れる
    * @param above 機体より手前に描く層（爆発の煙）
-   * @param fire  さらに手前（火の玉。煙に隠れると爆発に見えない）
+   * @param fire  さらに手前（火の玉と白熱した芯。煙に隠れると火に見えない）
    */
   constructor(
     private scene: Phaser.Scene,
     private below: Layer,
+    private flame: Layer,
     private above: Layer,
     private fire: Layer,
   ) {}
@@ -87,6 +100,41 @@ export class Particles {
       vx: rand(26, 48),
       vy: rand(-32, -16),
       peak: engine ? SMOKE.damageAlpha.engine : SMOKE.damageAlpha.handling,
+    });
+  }
+
+  /**
+   * 燃えているエンジンの炎をひと粒。呼ぶ側が間隔を決める。
+   *
+   * @param ux,uy 機首の向き。炎はこの逆へ、風に流されて伸びる
+   * @param f     炎の強さ（0〜1）。傷みから作る（`FIRE.from` を超えたぶん）
+   */
+  engineFlame(x: number, y: number, ux: number, uy: number, f: number): void {
+    const w = PLANE.width;
+    // 白熱した芯だけ機体の手前に置く。炎まで手前にすると機体の形が潰れる
+    const hot = Math.random() < FIRE.coreChance;
+    const back = FIRE.back[0] + (FIRE.back[1] - FIRE.back[0]) * f;
+    const size = w * (FIRE.size[0] + FIRE.size[1] * f) * rand(0.8, 1.2) * (hot ? FIRE.coreScale : 1);
+    this.spawn(hot ? this.fire : this.flame, pick(hot ? CORE : FIRE_KEYS), x, y, {
+      life: rand(FIRE.life[0], FIRE.life[1]),
+      size,
+      grow: FIRE.grow,
+      vx: -ux * back + rand(-40, 40),
+      vy: -uy * back - rand(30, 80),
+      peak: hot ? 1 : 0.95,
+    });
+  }
+
+  /** 火の粉をひと粒。炎より速く、後ろへ長く尾を引く */
+  engineEmber(x: number, y: number, ux: number, uy: number, f: number): void {
+    const e = FIRE.ember;
+    const sp = rand(e.speed[0], e.speed[1]) * (0.6 + 0.6 * f);
+    const len = rand(e.len[0], e.len[1]) * (0.7 + 0.6 * f);
+    const gfx = this.scene.add.rectangle(x, y, len, rand(e.width[0], e.width[1]), 0xffd98a);
+    this.fire.add(gfx);
+    this.embers.push({
+      gfx, t: 0, life: rand(e.life[0], e.life[1]),
+      vx: -ux * sp + rand(-60, 60), vy: -uy * sp - rand(20, 90),
     });
   }
 
@@ -125,7 +173,7 @@ export class Particles {
       const a = ground ? -Math.PI / 2 + rand(-0.58, 0.58) * Math.PI : rand(0, Math.PI * 2);
       const sp = w * rand(0.22, 0.64);
       const r0 = w * rand(0, 0.16);
-      this.spawn(this.fire, pick(FIRE), x + Math.cos(a) * r0, y + Math.sin(a) * r0, {
+      this.spawn(this.fire, pick(FIRE_KEYS), x + Math.cos(a) * r0, y + Math.sin(a) * r0, {
         life: rand(0.58, 0.88), size: w * rand(0.5, 0.84), grow: 1.55, peak: 1,
         vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - w * 0.12,
         delay: rand(0, 0.06),
@@ -181,7 +229,7 @@ export class Particles {
     for (let i = 0; i < 5; i++) {
       const a = rand(0, Math.PI * 2);
       const sp = w * rand(0.3, 0.8);
-      this.spawn(this.fire, pick(FIRE), x, y, {
+      this.spawn(this.fire, pick(FIRE_KEYS), x, y, {
         life: rand(0.34, 0.52), size: w * rand(0.22, 0.4), grow: 1.7, peak: 0.9,
         vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - w * 0.2, delay: rand(0, 0.05),
       });
@@ -227,6 +275,24 @@ export class Particles {
       q.img.setPosition(q.x0 + q.vx * ease * q.life, q.y0 + q.vy * ease * q.life);
       q.img.setRotation(q.img.rotation + q.spin * dt);
       q.img.setAlpha(Math.max(0, (k < 0.08 ? k / 0.08 : 1 - (k - 0.08) / 0.92) * q.peak));
+    }
+
+    for (let i = this.embers.length - 1; i >= 0; i--) {
+      const e = this.embers[i];
+      e.t += dt;
+      if (e.t >= e.life) {
+        e.gfx.destroy();
+        this.embers.splice(i, 1);
+        continue;
+      }
+      e.vy += FIRE.ember.gravity * dt;
+      e.gfx.x += e.vx * dt;
+      e.gfx.y += e.vy * dt;
+      const k = e.t / e.life;
+      // 出たては白く、飛ぶうちに橙へ落ちる
+      e.gfx.setFillStyle(k < 0.5 ? 0xffd98a : 0xe2701c);
+      e.gfx.setRotation(Math.atan2(e.vy, e.vx));
+      e.gfx.setAlpha(Math.max(0, 1 - k) * 0.95);
     }
 
     for (let i = this.shards.length - 1; i >= 0; i--) {

@@ -106,9 +106,10 @@ export class TimeAttackScene extends Phaser.Scene {
     bg.setDepth(0);
 
     const below = this.add.container(0, 0).setDepth(10);
+    const flame = this.add.container(0, 0).setDepth(25);
     const above = this.add.container(0, 0).setDepth(40);
     const fire = this.add.container(0, 0).setDepth(50);
-    this.particles = new Particles(this, below, above, fire);
+    this.particles = new Particles(this, below, flame, above, fire);
 
     this.rings = new Rings(this, 20);
     this.plane = new Plane(this, {

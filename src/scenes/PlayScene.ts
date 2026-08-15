@@ -11,7 +11,7 @@
 
 import Phaser from 'phaser';
 import {
-  AI_LEVELS, BALLOON, ENGINE, FLIGHT, PLANE, SMOKE, SCORE, VIEW, groundAt,
+  AI_LEVELS, BALLOON, ENGINE, FIRE, FLIGHT, PLANE, SMOKE, SCORE, VIEW, groundAt,
 } from '../config';
 import { settings, saveSettings } from '../settings';
 import { sweepHit } from '../collision';
@@ -70,6 +70,9 @@ interface Player {
   score: number;
   respawnTimer: number;
   smokeTimer: { engine: number; handling: number };
+  /** エンジンの炎と火の粉を出す間隔の残り */
+  fireTimer: number;
+  emberTimer: number;
   stallSoundTimer: number;
   /** 出撃位置 */
   home: { x: number; y: number; facing: Facing };
@@ -135,13 +138,15 @@ export class PlayScene extends Phaser.Scene {
     bg.setDisplaySize(VIEW.width, VIEW.height);
     bg.setDepth(0);
 
-    // 描画の重ね順。火は煙より手前に出さないと爆発に見えない
+    // 描画の重ね順。火は煙より手前に出さないと爆発に見えない。
+    // エンジンの炎は煙より手前・機体より奥（同じ層に混ぜると、あとから出た煙に隠れる）
     const below = this.add.container(0, 0).setDepth(10);
+    const flame = this.add.container(0, 0).setDepth(25);
     const above = this.add.container(0, 0).setDepth(40);
     const fire = this.add.container(0, 0).setDepth(50);
     const balloonLayer = this.add.container(0, 0).setDepth(20);
 
-    this.particles = new Particles(this, below, above, fire);
+    this.particles = new Particles(this, below, flame, above, fire);
     this.balloons = new Balloons(this, balloonLayer);
     this.bullets = new Bullets(this, 60);
 
@@ -349,6 +354,8 @@ export class PlayScene extends Phaser.Scene {
       score: 0,
       respawnTimer: 0,
       smokeTimer: { engine: 0, handling: 0 },
+      fireTimer: 0,
+      emberTimer: 0,
       stallSoundTimer: 0,
       engine: new EngineSound(id),
       home,
@@ -502,7 +509,7 @@ export class PlayScene extends Phaser.Scene {
     // 地面への激突は自滅。相手に点が入る
     if (p.plane.y >= groundAt(p.plane.x)) this.crash(p);
 
-    this.emitSmoke(p, dt);
+    this.emitDamageFx(p, dt);
     this.warnStall(p, dt);
     this.shakeStrain(p, dt);
   }
@@ -798,6 +805,8 @@ export class PlayScene extends Phaser.Scene {
     p.plane.damage.handling = Math.min(1, p.plane.damage.handling + (1 - p.plane.damage.handling) * k);
     p.smokeTimer.engine = 0;
     p.smokeTimer.handling = 0;
+    p.fireTimer = 0;
+    p.emberTimer = 0;
     p.engine.forget();
   }
 
@@ -828,14 +837,24 @@ export class PlayScene extends Phaser.Scene {
   }
 
   /**
-   * 煙の発生。通常飛行では出さない。
-   * 損傷したときだけ、どこをやられたかが色でわかるように出し分ける:
+   * 損傷の煙と炎。通常飛行では何も出さない。
+   *
+   * 煙はどこをやられたかが色でわかるように出し分ける:
    *   エンジン損傷 → 黒煙 / 操作系（舵）損傷 → 白煙
    * 傷が深いほど間隔が詰まる。フレームが落ちている環境でも途切れないよう、
-   * 1 フレームに複数出すことがある（上限つき）
+   * 1 フレームに複数出すことがある（上限つき）。
+   *
+   * **エンジンが深く傷むと炎が出る**（2026-08-15 追加）。炎は煙より手前・機体より奥、
+   * 白熱した芯だけ手前。詳しくは `FIRE`（src/config.ts）
    */
-  private emitSmoke(p: Player, dt: number): void {
+  private emitDamageFx(p: Player, dt: number): void {
     const e = p.plane.enginePos();
+    const ux = Math.cos(p.plane.state.pitch);
+    const uy = Math.sin(p.plane.state.pitch);
+    // 煙はエンジンの少し後ろから。同じ場所から出すと炎が煙に埋もれる
+    const sx = e.x - ux * PLANE.width * FIRE.smokeBack;
+    const sy = e.y - uy * PLANE.width * FIRE.smokeBack;
+
     for (const part of ['engine', 'handling'] as const) {
       const hurt = p.plane.hurt(part);
       if (hurt < SMOKE.damageThreshold) {
@@ -847,10 +866,35 @@ export class PlayScene extends Phaser.Scene {
       let guard = 4;
       while (p.smokeTimer[part] >= interval && guard-- > 0) {
         p.smokeTimer[part] -= interval;
-        this.particles.damage(e.x, e.y, part);
+        this.particles.damage(sx, sy, part);
       }
       if (p.smokeTimer[part] > interval) p.smokeTimer[part] = 0;
     }
+
+    // 炎。エンジンの傷みが FIRE.from を超えたぶんを強さにする
+    const f = (p.plane.hurt('engine') - FIRE.from) / (1 - FIRE.from);
+    if (f <= 0) {
+      p.fireTimer = 0;
+      p.emberTimer = 0;
+      return;
+    }
+    const fi = FIRE.interval / (0.35 + 0.65 * f);
+    p.fireTimer += dt;
+    let g1 = 6;
+    while (p.fireTimer >= fi && g1-- > 0) {
+      p.fireTimer -= fi;
+      this.particles.engineFlame(e.x, e.y, ux, uy, f);
+    }
+    if (p.fireTimer > fi) p.fireTimer = 0;
+
+    const ei = FIRE.ember.interval / (0.3 + 0.7 * f);
+    p.emberTimer += dt;
+    let g2 = 6;
+    while (p.emberTimer >= ei && g2-- > 0) {
+      p.emberTimer -= ei;
+      this.particles.engineEmber(e.x, e.y, ux, uy, f);
+    }
+    if (p.emberTimer > ei) p.emberTimer = 0;
   }
 
   private warnStall(p: Player, dt: number): void {
