@@ -16,6 +16,7 @@
  */
 
 import { FLIGHT } from './config';
+import { settings } from './settings';
 
 /** -π..π に畳む */
 export function wrapPi(a: number): number {
@@ -138,7 +139,9 @@ export function stepFlight(
   if (stalled) cd += FLIGHT.dragStall * (Math.abs(aoa) - FLIGHT.stallAoa);
   const drag = FLIGHT.dragScale * q * cd;
 
-  const thrust = FLIGHT.thrust[state.throttle] * damageFactor.engine;
+  // 全開の推力だけオプションで変えられる。巡航は据え置き
+  const power = state.throttle > 0 ? settings.thrust : FLIGHT.thrust[0];
+  const thrust = power * damageFactor.engine;
 
   const ax = thrust * nx - drag * ux + lift * upx;
   const ay = thrust * ny - drag * uy + lift * upy + FLIGHT.gravity;

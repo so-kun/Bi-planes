@@ -10,7 +10,7 @@
  * その回だけ設定が残らないだけで、遊べなくなる理由にはならない。
  */
 
-import { AUDIO, FILM_DEFAULT, PAD, SCORE, WEAPON } from './config';
+import { AUDIO, ENGINE, FILM_DEFAULT, FLIGHT, PAD, SCORE, WEAPON } from './config';
 
 const STORE_KEY = 'biplanes.settings';
 
@@ -56,6 +56,16 @@ export interface Settings {
    * 20mm（一撃撃墜）は変えない ―― 一撃という位置づけそのものが崩れるため
    */
   mgDamage: number;
+  /**
+   * 全開のときの推力。巡航（96）は変えない ―― 巡航まで速くすると、
+   * 全開が「ここぞという時の手」でなくなる
+   */
+  thrust: number;
+  /**
+   * 全開のときに水温が上がる速さ（毎秒）。0 なら上がらない＝過熱しない。
+   * 冷える速さ（`ENGINE.tempFall`）は変えない
+   */
+  tempRise: number;
 }
 
 const DEFAULT_BINDING: PadBinding = {
@@ -79,6 +89,8 @@ export const DEFAULTS: Settings = {
   film: FILM_DEFAULT,
   winning: SCORE.winning,
   mgDamage: WEAPON.mg.damage,
+  thrust: FLIGHT.thrust[1],
+  tempRise: ENGINE.tempRise,
 };
 
 /** 今の設定。ここを直接読み書きする */
@@ -162,6 +174,8 @@ export function loadSettings(): void {
   if (typeof s.film === 'number' && Number.isInteger(s.film) && s.film >= 0 && s.film <= 4) settings.film = s.film;
   if (typeof s.winning === 'number' && Number.isInteger(s.winning) && s.winning > 0) settings.winning = s.winning;
   if (typeof s.mgDamage === 'number' && s.mgDamage > 0 && s.mgDamage <= 100) settings.mgDamage = s.mgDamage;
+  if (typeof s.thrust === 'number' && s.thrust > 0 && s.thrust <= 1000) settings.thrust = s.thrust;
+  if (typeof s.tempRise === 'number' && s.tempRise >= 0 && s.tempRise <= 2) settings.tempRise = s.tempRise;
 }
 
 export function saveSettings(): void {

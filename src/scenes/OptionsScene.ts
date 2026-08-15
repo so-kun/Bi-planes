@@ -1,6 +1,11 @@
 /**
  * オプション画面。ステージ選択から入る。
  *
+ * **3枚ある**（`init` の `page`）――
+ * 入口の「選ぶだけ」の画面と、**ゲーム設定**、**コントローラー設定**。
+ * 項目が増えて一画面に収まらなくなったので分けた。中の仕掛けは3枚とも同じで、
+ * 並べる項目だけが違う。
+ *
  * **1P と 2P が同時に操作できる。** カーソルは2本あり、それぞれのパッドが
  * 自分のカーソルを動かす。パッドの割り当てのように人ごとに持つ項目は
  * 1P・2P の2列で並べ、**自分の列だけ**を書き換える。
@@ -14,7 +19,7 @@
  */
 
 import Phaser from 'phaser';
-import { PLANE, VIEW } from '../config';
+import { ENGINE, PLANE, VIEW } from '../config';
 import { sfx } from '../audio';
 import { attachFilm } from '../fx/attachFilm';
 import type { FilmPipeline } from '../fx/FilmPipeline';
@@ -56,6 +61,23 @@ const WINNING = [10, 15, 20, 30, 50];
  * 計器の目盛りも「あと何発」も読みにくくなる。既定は 15（7発で撃墜）
  */
 const MG_DAMAGE = [5, 10, 15, 20, 25, 50];
+/**
+ * 全開の推力と、そのときに落ち着く速度（`node tools/flight-probe.mjs` で実測）。
+ * 巡航は 96（速度 288）で据え置き ―― 巡航まで速くすると、全開が「ここぞという時の手」でなくなる
+ */
+const THRUST = [
+  { power: 150, speed: 371 },
+  { power: 180, speed: 409 },
+  { power: 220, speed: 454 },
+  { power: 260, speed: 495 },
+  { power: 300, speed: 532 },
+];
+/**
+ * 全開のときに水温が上がる速さ（毎秒）。
+ * 冷えきり（0.30）から振り切れ（1.0）までの秒数で見せる ―― 数字だけでは手応えに結び付かない。
+ * 0 は「上がらない」＝過熱そのものが起きない
+ */
+const TEMP_RISE = [0, 0.07, 0.10, 0.14, 0.20, 0.28];
 
 /** ボタンの割り当て待ちを打ち切るまでの秒数 */
 const WAIT_LIMIT = 8;
@@ -69,7 +91,17 @@ const GAP = 30;
 /** 人ごとの項目の値を出す位置。全体で1つの項目は左の列だけ使う */
 const COL_X = [690, 940];
 
+/** どの画面か */
+type Page = 'menu' | 'game' | 'pad';
+
+const PAGE_TITLE: Record<Page, string> = {
+  menu: 'オプション',
+  game: 'ゲーム設定',
+  pad: 'コントローラー設定',
+};
+
 export class OptionsScene extends Phaser.Scene {
+  private page: Page = 'menu';
   private rows: Row[] = [];
   private labels: Phaser.GameObjects.Text[] = [];
   /** 値の表示。`[行][列]`。全体で1つの項目は列 0 だけ使う */
@@ -111,6 +143,10 @@ export class OptionsScene extends Phaser.Scene {
     super('Options');
   }
 
+  init(data: { page?: Page }): void {
+    this.page = data?.page ?? 'menu';
+  }
+
   create(): void {
     // 画面は作り直されても構築子は呼ばれない。**作った物の控えは必ずここで空にする** ――
     // 空にし忘れると、開くたびに古い（もう消えた）文字が前に積み上がり、
@@ -132,7 +168,7 @@ export class OptionsScene extends Phaser.Scene {
     bg.setDisplaySize(VIEW.width, VIEW.height);
     this.add.rectangle(0, 0, VIEW.width, VIEW.height, 0x10233a, 0.55).setOrigin(0);
 
-    this.add.text(VIEW.width / 2, 62, 'オプション', {
+    this.add.text(VIEW.width / 2, 62, PAGE_TITLE[this.page], {
       fontFamily: 'Georgia, "Times New Roman", serif', fontSize: '38px', color: CREAM,
       stroke: INK, strokeThickness: 7,
     }).setOrigin(0.5);
@@ -154,38 +190,81 @@ export class OptionsScene extends Phaser.Scene {
     const nearest = (list: number[], now: number): number =>
       list.reduce((a, b) => (Math.abs(b - now) < Math.abs(a - now) ? b : a));
 
-    this.rows = [
-      { kind: 'shared',
-        label: '音量',
-        get: () => `${Math.round(settings.volume * 100)}%`,
-        step: (d) => {
-          settings.volume = Math.min(1, Math.max(0, Math.round((settings.volume + d * 0.1) * 10) / 10));
-          sfx.applyVolume();
-          saveSettings();
-        } },
-      { kind: 'shared',
-        label: 'BGM',
-        get: () => (settings.bgm ? '入' : '切'),
-        step: () => { settings.bgm = !settings.bgm; sfx.applyBgmSetting(); saveSettings(); } },
-      { kind: 'shared',
-        label: 'フィルムの強さ',
-        note: '古いフィルム風の粒とゆらぎ。切ると絵がそのまま出る',
-        get: () => FILM_NAMES[settings.film] ?? String(settings.film),
-        step: (d) => {
-          settings.film = (settings.film + d + FILM_NAMES.length) % FILM_NAMES.length;
-          this.film?.setLevel(settings.film);
-          saveSettings();
-        } },
-      { kind: 'shared',
-        label: '勝ちに必要な点',
-        get: () => `${settings.winning} 点`,
-        step: (d) => { settings.winning = cycle(WINNING, settings.winning, d); saveSettings(); } },
-      { kind: 'shared',
-        label: '7.7mm の威力',
-        note: '一発あたり。20mm は一撃撃墜のまま変わらない',
-        get: () => `${settings.mgDamage}（${Math.ceil(PLANE.maxHp / settings.mgDamage)} 発で撃墜）`,
-        step: (d) => { settings.mgDamage = cycle(MG_DAMAGE, settings.mgDamage, d); saveSettings(); } },
+    if (this.page === 'menu') {
+      this.rows = [
+        { kind: 'action', label: 'ゲーム設定',
+          note: '音・見た目・ルール・機体の性能',
+          run: () => this.go('game') },
+        { kind: 'action', label: 'コントローラー設定',
+          note: '機首の向き・スティックの遊び・ボタンの割り当て（1P・2P それぞれ）',
+          run: () => this.go('pad') },
+        { kind: 'action', label: '初期設定に戻す',
+          note: 'すべての項目を最初の状態へ',
+          run: () => this.resetAll() },
+      ];
+      return;
+    }
 
+    if (this.page === 'game') {
+      this.rows = [
+        { kind: 'shared',
+          label: '音量',
+          get: () => `${Math.round(settings.volume * 100)}%`,
+          step: (d) => {
+            settings.volume = Math.min(1, Math.max(0, Math.round((settings.volume + d * 0.1) * 10) / 10));
+            sfx.applyVolume();
+            saveSettings();
+          } },
+        { kind: 'shared',
+          label: 'BGM',
+          get: () => (settings.bgm ? '入' : '切'),
+          step: () => { settings.bgm = !settings.bgm; sfx.applyBgmSetting(); saveSettings(); } },
+        { kind: 'shared',
+          label: '古いフィルム風の効果',
+          note: '粒とゆらぎの強さ。切ると絵がそのまま出る',
+          get: () => FILM_NAMES[settings.film] ?? String(settings.film),
+          step: (d) => {
+            settings.film = (settings.film + d + FILM_NAMES.length) % FILM_NAMES.length;
+            this.film?.setLevel(settings.film);
+            saveSettings();
+          } },
+        { kind: 'shared',
+          label: '勝ちに必要な点',
+          get: () => `${settings.winning} 点`,
+          step: (d) => { settings.winning = cycle(WINNING, settings.winning, d); saveSettings(); } },
+        { kind: 'shared',
+          label: '7.7mm の威力',
+          note: '一発あたり。20mm は一撃撃墜のまま変わらない',
+          get: () => `${settings.mgDamage}（${Math.ceil(PLANE.maxHp / settings.mgDamage)} 発で撃墜）`,
+          step: (d) => { settings.mgDamage = cycle(MG_DAMAGE, settings.mgDamage, d); saveSettings(); } },
+        { kind: 'shared',
+          label: '全開のパワー',
+          note: '押している間の推力。巡航（速度 288）は変わらない',
+          get: () => {
+            const now = THRUST.find((t) => t.power === settings.thrust);
+            return now ? `${now.power}（速度 ${now.speed}）` : String(settings.thrust);
+          },
+          step: (d) => {
+            const now = nearest(THRUST.map((t) => t.power), settings.thrust);
+            settings.thrust = cycle(THRUST.map((t) => t.power), now, d);
+            saveSettings();
+          } },
+        { kind: 'shared',
+          label: '全開で水温が上がる速さ',
+          note: '「上がらない」にすると過熱しなくなる。冷える速さは変わらない',
+          get: () => (settings.tempRise <= 0
+            ? '上がらない'
+            : `振り切れまで ${((1 - ENGINE.tempFloor) / settings.tempRise).toFixed(1)} 秒`),
+          step: (d) => {
+            settings.tempRise = cycle(TEMP_RISE, nearest(TEMP_RISE, settings.tempRise), d);
+            saveSettings();
+          } },
+        { kind: 'action', label: '戻る', run: () => this.go('menu') },
+      ];
+      return;
+    }
+
+    this.rows = [
       { kind: 'each',
         label: '機首の向き',
         note: '「引くと上げ」は操縦桿と同じ向き。その人のキーとパッドの両方に効く',
@@ -205,19 +284,23 @@ export class OptionsScene extends Phaser.Scene {
         note: '決定（Enter・○A）を押してから、割り当てたいボタンを押す',
         action: a.key,
       })),
-
-      { kind: 'action',
-        label: '初期設定に戻す',
-        note: 'すべての項目を最初の状態へ',
-        run: () => {
-          resetSettings();
-          sfx.applyVolume();
-          sfx.applyBgmSetting();
-          this.film?.setLevel(settings.film);
-          sfx.menuDecide();
-          this.refresh();
-        } },
+      { kind: 'action', label: '戻る', run: () => this.go('menu') },
     ];
+  }
+
+  /** 別の画面へ。画面ごとに作り直すので、控えは create で空にしている */
+  private go(page: Page): void {
+    sfx.menuDecide();
+    this.scene.start('Options', { page });
+  }
+
+  private resetAll(): void {
+    resetSettings();
+    sfx.applyVolume();
+    sfx.applyBgmSetting();
+    this.film?.setLevel(settings.film);
+    sfx.menuDecide();
+    this.refresh();
   }
 
   /** 人ごとの項目が始まる行。ここに区切り線と 1P / 2P の見出しを置く */
@@ -227,26 +310,33 @@ export class OptionsScene extends Phaser.Scene {
 
   /** その行の高さ。人ごとの項目は、見出しを入れるぶんだけ下へずらす */
   private rowY(i: number): number {
-    return TOP + i * STEP + (i >= this.eachFrom ? GAP : 0);
+    // 入口の画面は数が少ないので、真ん中あたりにゆったり置く
+    const top = this.page === 'menu' ? 250 : TOP;
+    const step = this.page === 'menu' ? 56 : STEP;
+    const gap = this.eachFrom >= 0 && i >= this.eachFrom ? GAP : 0;
+    return top + i * step + gap;
   }
 
   private layout(): void {
-    const divY = this.rowY(this.eachFrom) - STEP * 0.8;
-    this.add.rectangle(VIEW.width / 2, divY, 900, 1, 0xf4e6c8, 0.35);
-    this.add.text(LABEL_X, divY - 12, 'ここから下は 1P・2P それぞれ', {
-      fontFamily: 'Georgia, serif', fontSize: '15px', color: CREAM,
-    }).setOrigin(0, 0.5).setAlpha(0.75);
-    PLAYER_NAMES.forEach((name, side) => {
-      this.add.text(COL_X[side], divY - 12, name, {
-        fontFamily: 'Georgia, serif', fontSize: '17px', color: SIDE_COLOR[side],
-        stroke: INK, strokeThickness: 4,
-      }).setOrigin(0, 0.5);
-    });
+    // 1P・2P の2列があるのはコントローラー設定だけ。区切りと見出しもそこにだけ出す
+    if (this.eachFrom >= 0) {
+      const divY = this.rowY(this.eachFrom) - STEP * 0.8;
+      this.add.rectangle(VIEW.width / 2, divY, 900, 1, 0xf4e6c8, 0.35);
+      this.add.text(LABEL_X, divY - 12, 'ここから下は 1P・2P それぞれ', {
+        fontFamily: 'Georgia, serif', fontSize: '15px', color: CREAM,
+      }).setOrigin(0, 0.5).setAlpha(0.75);
+      PLAYER_NAMES.forEach((name, side) => {
+        this.add.text(COL_X[side], divY - 12, name, {
+          fontFamily: 'Georgia, serif', fontSize: '17px', color: SIDE_COLOR[side],
+          stroke: INK, strokeThickness: 4,
+        }).setOrigin(0, 0.5);
+      });
+    }
 
     this.rows.forEach((r, i) => {
       const y = this.rowY(i);
       this.labels.push(this.add.text(LABEL_X, y, r.label, {
-        fontFamily: 'Georgia, serif', fontSize: '19px', color: CREAM,
+        fontFamily: 'Georgia, serif', fontSize: this.page === 'menu' ? '27px' : '19px', color: CREAM,
         stroke: INK, strokeThickness: 4,
       }).setOrigin(0, 0.5));
       // 全体で1つの項目は左の列だけ、人ごとの項目は2列
@@ -316,8 +406,10 @@ export class OptionsScene extends Phaser.Scene {
       c.setVisible(this.active(side));
     });
 
-    this.kbNote.setText(`Tab　キーボードで直す側 … いまは ${PLAYER_NAMES[this.kbSide]}　　`
-      + '（パッドはそれぞれ自分の列を直します）');
+    this.kbNote.setText(this.page === 'pad'
+      ? `Tab　キーボードで直す側 … いまは ${PLAYER_NAMES[this.kbSide]}　　`
+        + '（パッドはそれぞれ自分の列を直します）'
+      : '1P・2P のどちらのパッドでも操作できます');
 
     // 説明はキーボードが見ている行のもの。二人ぶん出すと下が埋まる
     const here = this.rows[this.index[this.kbSide]];
@@ -386,6 +478,7 @@ export class OptionsScene extends Phaser.Scene {
   private change(side: number, d: -1 | 1): void {
     if (this.waiting[side]) return;
     const r = this.rows[this.index[side]];
+    if (!r) return;
     if (r.kind === 'shared') r.step(d);
     else if (r.kind === 'each') r.step(side, d);
     else return;
@@ -396,6 +489,7 @@ export class OptionsScene extends Phaser.Scene {
   private decide(side: number): void {
     if (this.waiting[side]) return;
     const r = this.rows[this.index[side]];
+    if (!r) return;
     if (r.kind === 'pad') {
       this.waiting[side] = r.action;
       this.waitArmed[side] = false;
@@ -418,7 +512,9 @@ export class OptionsScene extends Phaser.Scene {
     }
     saveSettings();
     sfx.menuBack();
-    this.scene.start('Title');
+    // 下の画面からは入口へ、入口からはステージ選択へ戻る
+    if (this.page !== 'menu') this.scene.start('Options', { page: 'menu' });
+    else this.scene.start('Title');
   }
 
   /**

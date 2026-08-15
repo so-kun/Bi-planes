@@ -12,6 +12,7 @@
 
 import Phaser from 'phaser';
 import { ENGINE, PLANE, VIEW, WEAPON } from '../config';
+import { settings } from '../settings';
 import { stepFlight, wrapPi, type FlightReadout, type FlightState } from '../flight';
 
 export type Facing = 1 | -1;
@@ -164,7 +165,8 @@ export class Plane {
    */
   private updateTemp(dt: number): void {
     const wide = this.state.throttle > 0;
-    const next = this.temp + (wide ? ENGINE.tempRise : -ENGINE.tempFall) * dt;
+    // 上がる速さはオプションで変えられる（0 なら上がらない＝過熱しない）。冷える速さは据え置き
+    const next = this.temp + (wide ? settings.tempRise : -ENGINE.tempFall) * dt;
     this.temp = Math.min(1, Math.max(ENGINE.tempFloor, next));
 
     if (!wide || this.temp < 1) {
