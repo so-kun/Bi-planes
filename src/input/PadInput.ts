@@ -60,6 +60,13 @@ export class PadInput {
   private prevDecide = false;
   private prevCancel = false;
 
+  /**
+   * いま読んでいるパッドの番号（`navigator.getGamepads()` の添字）。見つからなければ -1。
+   * **振動を送る先**を決めるのに使う ―― 読んでいるのと同じパッドを震わせないと、
+   * 撃たれた人ではない側の手が震える
+   */
+  gamepadIndex = -1;
+
   /** @param index 標準配列のパッドの何台目を使うか。1P = 0、2P = 1 */
   constructor(private index = 0) {}
 
@@ -109,6 +116,7 @@ export class PadInput {
 
   private readPad(): PadState {
     const { pad, other } = this.pick();
+    this.gamepadIndex = pad ? pad.index : -1;
     if (!pad) {
       // 抜かれたときに立ち上がりの記録が残っていると、挿し直した瞬間に暴発する
       this.prevRoll = 0;

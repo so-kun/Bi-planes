@@ -1,0 +1,923 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!--
+  Bi-Planes の改善案の試作台。ゲーム本体とは別物で、採用が決まったものだけを src/ へ入れる。
+  **ブラウザで直接開いて使う** ―― 枠（iframe）の中に置くと、ブラウザがパッドを見せてくれないため、
+  振動が試せない。音のほうはどちらでも鳴る。
+-->
+<title>エンジン試運転台</title>
+<style>
+  :root {
+    --ink: #17110c;
+    --panel: #241a12;
+    --panel-2: #2d2117;
+    --edge: #4a3726;
+    --cream: #f4e6c8;
+    --dim: #b9a687;
+    --brass: #d59a34;
+    --gold: #ffd76b;
+    --hot: #c0442e;
+    --sky: #8fb6d8;
+    --red-plane: #e8836a;
+    --serif: Georgia, "Times New Roman", "Hiragino Mincho ProN", serif;
+    --sans: "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Yu Gothic", Meiryo, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    padding: 0 20px 96px;
+    background:
+      radial-gradient(120% 80% at 50% -10%, #2a1d13 0%, rgba(42,29,19,0) 60%),
+      var(--ink);
+    color: var(--cream);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.75;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap { max-width: 940px; margin: 0 auto; }
+
+  /* ---- 見出し ---------------------------------------------------------- */
+
+  header { padding: 64px 0 40px; border-bottom: 1px solid var(--edge); }
+
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--brass);
+    margin: 0 0 14px;
+  }
+
+  h1 {
+    font-family: var(--serif);
+    font-size: clamp(34px, 6vw, 54px);
+    line-height: 1.1;
+    margin: 0 0 18px;
+    text-wrap: balance;
+  }
+
+  header p { margin: 0; max-width: 62ch; color: var(--dim); }
+
+  /* ---- 節 -------------------------------------------------------------- */
+
+  section { padding: 52px 0 8px; border-bottom: 1px solid var(--edge); }
+  section:last-of-type { border-bottom: 0; }
+
+  .num {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.18em;
+    color: var(--brass);
+  }
+
+  h2 {
+    font-family: var(--serif);
+    font-size: clamp(24px, 3.4vw, 32px);
+    margin: 6px 0 10px;
+    text-wrap: balance;
+  }
+
+  .lead { margin: 0 0 28px; max-width: 64ch; color: var(--dim); }
+
+  p { margin: 0 0 16px; max-width: 64ch; }
+  strong { color: var(--gold); font-weight: 600; }
+
+  /* ---- 板 -------------------------------------------------------------- */
+
+  .panel {
+    background: linear-gradient(180deg, var(--panel-2), var(--panel));
+    border: 1px solid var(--edge);
+    border-radius: 3px;
+    padding: 22px;
+    box-shadow: inset 0 1px 0 rgba(244,230,200,0.06), 0 14px 30px rgba(0,0,0,0.35);
+  }
+
+  .stack { display: flex; flex-direction: column; gap: 22px; }
+  .row { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; }
+
+  .label {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--brass);
+    margin: 0 0 10px;
+  }
+
+  /* ---- ボタン ---------------------------------------------------------- */
+
+  button {
+    font-family: var(--sans);
+    font-size: 15px;
+    color: var(--cream);
+    background: #35271b;
+    border: 1px solid var(--edge);
+    border-radius: 2px;
+    padding: 10px 18px;
+    cursor: pointer;
+    transition: background 120ms ease, border-color 120ms ease, transform 60ms ease;
+  }
+  button:hover { background: #423020; border-color: var(--brass); }
+  button:active { transform: translateY(1px); }
+  button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+  button[disabled] { opacity: 0.4; cursor: not-allowed; }
+
+  .primary {
+    background: var(--brass);
+    border-color: var(--brass);
+    color: #1a1209;
+    font-weight: 700;
+    min-width: 150px;
+  }
+  .primary:hover { background: var(--gold); border-color: var(--gold); }
+  .primary.on { background: var(--hot); border-color: var(--hot); color: var(--cream); }
+
+  .seg { display: inline-flex; border: 1px solid var(--edge); border-radius: 2px; overflow: hidden; }
+  .seg button { border: 0; border-right: 1px solid var(--edge); border-radius: 0; padding: 9px 16px; background: transparent; }
+  .seg button:last-child { border-right: 0; }
+  .seg button[aria-pressed="true"] { background: var(--brass); color: #1a1209; font-weight: 700; }
+
+  /* ---- 水温計 ---------------------------------------------------------- */
+
+  .gauge { margin-top: 4px; }
+
+  .gauge-bar {
+    position: relative;
+    height: 26px;
+    border: 1px solid var(--edge);
+    border-radius: 2px;
+    background: linear-gradient(90deg, #2f4a52 0%, #6f6031 62%, #7d3520 100%);
+    overflow: hidden;
+  }
+  .gauge-red {
+    position: absolute; inset: 0 0 0 75%;
+    background: repeating-linear-gradient(45deg, rgba(192,68,46,0.65) 0 6px, rgba(192,68,46,0.35) 6px 12px);
+  }
+  .gauge-needle {
+    position: absolute; top: -3px; bottom: -3px; width: 3px;
+    background: var(--cream);
+    box-shadow: 0 0 6px rgba(0,0,0,0.7);
+    transition: left 90ms linear;
+  }
+  .gauge-scale {
+    display: flex; justify-content: space-between;
+    font-family: var(--mono); font-size: 11px; color: var(--dim); margin-top: 6px;
+  }
+
+  input[type="range"] { width: 100%; accent-color: var(--brass); margin: 12px 0 0; }
+  input[type="range"]:focus-visible { outline: 2px solid var(--gold); outline-offset: 4px; }
+
+  .readout {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--dim);
+    font-variant-numeric: tabular-nums;
+  }
+  .readout b { color: var(--gold); font-weight: 600; }
+  .readout .hot { color: var(--hot); }
+
+  /* ---- 案の切り替え ---------------------------------------------------- */
+
+  .modes { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
+
+  .mode {
+    text-align: left;
+    padding: 14px 15px;
+    background: #2b2016;
+    border: 1px solid var(--edge);
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .mode[aria-pressed="true"] {
+    border-color: var(--gold);
+    background: #3a2b1a;
+    box-shadow: inset 0 0 0 1px rgba(255,215,107,0.35);
+  }
+  .mode .name { font-family: var(--serif); font-size: 18px; color: var(--cream); }
+  .mode[aria-pressed="true"] .name { color: var(--gold); }
+  .mode .what { font-size: 13px; line-height: 1.6; color: var(--dim); }
+
+  /* ---- 表 -------------------------------------------------------------- */
+
+  .table-wrap { overflow-x: auto; margin: 0 0 8px; }
+  table { border-collapse: collapse; width: 100%; min-width: 520px; font-size: 15px; }
+  th, td { text-align: left; padding: 10px 14px 10px 0; border-bottom: 1px solid var(--edge); vertical-align: top; }
+  th { font-family: var(--mono); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--brass); font-weight: 400; }
+  td.num-cell { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(--dim); white-space: nowrap; }
+
+  /* ---- 一時停止の見取り図 ---------------------------------------------- */
+
+  .mock {
+    position: relative;
+    background: linear-gradient(180deg, #47617d 0%, #6d7f83 55%, #7e7259 100%);
+    border: 1px solid var(--edge);
+    border-radius: 3px;
+    padding: 46px 20px;
+    display: flex; justify-content: center;
+    overflow: hidden;
+  }
+  .mock::after {
+    content: ""; position: absolute; inset: 0;
+    background: rgba(16,35,58,0.45);
+  }
+  .mock-card {
+    position: relative; z-index: 1;
+    background: rgba(24,16,10,0.86);
+    border: 1px solid rgba(244,230,200,0.35);
+    padding: 26px 46px 24px;
+    text-align: center;
+    min-width: 330px;
+  }
+  .mock-card .pause {
+    font-family: var(--mono); font-size: 12px; letter-spacing: 0.3em; color: var(--gold); margin: 0 0 12px;
+  }
+  .mock-card .ask { font-family: var(--serif); font-size: 25px; margin: 0 0 20px; color: var(--cream); }
+  .mock-card ul { list-style: none; margin: 0 0 18px; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+  .mock-card li { font-family: var(--serif); font-size: 20px; color: rgba(244,230,200,0.6); }
+  .mock-card li.sel { color: var(--gold); }
+  .mock-card li.sel::before { content: "▶ "; color: var(--red-plane); }
+  .mock-card .keys { font-size: 12px; color: var(--dim); margin: 0; font-family: var(--mono); }
+
+  .caption { font-size: 13px; color: var(--dim); margin: 12px 0 0; }
+
+  /* ---- 状態表示 -------------------------------------------------------- */
+
+  .pill {
+    display: inline-flex; align-items: center; gap: 7px;
+    font-family: var(--mono); font-size: 12px;
+    padding: 5px 11px; border-radius: 999px;
+    border: 1px solid var(--edge); background: #2b2016; color: var(--dim);
+  }
+  .pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--dim); }
+  .pill.ok { color: var(--gold); border-color: rgba(255,215,107,0.4); }
+  .pill.ok::before { background: var(--gold); }
+  .pill.ng { color: var(--hot); border-color: rgba(192,68,46,0.5); }
+  .pill.ng::before { background: var(--hot); }
+
+  .note {
+    border-left: 2px solid var(--brass);
+    padding: 2px 0 2px 16px;
+    color: var(--dim);
+    font-size: 14px;
+    margin: 20px 0 0;
+    max-width: 64ch;
+  }
+
+  footer { padding: 44px 0 0; color: var(--dim); font-size: 13px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <p class="eyebrow">Bi-Planes ／ 改善案の試作</p>
+  <h1>エンジン試運転台</h1>
+  <p>ゲームに入れる前に、ここで音と振動を確かめるための台です。水温を上げてエンジンを回し、
+    過熱の鳴り方を4つ聞き比べられます。パッドがつながっていれば、振動の強さもその場で試せます。</p>
+</header>
+
+<section>
+  <p class="num">01</p>
+  <h2>＋ボタンで一時停止して聞き直す</h2>
+  <p class="lead">いまは＋（Start）を押すと、その場でタイトルへ戻ります。押し間違えると試合が消えるので、
+    <strong>一度止めて聞き直す</strong>ようにします。</p>
+
+  <div class="mock">
+    <div class="mock-card">
+      <p class="pause">一 時 停 止</p>
+      <p class="ask">ゲームを終了しますか？</p>
+      <ul>
+        <li class="sel">いいえ、つづける</li>
+        <li>はい、タイトルへもどる</li>
+      </ul>
+      <p class="keys">↑↓ 選ぶ　○A 決定　×B / ＋ つづける</p>
+    </div>
+  </div>
+
+  <p class="caption">画面はそのまま止まり、機体・弾・気球・煙のすべてが停まります。カーソルの初期位置は
+    「つづける」側 —— 押し間違えたときに、もう一度押すだけで戻れるようにするためです。</p>
+</section>
+
+<section>
+  <p class="num">02</p>
+  <h2>過熱の音を聞き比べる</h2>
+  <p class="lead">水温が赤帯（75%）に入ってからの鳴り方を、いまのものと3つの案で切り替えられます。
+    <strong>鳴らしたまま案を切り替えられる</strong>ので、違いはそのまま耳で比べられます。</p>
+
+  <div class="stack">
+    <div class="panel">
+      <div class="row" style="justify-content: space-between;">
+        <div class="row">
+          <button id="power" class="primary">エンジン始動</button>
+          <div class="seg" role="group" aria-label="スロットル">
+            <button id="th-cruise" aria-pressed="false">巡航</button>
+            <button id="th-full" aria-pressed="true">全開</button>
+          </div>
+        </div>
+        <p class="readout" id="state">停止中</p>
+      </div>
+
+      <div class="gauge">
+        <p class="label" style="margin-top: 22px;">水温</p>
+        <div class="gauge-bar">
+          <div class="gauge-red"></div>
+          <div class="gauge-needle" id="needle" style="left: 30%;"></div>
+        </div>
+        <div class="gauge-scale">
+          <span>冷えきり 30</span><span>赤帯 75</span><span>振り切れ 100</span>
+        </div>
+        <input type="range" id="temp" min="30" max="100" value="88" step="1" aria-label="水温">
+      </div>
+
+      <div class="row" style="margin-top: 18px;">
+        <label class="readout" for="vol">音量</label>
+        <input type="range" id="vol" min="0" max="100" value="70" step="1" style="width: 200px;" aria-label="音量">
+        <span class="readout" id="vol-out">70%</span>
+      </div>
+    </div>
+
+    <div>
+      <p class="label">鳴らし方</p>
+      <div class="modes" id="modes">
+        <button class="mode" data-mode="now" aria-pressed="true">
+          <span class="name">いまの音</span>
+          <span class="what">音程を 7% 上げ、こもりを取り、130ms ごとに軽いノッキング</span>
+        </button>
+        <button class="mode" data-mode="boil" aria-pressed="false">
+          <span class="name">案A　沸騰</span>
+          <span class="what">蒸気の噴き出しとやかんの鳴り。ノッキングは回転に噛み合わせる</span>
+        </button>
+        <button class="mode" data-mode="misfire" aria-pressed="false">
+          <span class="name">案B　息切れ</span>
+          <span class="what">失火で音が飛び、金属を強く叩く。回転そのものが不安定になる</span>
+        </button>
+        <button class="mode" data-mode="both" aria-pressed="false">
+          <span class="name">案C　全部入り</span>
+          <span class="what">A＋B。振り切れる直前は低い軋みも混ざる</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <p class="note">どの案も、赤帯に入ってから振り切れるまでの間で<strong>だんだん悪くなります</strong>。
+    いまの音は入切の2値なので、赤帯に入った瞬間だけ変わって、あとはずっと同じでした。</p>
+</section>
+
+<section>
+  <p class="num">03</p>
+  <h2>振動を確かめる</h2>
+  <p class="lead">パッドの振動は Chrome・Edge で使えます（Safari は非対応、Firefox は機種による）。
+    ボタンを一度押してからでないとブラウザがパッドを見せてくれないので、<strong>手元のパッドを一度押してから</strong>試してください。</p>
+
+  <div class="panel stack">
+    <div class="row" style="justify-content: space-between;">
+      <span class="pill" id="pad-state">パッドを探しています…</span>
+      <span class="readout" id="pad-name">—</span>
+    </div>
+
+    <div>
+      <p class="label">診断</p>
+      <div class="table-wrap">
+        <table id="diag">
+          <tbody>
+            <tr><td>このページの居場所</td><td class="num-cell" id="d-frame">—</td></tr>
+            <tr><td>パッドを見る窓口（getGamepads）</td><td class="num-cell" id="d-api">—</td></tr>
+            <tr><td>枠に許された権限（gamepad）</td><td class="num-cell" id="d-policy">—</td></tr>
+            <tr><td>見えているパッド</td><td class="num-cell" id="d-count">—</td></tr>
+            <tr><td>振動の口（vibrationActuator）</td><td class="num-cell" id="d-motor">—</td></tr>
+            <tr><td>いま押しているボタン</td><td class="num-cell" id="d-buttons">—</td></tr>
+            <tr><td>最後に頼んだ振動の返事</td><td class="num-cell" id="d-result">—</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="caption" id="d-advice"></p>
+    </div>
+
+    <div>
+      <p class="label">強さ</p>
+      <div class="seg" role="group" aria-label="振動の強さ">
+        <button data-strength="0" aria-pressed="false">切</button>
+        <button data-strength="0.5" aria-pressed="false">弱</button>
+        <button data-strength="1" aria-pressed="true">標準</button>
+        <button data-strength="1.5" aria-pressed="false">強</button>
+      </div>
+    </div>
+
+    <div>
+      <p class="label">出来事</p>
+      <div class="row">
+        <button data-rumble="small">小　7.7mm を受けた</button>
+        <button data-rumble="medium">中　赤帯に入っている</button>
+        <button data-rumble="large">大　撃墜された</button>
+        <button data-rumble="hold" id="hold">中を鳴らし続ける</button>
+      </div>
+    </div>
+
+    <p class="readout" id="rumble-out">まだ鳴らしていません</p>
+  </div>
+
+  <div class="table-wrap" style="margin-top: 26px;">
+    <table>
+      <thead>
+        <tr><th>出来事</th><th>強さ</th><th>長さ</th><th>ねらい</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>7.7mm を受けた</td>
+          <td class="num-cell">高 0.45 ／ 低 0.15</td>
+          <td class="num-cell">110ms</td>
+          <td>一発ごとに短く弾く。連射で埋もれないよう軽く</td>
+        </tr>
+        <tr>
+          <td>赤帯に入っている</td>
+          <td class="num-cell">高 0.30 ／ 低 0.25</td>
+          <td class="num-cell">260ms を 240ms ごと</td>
+          <td>止まらない低いうなり。水温に応じて強くなる</td>
+        </tr>
+        <tr>
+          <td>撃墜された</td>
+          <td class="num-cell">高 0.65 ／ 低 1.00</td>
+          <td class="num-cell">420ms</td>
+          <td>手に残る一撃。ほかの振動より優先する</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="note">「高」は高い周波数の小さな錘、「低」は低い周波数の大きな錘です（<code>dual-rumble</code>）。
+    弾は高いほうを弾き、爆発は低いほうを効かせると、同じ強さでも別のものに感じます。</p>
+</section>
+
+<footer>
+  <p>この台はゲーム本体とは別の試作です（<code>samples/overheat-sound-sample.html</code>）。
+    採用が決まったものだけを <code>src/sound/engine.ts</code> と設定へ入れます。</p>
+</footer>
+
+</div>
+
+<script>
+(() => {
+  'use strict';
+
+  // ---------------------------------------------------------------- 音
+
+  const AC = window.AudioContext || window.webkitAudioContext;
+  let ac = null;
+  let master = null;
+  let engine = null;
+
+  let mode = 'now';
+  let level = 3;          // 2 = 巡航、3 = 全開（ゲームの段階に合わせる）
+  let temp = 0.88;
+
+  const PITCH = [0, 46, 64, 88];
+  const CHOP  = [0, 17, 24, 34];
+  const REDLINE = 0.75;
+
+  /** 赤帯からどれだけ踏み込んでいるか（0〜1） */
+  function strain() {
+    return Math.max(0, Math.min(1, (temp - REDLINE) / (1 - REDLINE)));
+  }
+
+  let noise = null;
+  function noiseBuffer() {
+    if (noise) return noise;
+    const len = Math.floor(ac.sampleRate * 2);
+    noise = ac.createBuffer(1, len, ac.sampleRate);
+    const d = noise.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    return noise;
+  }
+
+  /** 案ごとの中身。いまの音だけ入切の2値で、ほかは水温で連続して悪くなる */
+  const MODES = {
+    now:     { hiss: 0,    whistle: 0,   knock: 'timed', misfire: false, grind: false, binary: true },
+    boil:    { hiss: 1,    whistle: 1,   knock: 'rpm',   misfire: false, grind: false, binary: false },
+    misfire: { hiss: 0.35, whistle: 0,   knock: 'hard',  misfire: true,  grind: false, binary: false },
+    both:    { hiss: 0.9,  whistle: 0.8, knock: 'hard',  misfire: true,  grind: true,  binary: false },
+  };
+
+  class Engine {
+    constructor(out) {
+      this.out = out;
+      this.o1 = ac.createOscillator(); this.o1.type = 'sawtooth';
+      this.o2 = ac.createOscillator(); this.o2.type = 'square'; this.o2.detune.value = 9;
+      this.lp = ac.createBiquadFilter(); this.lp.type = 'lowpass';
+      this.g = ac.createGain(); this.g.gain.value = 0;
+      this.base = ac.createGain(); this.base.gain.value = 0.42;
+      this.chop = ac.createOscillator(); this.chop.type = 'square';
+      const chopG = ac.createGain(); chopG.gain.value = 0.4;
+      this.chop.connect(chopG); chopG.connect(this.g.gain);
+      this.o1.connect(this.lp); this.o2.connect(this.lp);
+      this.lp.connect(this.g); this.g.connect(this.base); this.base.connect(out);
+
+      this.wobble = ac.createOscillator(); this.wobble.type = 'sine';
+      this.wobble.frequency.value = 6.4;
+      this.wobbleG = ac.createGain(); this.wobbleG.gain.value = 0;
+      this.wobble.connect(this.wobbleG); this.wobbleG.connect(this.o2.detune);
+
+      // 蒸気。広い帯の雑音をそのまま出す
+      this.hissSrc = ac.createBufferSource();
+      this.hissSrc.buffer = noiseBuffer(); this.hissSrc.loop = true;
+      this.hissBp = ac.createBiquadFilter();
+      this.hissBp.type = 'bandpass'; this.hissBp.frequency.value = 2600; this.hissBp.Q.value = 0.7;
+      this.hissG = ac.createGain(); this.hissG.gain.value = 0;
+      this.hissSrc.connect(this.hissBp); this.hissBp.connect(this.hissG); this.hissG.connect(out);
+
+      // やかん。同じ雑音を細い帯だけ通すと笛になる
+      this.whSrc = ac.createBufferSource();
+      this.whSrc.buffer = noiseBuffer(); this.whSrc.loop = true;
+      this.whBp = ac.createBiquadFilter();
+      this.whBp.type = 'bandpass'; this.whBp.frequency.value = 2300; this.whBp.Q.value = 16;
+      this.whG = ac.createGain(); this.whG.gain.value = 0;
+      this.whSrc.connect(this.whBp); this.whBp.connect(this.whG); this.whG.connect(out);
+
+      // 軋み。振り切れる直前だけ低いところで唸らせる
+      this.grind = ac.createOscillator(); this.grind.type = 'sawtooth';
+      this.grindLp = ac.createBiquadFilter(); this.grindLp.type = 'lowpass'; this.grindLp.frequency.value = 320;
+      this.grindG = ac.createGain(); this.grindG.gain.value = 0;
+      this.grind.connect(this.grindLp); this.grindLp.connect(this.grindG); this.grindG.connect(out);
+
+      this.o1.start(); this.o2.start(); this.chop.start(); this.wobble.start();
+      this.hissSrc.start(); this.whSrc.start(); this.grind.start();
+
+      this.knockTimer = null;
+      this.misfireTimer = null;
+      this.apply();
+    }
+
+    apply() {
+      const t = ac.currentTime;
+      const m = MODES[mode];
+      const s = m.binary ? (temp >= REDLINE ? 1 : 0) : strain();
+      const hot = temp >= REDLINE;
+
+      const up = 1 + (m.binary ? (hot ? 0.07 : 0) : 0.05 * s);
+      const f = PITCH[level] * up;
+      const c = CHOP[level] * up;
+      this.o1.frequency.setTargetAtTime(f, t, 0.15);
+      this.o2.frequency.setTargetAtTime(f * 2.01, t, 0.15);
+      this.chop.frequency.setTargetAtTime(c, t, 0.15);
+      this.lp.frequency.setTargetAtTime(300 + level * 330 + 620 * s, t, 0.2);
+      this.g.gain.setTargetAtTime(0.14 + level * 0.09, t, 0.12);
+      this.wobbleG.gain.setTargetAtTime(m.binary ? (hot ? 42 : 0) : 26 + 58 * s, t, 0.25);
+
+      this.hissG.gain.setTargetAtTime(0.16 * m.hiss * s, t, 0.35);
+      this.whBp.frequency.setTargetAtTime(2050 + 900 * s, t, 0.4);
+      this.whG.gain.setTargetAtTime(0.5 * m.whistle * Math.max(0, s - 0.15), t, 0.4);
+      this.grind.frequency.setTargetAtTime(f * 0.503, t, 0.2);
+      this.grindG.gain.setTargetAtTime(m.grind ? 0.09 * Math.max(0, (s - 0.55) / 0.45) : 0, t, 0.3);
+
+      this.scheduleKnock();
+      this.scheduleMisfire();
+      this.chopHz = c;
+      this.strainNow = s;
+    }
+
+    scheduleKnock() {
+      const m = MODES[mode];
+      if (this.knockTimer) { clearTimeout(this.knockTimer); this.knockTimer = null; }
+      const s = this.strainNow ?? strain();
+      if (m.knock === 'timed') {
+        if (!(temp >= REDLINE)) return;
+        const tick = () => {
+          if (Math.random() >= 0.25) this.knock(0.55 + Math.random() * 0.35, 1);
+          this.knockTimer = setTimeout(tick, 130);
+        };
+        this.knockTimer = setTimeout(tick, 130);
+        return;
+      }
+      if (s <= 0) return;
+      const hard = m.knock === 'hard';
+      const tick = () => {
+        const sv = this.strainNow ?? 0;
+        // 回転（プロペラの刻み）の何発かに一度。踏み込むほど間隔が詰まる
+        const every = Math.max(2, Math.round(9 - 6 * sv) + (Math.random() < 0.35 ? 1 : 0));
+        const wait = (every / (this.chopHz || 34)) * 1000;
+        const amp = (hard ? 0.75 : 0.5) * (0.35 + 0.75 * sv);
+        this.knock(amp, hard ? 2 : 1);
+        this.knockTimer = setTimeout(tick, wait);
+      };
+      this.knockTimer = setTimeout(tick, 60);
+    }
+
+    /** 金属を叩くひと打ち。ring を 2 にすると余韻が残って重くなる */
+    knock(amp, ring) {
+      const t = ac.currentTime;
+      const o = ac.createOscillator();
+      o.type = 'square';
+      o.frequency.setValueAtTime(300 + Math.random() * 120, t);
+      o.frequency.exponentialRampToValueAtTime(110, t + 0.05);
+      const bp = ac.createBiquadFilter();
+      bp.type = 'bandpass';
+      bp.frequency.value = 1050 + Math.random() * 450;
+      bp.Q.value = 3.2;
+      const g = ac.createGain();
+      const peak = Math.max(0.02, Math.min(1.1, amp));
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(peak, t + 0.004);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.075);
+      o.connect(bp); bp.connect(g); g.connect(this.out);
+      o.start(t); o.stop(t + 0.09);
+
+      if (ring < 2) return;
+      // 余韻。高いところに細い帯を足すと、鉄を打った音に近づく
+      const r = ac.createOscillator();
+      r.type = 'triangle';
+      r.frequency.setValueAtTime(1750 + Math.random() * 500, t);
+      const rg = ac.createGain();
+      rg.gain.setValueAtTime(0.0001, t);
+      rg.gain.exponentialRampToValueAtTime(peak * 0.28, t + 0.006);
+      rg.gain.exponentialRampToValueAtTime(0.0001, t + 0.22);
+      r.connect(rg); rg.connect(this.out);
+      r.start(t); r.stop(t + 0.24);
+    }
+
+    scheduleMisfire() {
+      const m = MODES[mode];
+      if (this.misfireTimer) { clearInterval(this.misfireTimer); this.misfireTimer = null; }
+      if (!m.misfire) { this.base.gain.setTargetAtTime(0.42, ac.currentTime, 0.1); return; }
+      this.misfireTimer = setInterval(() => {
+        const sv = this.strainNow ?? 0;
+        if (sv <= 0 || Math.random() > 0.12 + 0.55 * sv) return;
+        const now = ac.currentTime;
+        this.base.gain.setValueAtTime(0.42, now);
+        this.base.gain.setValueAtTime(0.05, now + 0.01);
+        this.base.gain.setValueAtTime(0.42, now + 0.05 + Math.random() * 0.09);
+      }, 190);
+    }
+
+    stop() {
+      const t = ac.currentTime;
+      this.g.gain.setTargetAtTime(0, t, 0.08);
+      this.hissG.gain.setTargetAtTime(0, t, 0.08);
+      this.whG.gain.setTargetAtTime(0, t, 0.08);
+      this.grindG.gain.setTargetAtTime(0, t, 0.08);
+      if (this.knockTimer) clearTimeout(this.knockTimer);
+      if (this.misfireTimer) clearInterval(this.misfireTimer);
+      setTimeout(() => {
+        this.o1.stop(); this.o2.stop(); this.chop.stop(); this.wobble.stop();
+        this.hissSrc.stop(); this.whSrc.stop(); this.grind.stop();
+      }, 400);
+    }
+  }
+
+  // ---------------------------------------------------------------- 画面
+
+  const $ = (id) => document.getElementById(id);
+  const powerBtn = $('power');
+  const stateOut = $('state');
+  const needle = $('needle');
+  const tempRange = $('temp');
+  const volRange = $('vol');
+  const volOut = $('vol-out');
+
+  function tempName() {
+    if (temp >= 1) return ['振り切れ', true];
+    if (temp >= REDLINE) return ['赤帯', true];
+    if (temp >= 0.55) return ['温まっている', false];
+    return ['冷えている', false];
+  }
+
+  function refresh() {
+    needle.style.left = `${(temp - 0.3) / 0.7 * 100}%`;
+    const [name, hot] = tempName();
+    const pct = Math.round(temp * 100);
+    stateOut.innerHTML = engine
+      ? `回転中　水温 <b>${pct}%</b>　<span class="${hot ? 'hot' : ''}">${name}</span>　踏み込み <b>${Math.round(strain() * 100)}%</b>`
+      : `停止中　水温 ${pct}%　${name}`;
+  }
+
+  function start() {
+    if (!ac) {
+      ac = new AC();
+      master = ac.createGain();
+      master.gain.value = Number(volRange.value) / 100;
+      const comp = ac.createDynamicsCompressor();
+      comp.threshold.value = -14; comp.ratio.value = 5;
+      master.connect(comp); comp.connect(ac.destination);
+    }
+    if (ac.state === 'suspended') ac.resume();
+    engine = new Engine(master);
+    powerBtn.textContent = 'エンジン停止';
+    powerBtn.classList.add('on');
+    refresh();
+  }
+
+  function stop() {
+    engine?.stop();
+    engine = null;
+    powerBtn.textContent = 'エンジン始動';
+    powerBtn.classList.remove('on');
+    refresh();
+  }
+
+  powerBtn.addEventListener('click', () => (engine ? stop() : start()));
+
+  tempRange.addEventListener('input', () => {
+    temp = Number(tempRange.value) / 100;
+    engine?.apply();
+    refresh();
+  });
+
+  volRange.addEventListener('input', () => {
+    volOut.textContent = `${volRange.value}%`;
+    if (master) master.gain.value = Number(volRange.value) / 100;
+  });
+
+  for (const [id, lv] of [['th-cruise', 2], ['th-full', 3]]) {
+    $(id).addEventListener('click', () => {
+      level = lv;
+      $('th-cruise').setAttribute('aria-pressed', String(lv === 2));
+      $('th-full').setAttribute('aria-pressed', String(lv === 3));
+      engine?.apply();
+    });
+  }
+
+  for (const b of document.querySelectorAll('#modes .mode')) {
+    b.addEventListener('click', () => {
+      mode = b.dataset.mode;
+      for (const other of document.querySelectorAll('#modes .mode')) {
+        other.setAttribute('aria-pressed', String(other === b));
+      }
+      engine?.apply();
+    });
+  }
+
+  refresh();
+
+  // ---------------------------------------------------------------- 振動
+
+  const SPEC = {
+    small:  { duration: 110, weak: 0.45, strong: 0.15, name: '小　7.7mm' },
+    medium: { duration: 260, weak: 0.30, strong: 0.25, name: '中　赤帯' },
+    large:  { duration: 420, weak: 0.65, strong: 1.00, name: '大　爆発' },
+  };
+  let strength = 1;
+  let holdTimer = null;
+
+  const padState = $('pad-state');
+  const padName = $('pad-name');
+  const rumbleOut = $('rumble-out');
+
+  let apiError = '';
+  function livePads() {
+    try {
+      if (!navigator.getGamepads) return [];
+      return [...navigator.getGamepads()].filter((p) => p && p.connected);
+    } catch (err) {
+      apiError = String(err && err.name ? err.name : err);
+      return [];
+    }
+  }
+
+  // 枠の中（iframe）に置かれたページは、既定ではパッドを見せてもらえない。
+  // 見えない理由がこれなのか、パッドが押されていないだけなのかを分けて出す
+  const inFrame = window.self !== window.top;
+  let sawEvent = false;
+  window.addEventListener('gamepadconnected', () => { sawEvent = true; });
+
+  function policyState() {
+    try {
+      const fp = document.featurePolicy || document.permissionsPolicy;
+      if (!fp || !fp.allowsFeature) return '調べられません';
+      return fp.allowsFeature('gamepad') ? '許可されています' : '禁じられています';
+    } catch { return '調べられません'; }
+  }
+
+  const dFrame = $('d-frame'), dApi = $('d-api'), dPolicy = $('d-policy');
+  const dCount = $('d-count'), dMotor = $('d-motor'), dButtons = $('d-buttons');
+  const dResult = $('d-result'), dAdvice = $('d-advice');
+
+  dFrame.textContent = inFrame ? '枠の中（iframe）' : 'そのまま開かれている';
+  dApi.textContent = navigator.getGamepads ? 'あります' : 'ありません';
+  dPolicy.textContent = policyState();
+
+  function watchPads() {
+    const pads = livePads();
+    const withMotor = pads.filter((p) => p.vibrationActuator);
+
+    dApi.textContent = navigator.getGamepads
+      ? (apiError ? `呼ぶと断られます（${apiError}）` : 'あります')
+      : 'ありません';
+    dCount.textContent = pads.length
+      ? `${pads.length}台（gamepadconnected ${sawEvent ? '届いた' : '未着'}）`
+      : `0台（gamepadconnected ${sawEvent ? '届いた' : '未着'}）`;
+    dMotor.textContent = pads.length
+      ? pads.map((p) => (p.vibrationActuator
+          ? `あり（${(p.vibrationActuator.effects || ['dual-rumble']).join(', ')}）`
+          : 'なし')).join(' ／ ')
+      : '—';
+    const held = [];
+    for (const p of pads) {
+      p.buttons.forEach((b, i) => { if (b.pressed) held.push(i); });
+    }
+    dButtons.textContent = pads.length ? (held.length ? held.join(' ') : '（押されていません）') : '—';
+
+    if (pads.length === 0) {
+      padState.className = 'pill';
+      padState.textContent = inFrame && policyState() !== '許可されています'
+        ? '枠の中なので、パッドが見えません'
+        : 'パッドのボタンを一度押してください';
+      padName.textContent = '—';
+      dAdvice.textContent = inFrame
+        ? 'このページは枠の中に置かれています。ブラウザは枠の中のページにパッドを見せない決まりなので、'
+          + '振動はここでは試せません。同じ内容のファイル（samples/overheat-sound-sample.html）を'
+          + '手元に保存して、ブラウザで直接開いてください。音のほうは枠の中でも鳴ります。'
+        : 'パッドのボタンを一度押すと見えるようになります（ブラウザの決まりです）。'
+          + 'それでも 0 台のままなら、別のブラウザ（Chrome / Edge）で試してください。';
+      return;
+    }
+
+    padState.className = withMotor.length ? 'pill ok' : 'pill ng';
+    padState.textContent = withMotor.length
+      ? `${pads.length}台つながっています（振動あり ${withMotor.length}台）`
+      : `${pads.length}台つながっていますが、振動の口がありません`;
+    padName.textContent = pads.map((p) => p.id.slice(0, 34)).join(' ／ ');
+    dAdvice.textContent = withMotor.length
+      ? '「出来事」のボタンを押すと震えます。震えないときは、下の「返事」を見てください。'
+      : 'このパッドは振動の口を見せていません。無線でつないでいる場合、有線にすると出ることがあります。';
+  }
+  setInterval(watchPads, 400);
+  watchPads();
+
+  function fire(kind) {
+    const spec = SPEC[kind];
+    const pads = livePads().filter((p) => p.vibrationActuator);
+    if (strength === 0) {
+      rumbleOut.textContent = '「切」なので鳴らしません';
+      return;
+    }
+    if (pads.length === 0) {
+      rumbleOut.textContent = '振動できるパッドが見つかりません';
+      return;
+    }
+    const weak = Math.min(1, spec.weak * strength);
+    const strong = Math.min(1, spec.strong * strength);
+    for (const p of pads) {
+      let promise;
+      try {
+        promise = p.vibrationActuator.playEffect('dual-rumble', {
+          startDelay: 0, duration: spec.duration, weakMagnitude: weak, strongMagnitude: strong,
+        });
+      } catch (err) {
+        dResult.textContent = `断られました（${err && err.name ? err.name : err}）`;
+        continue;
+      }
+      if (promise && promise.then) {
+        promise.then(
+          (r) => { dResult.textContent = `${String(r)}（complete なら実際に回っています）`; },
+          (err) => { dResult.textContent = `失敗（${err && err.name ? err.name : err}）`; },
+        );
+      } else {
+        dResult.textContent = '返事がありません（古い作りのブラウザ）';
+      }
+    }
+    rumbleOut.textContent =
+      `${spec.name}　高 ${weak.toFixed(2)} ／ 低 ${strong.toFixed(2)} ／ ${spec.duration}ms`;
+  }
+
+  for (const b of document.querySelectorAll('[data-strength]')) {
+    b.addEventListener('click', () => {
+      strength = Number(b.dataset.strength);
+      for (const o of document.querySelectorAll('[data-strength]')) {
+        o.setAttribute('aria-pressed', String(o === b));
+      }
+    });
+  }
+
+  for (const b of document.querySelectorAll('[data-rumble]')) {
+    const kind = b.dataset.rumble;
+    if (kind === 'hold') continue;
+    b.addEventListener('click', () => fire(kind));
+  }
+
+  $('hold').addEventListener('click', () => {
+    if (holdTimer) {
+      clearInterval(holdTimer);
+      holdTimer = null;
+      $('hold').textContent = '中を鳴らし続ける';
+      for (const p of livePads()) p.vibrationActuator?.reset?.();
+      rumbleOut.textContent = '止めました';
+      return;
+    }
+    fire('medium');
+    holdTimer = setInterval(() => fire('medium'), 240);
+    $('hold').textContent = '止める';
+  });
+})();
+</script>
+</body>
+</html>

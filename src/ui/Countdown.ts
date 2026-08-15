@@ -32,10 +32,32 @@ export class Countdown {
     this.endsAt = performance.now() + COUNT_TOTAL * 1000;
     this.left = COUNT_TOTAL;
     this.lastBeep = -1;
+    this.pins = true;
+    this.text.setVisible(true);
+  }
+
+  /**
+   * 一時停止から戻るときの合図。**GO! だけ**を短く出す。
+   * いきなり動きだすと、握り直す間がないまま撃たれる ―― 二人とも手を戻す間が要る。
+   * 出撃位置には戻さないので（`pinning` が false）、機体はそのままの場所で待つ
+   */
+  beginResume(): void {
+    this.endsAt = performance.now() + COUNT.go * 1000;
+    this.left = COUNT.go;
+    this.lastBeep = -1;
+    this.pins = false;
     this.text.setVisible(true);
   }
 
   get running(): boolean { return this.endsAt !== 0; }
+
+  /**
+   * 合図の間、機体を出撃位置に据え置くか。
+   * 開始の合図では据え置き、再開の合図ではその場に残す
+   */
+  get pinning(): boolean { return this.pins; }
+
+  private pins = true;
 
   /**
    * @returns 合図が終わって本編が動いているか

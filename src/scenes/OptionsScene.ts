@@ -16,17 +16,25 @@
  *
  * 変えたそばから効く（音量もフィルムもその場で変わる）ようにして、
  * 「決定」を押さないと反映されない作りは避けた。設定はそのつど保存する。
+ *
+ * **ボタンの割り当ては、押したボタンがそのまま入る**（2026-08-15 改定）。
+ * 「決定してから押す」の二段構えをやめた ―― 割り当てたいボタンを押すのが
+ * いちばん短い言い方で、待ちの状態そのものが要らなくなる。
+ * 十字キーの上下とスティックだけは項目を選ぶのに使うので、割り当てには入らない。
  */
 
 import Phaser from 'phaser';
-import { VIEW } from '../config';
+import { PAD, VIEW } from '../config';
 import { sfx } from '../audio';
 import { attachFilm } from '../fx/attachFilm';
 import type { FilmPipeline } from '../fx/FilmPipeline';
 import { PadInput, PAD_IDLE } from '../input/PadInput';
 import { PadMenu } from '../input/PadMenu';
 import { StuckKeyGuard } from '../input/StuckKeyGuard';
-import { PAD_ACTIONS, PLAYER_NAMES, buttonName, saveSettings, settings, type PadBinding } from '../settings';
+import {
+  PAD_ACTIONS, PLAYER_NAMES, buttonName, padConflicts, saveSettings, settings,
+} from '../settings';
+import { Rumble } from '../input/Rumble';
 import { PAGE_TITLE, buildRows, type Page, type Row } from '../ui/optionRows';
 
 const KEY = Phaser.Input.Keyboard.KeyCodes;
@@ -36,8 +44,11 @@ const GOLD = '#ffd76b';
 /** 1P・2P の色。機体と計器盤に合わせてある */
 const SIDE_COLOR = ['#e8836a', '#8fb6d8'];
 
-/** ボタンの割り当て待ちを打ち切るまでの秒数 */
-const WAIT_LIMIT = 8;
+/**
+ * 割り当てに使えないボタン。十字キーの上下は項目を選ぶのに使う ――
+ * ここを取られると、パッドだけでは一覧を動かせなくなる
+ */
+const RESERVED = [PAD.buttons.up, PAD.buttons.down];
 
 /** 一覧の見た目 */
 const TOP = 116;
@@ -76,16 +87,14 @@ export class OptionsScene extends Phaser.Scene {
   /** キーボードがどちらの列を担当しているか。Tab で入れ替える */
   private kbSide = 0;
 
+  /** 振動の強さを選んだときに、その場で試す */
+  private rumbles = [new Rumble(), new Rumble()];
   /**
-   * ボタンの割り当て待ち。null なら待っていない。人ごとに持つ。
-   * 待っている間、その人はほかの操作を受け付けない ――
-   * 割り当てたいボタンが「決定」や「取り消し」と重なることがあるため
+   * 前のフレームで押されていたボタン。人ごとに持つ。
+   * 割り当ては**押した瞬間**だけ拾う ―― 押しっぱなしのまま項目を移ると、
+   * 移った先まで同じボタンで埋まってしまう
    */
-  private waiting: (keyof PadBinding | null)[] = [null, null];
-  /** 待ちに入ったあと、いったん全部離すまで拾わない */
-  private waitArmed = [false, false];
-  /** 待ちはじめてからの秒数。押されないまま置き去りにならないよう打ち切る */
-  private waitTimer = [0, 0];
+  private prevButtons: number[][] = [[], []];
   /**
    * 割り当てを決めた直後。**指を離すまでその人の操作を読まない**。
    *
@@ -114,10 +123,10 @@ export class OptionsScene extends Phaser.Scene {
     this.cursors = [];
     this.index = [0, 0];
     this.kbSide = 0;
-    this.waiting = [null, null];
-    this.waitArmed = [false, false];
-    this.waitTimer = [0, 0];
     this.settling = [false, false];
+    // 入ってきたときに押されていたボタンは「押した瞬間」にしない ――
+    // ○A で入った直後の押しっぱなしが、そのまま割り当てにならないように
+    this.prevButtons = [this.pressedButtons(0), this.pressedButtons(1)];
     this.padUpHeld = [false, false];
     this.padStates = this.pads.map((p) => p.read());
     for (const m of this.padMenus) m.disarm();
@@ -149,6 +158,9 @@ export class OptionsScene extends Phaser.Scene {
       film: () => this.film,
       go: (page) => this.go(page),
       afterReset: () => this.refresh(),
+      buzz: (side) => this.rumbles[side].play(
+        side, this.pads[side].gamepadIndex, 'strain', this.time.now / 1000,
+      ),
     });
   }
 
@@ -221,7 +233,8 @@ export class OptionsScene extends Phaser.Scene {
 
     this.add.text(VIEW.width / 2, VIEW.height - 54,
       '↑ ↓ 項目　　← → 変更　　Enter 決定　　Esc 戻る　　'
-      + 'パッドはスティック上下と L / R、決定 ○A・戻る ×B', {
+      + 'パッドはスティック上下と L / R、決定 ○A・戻る ×B'
+      + (this.page === 'pad' ? '　　※割り当ての行では押したボタンがそのまま入ります' : ''), {
         fontFamily: 'Georgia, serif', fontSize: '16px', color: CREAM,
         backgroundColor: 'rgba(24,16,10,0.55)', padding: { x: 14, y: 5 },
       }).setOrigin(0.5);
@@ -245,9 +258,9 @@ export class OptionsScene extends Phaser.Scene {
         // 列が1つしかないので、2P が選んでいるときに何も光らないのは分かりにくい
         const mine = each ? this.index[c] === i && this.active(c) : on;
         if (r.kind === 'pad') {
-          t.setText(this.waiting[c] === r.action
-            ? '― 押してください ―'
-            : buttonName(settings.pads[c][r.action]));
+          // カーソルが乗っている行は「押せば入る」ことが分かるように挟んで出す
+          const name = buttonName(settings.pads[c][r.action]);
+          t.setText(mine ? `▸ ${name} ◂` : name);
         } else if (r.kind === 'each') {
           t.setText(`◂ ${r.get(c)} ▸`);
         } else if (r.kind === 'shared') {
@@ -266,16 +279,13 @@ export class OptionsScene extends Phaser.Scene {
 
     this.kbNote.setText(this.page === 'pad'
       ? `Tab　キーボードで直す側 … いまは ${PLAYER_NAMES[this.kbSide]}　　`
-        + '（パッドはそれぞれ自分の列を直します）'
+        + '（パッドはそれぞれ自分の列を直します。画面を出るには「戻る」か Esc）'
       : '1P・2P のどちらのパッドでも操作できます');
 
     // 説明はキーボードが見ている行のもの。二人ぶん出すと下が埋まる
     const here = this.rows[this.index[this.kbSide]];
-    let hint = '';
-    if (this.waiting[0] || this.waiting[1]) hint = '割り当てたいボタンを押してください（Esc でやめる）';
-    else if (here?.note) hint = here.note;
-    this.hint.setText(hint);
-    this.hint.setVisible(hint !== '');
+    this.hint.setText(here?.note ?? '');
+    this.hint.setVisible(this.hint.text !== '');
   }
 
   /**
@@ -309,7 +319,7 @@ export class OptionsScene extends Phaser.Scene {
     for (const k of ['left', 'a']) keys[k].on('down', () => this.change(this.kbSide, -1));
     for (const k of ['right', 'd']) keys[k].on('down', () => this.change(this.kbSide, 1));
     for (const k of ['enter', 'space']) keys[k].on('down', () => this.decide(this.kbSide));
-    keys.back.on('down', () => this.back(this.kbSide));
+    keys.back.on('down', () => this.back());
     keys.swap.on('down', () => this.swapKeyboardSide());
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
@@ -320,21 +330,18 @@ export class OptionsScene extends Phaser.Scene {
 
   /** キーボードが直す列を入れ替える。パッド1台でも 2P 側を組めるようにするため */
   private swapKeyboardSide(): void {
-    if (this.waiting[this.kbSide]) return;
     this.kbSide = (this.kbSide + 1) % PLAYER_NAMES.length;
     sfx.menuLevel(1);
     this.refresh();
   }
 
   private move(side: number, d: -1 | 1): void {
-    if (this.waiting[side]) return;
     this.index[side] = (this.index[side] + d + this.rows.length) % this.rows.length;
     sfx.menuMove();
     this.refresh();
   }
 
   private change(side: number, d: -1 | 1): void {
-    if (this.waiting[side]) return;
     const r = this.rows[this.index[side]];
     if (!r) return;
     if (r.kind === 'shared') r.step(d);
@@ -345,15 +352,13 @@ export class OptionsScene extends Phaser.Scene {
   }
 
   private decide(side: number): void {
-    if (this.waiting[side]) return;
     const r = this.rows[this.index[side]];
     if (!r) return;
+    // 割り当ての行は「押したボタンがそのまま入る」ので、決定ですることがない。
+    // キーボードの Enter がここへ来たときのために、何をすればよいかだけ出す
     if (r.kind === 'pad') {
-      this.waiting[side] = r.action;
-      this.waitArmed[side] = false;
-      this.waitTimer[side] = 0;
-      sfx.menuDecide();
-      this.refresh();
+      this.hint.setText('パッドの、割り当てたいボタンをそのまま押してください');
+      this.hint.setVisible(true);
       return;
     }
     if (r.kind === 'action') { r.run(); return; }
@@ -361,22 +366,8 @@ export class OptionsScene extends Phaser.Scene {
     this.change(side, 1);
   }
 
-  private back(side: number): void {
-    if (this.waiting[side]) {
-      this.waiting[side] = null;
-      sfx.menuBack();
-      this.refresh();
-      return;
-    }
-    // 相手がボタンを割り当てている最中は画面を閉じない ――
-    // 二人で同時に触れる画面なので、片方の取り消しでもう片方の作業が消えると理不尽になる
-    const busy = this.waiting.findIndex((w, i) => i !== side && w !== null);
-    if (busy >= 0) {
-      this.hint.setText(`${PLAYER_NAMES[busy]} がボタンを割り当て中です`);
-      this.hint.setVisible(true);
-      sfx.menuBack();
-      return;
-    }
+  /** 画面を出る。どちらが押しても同じ ―― 設定はそのつど保存してあるので、失うものはない */
+  private back(): void {
     saveSettings();
     sfx.menuBack();
     // 下の画面からは入口へ、入口からはステージ選択へ戻る
@@ -385,41 +376,38 @@ export class OptionsScene extends Phaser.Scene {
   }
 
   /**
-   * 割り当て待ちの読み取り。
+   * 割り当ての読み取り。**押したボタンがそのまま入る**。
    *
-   * 押されたボタンをそのまま割り当てる。**同じボタンが別の操作に付いていたら入れ替える** ――
-   * 消さずに残すと、二つの操作が同時に出て収拾がつかなくなる。
-   * 入れ替えるのはその人のパッドの中だけで、もう一方には触らない。
-   * 決定に使ったボタンをそのまま拾わないよう、一度すべて離すまで待つ
+   * 拾うのは押した瞬間だけ。押しっぱなしのまま項目を移ると、移った先まで
+   * 同じボタンで埋まってしまう。十字キーの上下は項目を選ぶのに使うので拾わない。
+   *
+   * **同じボタンが別の操作に付いていたら入れ替える。**
+   * ただし入れ替えるのは**同じ場面で読む操作どうし**だけ（`padConflicts`）――
+   * 20mm（飛行中）と決定（画面）のように、同じ場面に出てこないものは
+   * 同じボタンに乗っていても困らない。ここを見ずに追い出していたので、
+   * 決定に○A を割り当てると 20mm がそこから消えていた
+   *
+   * @returns 割り当てたか
    */
-  private captureButton(side: number, dt: number): void {
-    const held = this.pressedButtons(side);
-    if (!this.waitArmed[side]) {
-      if (held.length === 0) this.waitArmed[side] = true;
-      return;
-    }
-    this.waitTimer[side] += dt;
-    if (held.length === 0) {
-      // パッドだけで遊んでいて押せるボタンが無くなった場合の逃げ道
-      if (this.waitTimer[side] > WAIT_LIMIT) {
-        this.waiting[side] = null;
-        sfx.menuBack();
-        this.refresh();
-      }
-      return;
-    }
+  private captureButton(side: number, held: number[]): boolean {
+    const r = this.rows[this.index[side]];
+    if (r?.kind !== 'pad') return false;
+    const prev = this.prevButtons[side];
+    const button = held.find((b) => !prev.includes(b) && !RESERVED.includes(b));
+    if (button === undefined) return false;
 
-    const button = held[0];
-    const action = this.waiting[side]!;
     const bind = settings.pads[side];
-    const before = bind[action];
-    for (const { key } of PAD_ACTIONS) {
-      if (key !== action && bind[key] === button) bind[key] = before;
+    const before = bind[r.action];
+    if (before !== button) {
+      for (const { key } of PAD_ACTIONS) {
+        if (key !== r.action && bind[key] === button && padConflicts(key, r.action)) {
+          bind[key] = before;
+        }
+      }
+      bind[r.action] = button;
+      saveSettings();
     }
-    bind[action] = button;
-    saveSettings();
-    this.waiting[side] = null;
-    // 決めたボタンはまだ押されたまま。指を離すまでこの人の操作は読まない ――
+    // 押したボタンはまだ押されたまま。指を離すまでこの人の操作は読まない ――
     // 「決定」や「取り消し」を割り当て直した直後に、その押しっぱなしが
     // 決定や取り消しとして効いてしまうのを断つ
     this.settling[side] = true;
@@ -427,6 +415,7 @@ export class OptionsScene extends Phaser.Scene {
     this.padUpHeld[side] = false;
     sfx.menuDecide();
     this.refresh();
+    return true;
   }
 
   /**
@@ -441,7 +430,13 @@ export class OptionsScene extends Phaser.Scene {
       if (!navigator.getGamepads) return out;
       const pads = [...navigator.getGamepads()]
         .filter((p): p is Gamepad => !!p && p.connected && p.mapping === 'standard');
-      const pad = pads[side] ?? (this.kbSide === side ? pads[0] : undefined);
+      // その列のパッドが無いときは、キーボードがその列にいる場合だけ1台目を借りる。
+      // 借りている間は持ち主の列を触らせない ―― 1台のパッドで両方の列に
+      // 同じボタンが入ってしまうため
+      const borrowing = !pads[side] && this.kbSide === side;
+      const lent = !pads[1] && this.kbSide === 1;
+      if (side === 0 && lent && this.rows[this.index[1]]?.kind === 'pad') return out;
+      const pad = pads[side] ?? (borrowing ? pads[0] : undefined);
       if (!pad) return out;
       pad.buttons.forEach((b, i) => { if (b.pressed) out.push(i); });
     } catch {
@@ -450,23 +445,26 @@ export class OptionsScene extends Phaser.Scene {
     return out;
   }
 
-  override update(_time: number, delta: number): void {
-    const dt = Math.min(0.05, delta / 1000);
+  override update(): void {
     this.keyGuard.update();
 
     // パッドはこのフレームで一度だけ読む（立ち上がりを食べないように）
     this.padStates = this.pads.map((p) => p.read());
 
     for (let side = 0; side < this.pads.length; side++) {
-      if (this.waiting[side]) {
-        this.captureButton(side, dt);
-        continue;                    // 待っている人はほかの操作を読まない
-      }
+      const held = this.pressedButtons(side);
       if (this.settling[side]) {
-        // 割り当てを決めた直後。指を離すまで読まない
-        if (this.pressedButtons(side).length === 0) this.settling[side] = false;
+        // 割り当てた直後。指を離すまで読まない
+        if (held.length === 0) this.settling[side] = false;
+        this.prevButtons[side] = held;
         continue;
       }
+      // 割り当ての行にいるなら、押したボタンがそのまま入る。
+      // 入ったフレームは、その押しをほかの操作として読まない
+      const captured = this.captureButton(side, held);
+      this.prevButtons[side] = held;
+      if (captured) continue;
+
       const s = this.padStates[side];
       if (!s.connected) continue;
       if (Math.abs(s.pitch) > 0.5) {
@@ -477,11 +475,14 @@ export class OptionsScene extends Phaser.Scene {
       } else {
         this.padUpHeld[side] = false;
       }
-      if (s.rollEdge !== 0) this.change(side, s.rollEdge);
 
       const m = this.padMenus[side].read(s);
+      // 割り当ての行では、L / R も決定も取り消しも「割り当てるボタン」として扱う。
+      // ここまで来ているのは割り当てなかったとき（＝押した瞬間ではないとき）だけ
+      if (this.rows[this.index[side]]?.kind === 'pad') continue;
+      if (s.rollEdge !== 0) this.change(side, s.rollEdge);
       if (m.decide) this.decide(side);
-      else if (m.cancel) this.back(side);
+      else if (m.cancel) this.back();
     }
   }
 }

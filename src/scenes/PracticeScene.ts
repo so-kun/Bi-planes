@@ -18,6 +18,7 @@ import { PadMenu } from '../input/PadMenu';
 import { StuckKeyGuard } from '../input/StuckKeyGuard';
 import { PadInput, type PadState } from '../input/PadInput';
 import { Countdown } from '../ui/Countdown';
+import { PauseMenu } from '../ui/PauseMenu';
 import { STAGES, START, formatTime, PRACTICE_STAGES } from '../practice/stages';
 
 const KEY = Phaser.Input.Keyboard.KeyCodes;
@@ -31,6 +32,10 @@ export class PracticeScene extends Phaser.Scene {
   private rings!: Rings;
   private film: FilmPipeline | null = null;
   private countdown!: Countdown;
+  /** ＋（Start）や Esc で出る、終了の確認 */
+  private pause!: PauseMenu;
+  /** 一時停止の画面で、スティックを倒しっぱなしにしても1度しか動かさないための記録 */
+  private menuHeld = false;
 
   private keys!: Record<string, Phaser.Input.Keyboard.Key>;
   private keyGuard!: StuckKeyGuard;
@@ -92,12 +97,14 @@ export class PracticeScene extends Phaser.Scene {
     this.woke = false;
     this.film = null;
     this.filmWatchdog = 1;
+    this.menuHeld = false;
 
     this.setupInput();
     this.setupHud();
     this.setupFilm();
 
     this.countdown = new Countdown(this);
+    this.pause = new PauseMenu(this);
     // 音がもう起きていれば、ここでエンジンも曲も鳴りはじめる
     this.wakeAudio();
     this.beginStage();
@@ -149,14 +156,65 @@ export class PracticeScene extends Phaser.Scene {
   }
 
   private toTitle(): void {
+    sfx.duck(false);
     sfx.stopEngines();
     this.scene.start('Title');
+  }
+
+  // ---------------------------------------------------------------- 一時停止
+
+  /** ＋（Start）や Esc で止める。中身は対戦と同じ（`src/ui/PauseMenu.ts`） */
+  private openPause(): void {
+    if (this.pause.open) return;
+    this.pause.show();
+    this.padMenu.disarm();
+    this.menuHeld = false;
+    sfx.setEngine(0, 1, false);
+    sfx.duck(true);
+    sfx.menuDecide();
+  }
+
+  /** 止めるのをやめて戻る。握り直す間を置くため、GO! を短く出してから動かす */
+  private resumeGame(): void {
+    if (!this.pause.open) return;
+    this.pause.hide();
+    this.padMenu.disarm();
+    sfx.duck(false);
+    sfx.menuBack();
+    this.countdown.beginResume();
+  }
+
+  private movePause(d: -1 | 1): void {
+    if (!this.pause.open) return;
+    this.pause.move(d);
+    sfx.menuMove();
+  }
+
+  private choosePause(): void {
+    if (this.pause.choice === 'quit') this.toTitle();
+    else this.resumeGame();
+  }
+
+  /** 止めている間の操作 */
+  private readPauseInput(): void {
+    const s = this.padState;
+    if (Math.abs(s.pitch) > 0.5) {
+      if (!this.menuHeld) {
+        this.menuHeld = true;
+        this.movePause(s.pitch > 0 ? -1 : 1);
+      }
+    } else {
+      this.menuHeld = false;
+    }
+    const m = this.padMenu.read(s);
+    if (m.start || m.cancel) { this.resumeGame(); return; }
+    if (m.decide) this.choosePause();
   }
 
   /**
    * パッドでの決定・取り消し・中断。
    *
-   * 練習中は Start でタイトルへ、Select でやり直し。この2つは武器と重ならないので、
+   * 練習中は Start で一時停止、Select でやり直し。この2つは武器と重ならないので、
    * 飛びながら押しても差し支えない。決定と取り消し（○A・×B）は
    * **全10ステージを終えたあとだけ**読む ―― 対戦の画面と同じ扱いにそろえてある
    *
@@ -164,7 +222,13 @@ export class PracticeScene extends Phaser.Scene {
    */
   private readPadMenu(): boolean {
     const m = this.padMenu.read(this.padState);
-    if (m.start) { this.toTitle(); return true; }
+    if (m.start) {
+      // 終えたあとは画面に戻り方が出ているので、そのままタイトルへ。
+      // 飛んでいる最中は、いったん止めて聞き直す
+      if (this.finished) { this.toTitle(); return true; }
+      this.openPause();
+      return true;
+    }
     if (this.finished) {
       if (m.decide) { this.restart(); return false; }
       if (m.cancel) { this.toTitle(); return true; }
@@ -189,6 +253,8 @@ export class PracticeScene extends Phaser.Scene {
     this.keyGuard.update();
     this.padState = this.pad.read();
     if (!this.woke && this.padState.connected) { this.woke = true; this.wakeAudio(); }
+    // 止めている間は何も進めない。読むのは一時停止の画面の操作だけ
+    if (this.pause.open) { this.readPauseInput(); return; }
     if (this.readPadMenu()) return;
     this.watchFilm(dt);
 
@@ -224,6 +290,8 @@ export class PracticeScene extends Phaser.Scene {
 
   /** 機体を飛ばす。合図の間は出撃位置で待たせる（対戦と同じ） */
   private flyPlane(dt: number, live: boolean): void {
+    // 一時停止から戻るときの合図では動かさない。その場で待たせる
+    if (!live && !this.countdown.pinning) return;
     if (!live) {
       this.plane.state.x = START.x;
       this.plane.state.y = START.y;
@@ -289,6 +357,7 @@ export class PracticeScene extends Phaser.Scene {
     }
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.keyGuard.detach();
+      sfx.duck(false);
       sfx.stopEngines();
       this.rings.destroy();
       window.removeEventListener('blur', releaseAll);
@@ -301,9 +370,19 @@ export class PracticeScene extends Phaser.Scene {
 
     for (const key of ['rollL', 'rollLAlt']) this.keys[key].on('down', () => this.plane.roll(-1));
     for (const key of ['rollR', 'rollRAlt']) this.keys[key].on('down', () => this.plane.roll(1));
-    this.keys.restart.on('down', () => { if (this.finished) this.restart(); });
-    this.keys.retry.on('down', () => { if (!this.finished) this.beginStage(); });
-    this.keys.title.on('down', () => this.toTitle());
+    this.keys.restart.on('down', () => {
+      if (this.pause.open) { this.choosePause(); return; }
+      if (this.finished) this.restart();
+    });
+    this.keys.retry.on('down', () => { if (!this.pause.open && !this.finished) this.beginStage(); });
+    // Esc も「その場でタイトルへ」をやめて、いったん止めて聞き直す（対戦と同じ）
+    this.keys.title.on('down', () => {
+      if (this.pause.open) this.resumeGame();
+      else this.openPause();
+    });
+    // 一時停止の画面でだけ働く上下
+    for (const key of ['up', 'upAlt']) this.keys[key].on('down', () => this.movePause(-1));
+    for (const key of ['down', 'downAlt']) this.keys[key].on('down', () => this.movePause(1));
     this.keys.mute.on('down', () => sfx.toggleMute());
     this.keys.bgm.on('down', () => sfx.toggleBgm());
     // ステージ選択の曲を引きずらないよう、ここで対戦と同じ曲に入れ替える
@@ -344,7 +423,7 @@ export class PracticeScene extends Phaser.Scene {
 
     this.add.text(VIEW.width / 2, VIEW.height - 26,
       '矢印の向きに輪をくぐる（順番どおりに）　　S/W・↓↑ 機首上げ下げ　　A/D・←→ ロール　　E 全開　　'
-      + 'R / パッド Select やり直し　　Esc / パッド Start タイトルへ', {
+      + 'R / パッド Select やり直し　　Esc / パッド ＋ 一時停止', {
         fontFamily: 'Georgia, serif', fontSize: '15px', color: '#f4e6c8',
         backgroundColor: 'rgba(24,16,10,0.5)', padding: { x: 12, y: 5 },
       }).setOrigin(0.5).setDepth(71).setAlpha(0.9);
