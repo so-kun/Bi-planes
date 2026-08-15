@@ -26,6 +26,7 @@ import { PadMenu } from '../input/PadMenu';
 import { StuckKeyGuard } from '../input/StuckKeyGuard';
 import { PadInput, PAD_IDLE, type PadState } from '../input/PadInput';
 import { Rumble, STRAIN_INTERVAL } from '../input/Rumble';
+import { EngineSound } from '../sound/planeEngine';
 import { Pilot } from '../ai/Pilot';
 import { Countdown } from '../ui/Countdown';
 import { PauseMenu } from '../ui/PauseMenu';
@@ -64,11 +65,12 @@ interface Player {
   strainTimer: number;
   /** 一時停止の画面で、スティックを倒しっぱなしにしても1度しか動かさないための記録 */
   menuHeld: boolean;
+  /** その機のエンジン音。機体の状態をそのまま流す */
+  engine: EngineSound;
   score: number;
   respawnTimer: number;
   smokeTimer: { engine: number; handling: number };
   stallSoundTimer: number;
-  lastEngineState: string;
   /** 出撃位置 */
   home: { x: number; y: number; facing: Facing };
   /** コンピュータ操縦。0 = 人が操縦、1..3 = 弱・普通・強 */
@@ -199,7 +201,7 @@ export class PlayScene extends Phaser.Scene {
     this.countdown.begin();
     for (const p of this.players) {
       p.plane.reset(p.home.x, p.home.y, p.home.facing);
-      p.lastEngineState = '';
+      p.engine.forget();
       this.downedTexts[p.id].setVisible(false);
     }
   }
@@ -348,7 +350,7 @@ export class PlayScene extends Phaser.Scene {
       respawnTimer: 0,
       smokeTimer: { engine: 0, handling: 0 },
       stallSoundTimer: 0,
-      lastEngineState: '',
+      engine: new EngineSound(id),
       home,
       ai: 0,
       pilot: new Pilot(AI_LEVELS[1]),
@@ -451,7 +453,7 @@ export class PlayScene extends Phaser.Scene {
       this.downedTexts[p.id].setText(`${p.name} 撃墜\n再出撃まで ${Math.max(0, p.respawnTimer).toFixed(1)}`);
       if (p.respawnTimer <= 0) {
         p.plane.reset(p.home.x, p.home.y, p.home.facing);
-        p.lastEngineState = '';
+        p.engine.forget();
         this.downedTexts[p.id].setVisible(false);
       }
       return;
@@ -491,7 +493,7 @@ export class PlayScene extends Phaser.Scene {
     p.plane.setThrottle(throttle ? 1 : 0);
     p.plane.update(pitch, dt);
     if (p.plane.overheated) this.overheat(p);
-    this.syncEngineSound(p);
+    p.engine.follow(p.plane);
 
     if (rollEdge !== 0) p.plane.roll(rollEdge);
     if (cannonEdge) this.fireCannon(p);
@@ -571,8 +573,7 @@ export class PlayScene extends Phaser.Scene {
     p.plane.destroy();
     p.respawnTimer = PLANE.respawnDelay;
     // 落ちた機のエンジン音は絞る。鳴ったままだと空にいない機の音が残る
-    sfx.setEngine(p.id, 1, false);
-    p.lastEngineState = '';
+    p.engine.idle();
     if (credit) this.addScore(credit, points, where.x, where.y - 40);
   }
 
@@ -602,7 +603,7 @@ export class PlayScene extends Phaser.Scene {
       q.plane.setThrottle(0);
       this.downedTexts[q.id].setVisible(false);
     }
-    for (const q of this.players) sfx.setEngine(q.id, 1, false);
+    for (const q of this.players) q.engine.idle();
     this.resultText.setText(
       `${p.name} の勝ち\n\n${this.players[0].score} 対 ${this.players[1].score}\n`
       + 'Enter / ○A でもう一度　　Esc / ×B でタイトルへ');
@@ -633,8 +634,7 @@ export class PlayScene extends Phaser.Scene {
     for (const p of this.players) {
       p.menuHeld = false;
       p.rumble.stop(p.pad.gamepadIndex);
-      sfx.setEngine(p.id, 1, false);
-      p.lastEngineState = '';
+      p.engine.idle();
     }
     sfx.duck(true);
     sfx.menuDecide();
@@ -798,27 +798,10 @@ export class PlayScene extends Phaser.Scene {
     p.plane.damage.handling = Math.min(1, p.plane.damage.handling + (1 - p.plane.damage.handling) * k);
     p.smokeTimer.engine = 0;
     p.smokeTimer.handling = 0;
-    p.lastEngineState = '';
+    p.engine.forget();
   }
 
   // ---------------------------------------------------------------- 音と煙
-
-  /**
-   * スロットル・損傷・水温が変わったときだけエンジン音を鳴らし直す。
-   *
-   * 水温は入切ではなく**踏み込み具合**（0〜1）で渡す ―― 赤帯に入った瞬間だけ
-   * 変わってあとは同じだと、まずいことに気づけないため。
-   * 毎フレーム渡し直すとタイマーを組み直してしまうので、5段に丸めてから見る
-   */
-  private syncEngineSound(p: Player): void {
-    const damaged = p.plane.hp < 70;
-    const strain = Math.round(p.plane.strain * 5) / 5;
-    const key = `${p.plane.state.throttle}/${damaged}/${strain}`;
-    if (key === p.lastEngineState) return;
-    p.lastEngineState = key;
-    // EngineVoice の段階は 1..3。巡航を 2、全開を 3 に対応させる
-    sfx.setEngine(p.id, p.plane.state.throttle + 2, damaged, strain);
-  }
 
   /**
    * パッドの振動。
