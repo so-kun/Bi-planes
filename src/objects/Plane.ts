@@ -208,6 +208,14 @@ export class Plane {
     return Math.min(1, Math.max(0, (1 - this.damage[part]) / (1 - floor)));
   }
 
+  /**
+   * 出撃位置へ戻す。撃墜されて出直すときにも呼ぶ。
+   *
+   * **20mm の残弾はここでは戻さない**（2026-08-15 改定）。
+   * 5 発は**一試合を通しての持ち弾**で、落ちても補充されない ――
+   * リスポーンで戻ると「撃ち切ったら落ちればいい」という手ができてしまう。
+   * 試合の初めに配るのは `rearm()`
+   */
   reset(x: number, y: number, facing: Facing): void {
     this.state.x = x;
     this.state.y = y;
@@ -224,12 +232,16 @@ export class Plane {
     this.temp = ENGINE.tempFloor;
     this.overheatTimer = 0;
     this.overheated = false;
-    this.cannonAmmo = WEAPON.cannon.ammo;
     this.rollT = 1;
     this.alive = true;
     this.invuln = PLANE.invulnDuration;
     this.container.setVisible(true);
     this.container.setAlpha(1);
+  }
+
+  /** 20mm を満タンに配る。**試合の初めだけ**（`reset` では戻さない） */
+  rearm(): void {
+    this.cannonAmmo = WEAPON.cannon.ammo;
   }
 
   update(pitchInput: number, dt: number): void {

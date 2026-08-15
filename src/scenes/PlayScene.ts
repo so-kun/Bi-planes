@@ -206,6 +206,8 @@ export class PlayScene extends Phaser.Scene {
     this.countdown.begin();
     for (const p of this.players) {
       p.plane.reset(p.home.x, p.home.y, p.home.facing);
+      // 20mm を配るのは試合の初めだけ。再出撃では補充しない（`Plane.reset` の但し書き）
+      p.plane.rearm();
       p.engine.forget();
       this.downedTexts[p.id].setVisible(false);
     }
